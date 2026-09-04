@@ -1,5 +1,6 @@
 "use client";
 
+import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -69,13 +70,11 @@ export default function SemesterSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Semester Settings</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Auto is the default. Manual mode is a safety net for when real dates
-          drift from the hardcoded calendar.
-        </p>
-      </div>
+      <AdminPageHeader
+        kicker="Settings"
+        title="Semester Settings"
+        description="Auto is the default. Manual mode is a safety net for when real dates drift from the hardcoded calendar."
+      />
 
       {settingsQuery.isPending && (
         <div className="space-y-2 max-w-md" aria-busy="true" aria-label="Loading settings">

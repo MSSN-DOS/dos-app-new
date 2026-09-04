@@ -1,6 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  compress: true,
+  poweredByHeader: false,
+  devIndicators: false,
+  experimental: {
+    optimizePackageImports: ["lucide-react", "radix-ui"],
+  },
   async headers() {
     return [
       {

@@ -1,5 +1,6 @@
 "use client";
 
+import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Pencil, Trash2 } from "lucide-react";
@@ -227,15 +228,16 @@ export default function DepartmentsPage() {
 
   return (
     <div>
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Departments</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Each department belongs to one faculty and spans one or more levels.
-          </p>
-        </div>
-        <Button onClick={openAdd} className="shrink-0">Add department</Button>
-      </div>
+      <AdminPageHeader
+        kicker="Structure"
+        title="Departments"
+        description="Each department belongs to one faculty and spans one or more levels."
+        actions={
+          <Button onClick={openAdd} className="min-h-11 shrink-0 rounded-xl">
+            Add department
+          </Button>
+        }
+      />
 
       <div className="mt-4">
         <Label htmlFor="faculty-filter" className="sr-only">Filter by faculty</Label>

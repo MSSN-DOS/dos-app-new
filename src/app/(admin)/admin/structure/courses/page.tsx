@@ -1,5 +1,6 @@
 "use client";
 
+import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -275,15 +276,16 @@ export default function CoursesPage() {
 
   return (
     <div>
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Courses</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Courses belong to a level and semester, scoped by who can see them.
-          </p>
-        </div>
-        <Button onClick={openAdd} className="shrink-0">Add course</Button>
-      </div>
+      <AdminPageHeader
+        kicker="Structure"
+        title="Courses"
+        description="Courses belong to a level and semester, scoped by who can see them."
+        actions={
+          <Button onClick={openAdd} className="min-h-11 shrink-0 rounded-xl">
+            Add course
+          </Button>
+        }
+      />
 
       <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
         <div>

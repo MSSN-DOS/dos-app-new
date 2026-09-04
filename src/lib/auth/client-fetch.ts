@@ -3,8 +3,30 @@
 // the Authorization header, points at the app's own /api base, and throws a typed ApiError on
 // non-2xx so callers don't each re-implement error parsing.
 
+import { toast } from "sonner";
+
 export const TOKEN_KEY = "dos_token";
 export const USER_KEY = "dos_user";
+
+let sessionExpiredNotified = false;
+
+function handleSessionExpired() {
+  if (typeof window === "undefined") return;
+  // Avoid loop on auth pages
+  if (window.location.pathname.startsWith("/login") || window.location.pathname.startsWith("/register")) return;
+  if (sessionExpiredNotified) return;
+  sessionExpiredNotified = true;
+  clearToken();
+  toast.error("Session expired — please log in again.");
+  // Let toast render briefly before navigating
+  window.setTimeout(() => {
+    window.location.href = "/login";
+  }, 300);
+  // Reset dedupe after navigation window
+  window.setTimeout(() => {
+    sessionExpiredNotified = false;
+  }, 5000);
+}
 
 export type RoleName = "admin" | "teacher" | "student" | "aspirant";
 
@@ -68,7 +90,14 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   }
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
-  const res = await fetch(`/api${path}`, { ...options, headers });
+  let res: Response;
+  try {
+    res = await fetch(`/api${path}`, { ...options, headers });
+  } catch (err) {
+    // Network failure (offline, DNS, CORS) — surface as ApiError(0) so UI can show offline state
+    if (err instanceof TypeError) throw err;
+    throw new TypeError((err as Error).message ?? "Network error");
+  }
 
   if (res.status === 204) {
     return undefined as T;
@@ -82,9 +111,24 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   }
 
   if (!res.ok) {
+    if (res.status === 401) {
+      handleSessionExpired();
+    }
     const envelope = body as { error?: { message?: string; code?: string; details?: unknown } };
+    const fallback =
+      res.status === 401
+        ? "Session expired. Please log in again."
+        : res.status === 403
+          ? "You do not have permission to do that."
+          : res.status === 404
+            ? "Not found."
+            : res.status === 429
+              ? "Too many requests. Try again shortly."
+              : res.status >= 500
+                ? "Service temporarily unavailable."
+                : "Request failed";
     throw new ApiError(
-      envelope?.error?.message ?? "Request failed",
+      envelope?.error?.message ?? fallback,
       res.status,
       envelope?.error?.code,
       envelope?.error?.details,

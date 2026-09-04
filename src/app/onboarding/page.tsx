@@ -8,16 +8,14 @@ import { Loader2 } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { roleDashboardPath } from "@/components/auth/redirect-if-authenticated";
 import { apiFetch, ApiError } from "@/lib/auth/client-fetch";
+import { toast } from "sonner";
 import { AuthCard } from "@/components/auth/auth-card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+import { Check, ChevronDown } from "lucide-react";
 
 interface Option {
   id: number;
@@ -46,31 +44,71 @@ function SelectField({
   loading: boolean;
   labelKey: "name" | "value";
 }) {
+  const [open, setOpen] = useState(false);
+  const selected = items.find((item) => String(item.id) === value);
+  const display = selected ? (labelKey === "name" ? selected.name : String(selected.value)) : "";
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 min-w-0">
       <Label htmlFor={id}>{label}</Label>
-      <Select value={value} onValueChange={onChange} disabled={disabled || loading}>
-        <SelectTrigger id={id} className="w-full">
-          <SelectValue placeholder={loading ? "Loading…" : placeholder} />
-        </SelectTrigger>
-        <SelectContent>
-          {items.map((item) => (
-            <SelectItem key={item.id} value={String(item.id)}>
-              {labelKey === "name" ? item.name : item.value}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            id={id}
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            aria-label={label}
+            disabled={disabled || loading}
+            className={cn(
+              "h-11 min-h-[44px] w-full min-w-0 justify-between bg-transparent px-3 py-2 text-sm font-normal",
+              !value && "text-muted-foreground",
+            )}
+          >
+            <span className="truncate text-left">{loading ? "Loading…" : display || placeholder}</span>
+            <ChevronDown className="ml-2 size-4 shrink-0 opacity-50" aria-hidden="true" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+          <Command>
+            <CommandInput placeholder={`Search ${label.toLowerCase()}…`} className="h-9" />
+            <CommandList>
+              <CommandEmpty className="py-6 text-center text-sm text-muted-foreground">No results found.</CommandEmpty>
+              <CommandGroup>
+                {items.map((item) => {
+                  const text = labelKey === "name" ? (item.name ?? "") : String(item.value ?? "");
+                  return (
+                    <CommandItem
+                      key={item.id}
+                      value={`${text} ${item.id}`}
+                      onSelect={() => {
+                        onChange(String(item.id));
+                        setOpen(false);
+                      }}
+                      className="min-h-[44px] wrap-break-word"
+                    >
+                      <span className="truncate wrap-break-word">{text}</span>
+                      <Check
+                        className={cn("ml-auto size-4 shrink-0", value === String(item.id) ? "opacity-100" : "opacity-0")}
+                        aria-hidden="true"
+                      />
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }
 
 function SubmitButton({ submitting, label }: { submitting: boolean; label: string }) {
   return (
-    <Button type="submit" disabled={submitting} className="w-full">
+    <Button type="submit" disabled={submitting} aria-busy={submitting} className="w-full min-w-0">
       {submitting ? (
         <>
-          <Loader2 className="animate-spin" aria-hidden="true" />
+          <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden="true" />
           Saving…
         </>
       ) : (
@@ -83,7 +121,7 @@ function SubmitButton({ submitting, label }: { submitting: boolean; label: strin
 function FormError({ error }: { error: string | null }) {
   if (!error) return null;
   return (
-    <p role="alert" className="text-sm text-destructive">
+    <p role="alert" aria-live="assertive" className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive wrap-break-word">
       {error}
     </p>
   );
@@ -91,13 +129,13 @@ function FormError({ error }: { error: string | null }) {
 
 function StructureUnavailable({ onRetry }: { onRetry: () => void }) {
   return (
-    <div className="space-y-4 text-center">
-      <p className="text-sm leading-relaxed text-muted-foreground">
-        The Board hasn&apos;t set up the academic structure yet, so there&apos;s nothing to
-        choose from right now. Check back soon.
+    <div className="space-y-4 text-center min-w-0">
+      <p className="text-sm leading-relaxed text-muted-foreground wrap-break-word">
+        The Board hasn&apos;t published the academic structure yet, so there&apos;s nothing to
+        choose from. Try reloading — if it persists, check back later.
       </p>
-      <Button variant="outline" onClick={onRetry} className="w-full">
-        Try again
+      <Button variant="outline" onClick={onRetry} className="w-full min-w-0">
+        Reload
       </Button>
     </div>
   );
@@ -185,16 +223,24 @@ function StudentForm() {
   const submitMutation = useMutation({
     mutationFn: (body: string) =>
       apiFetch("/auth/onboarding", { method: "POST", body }),
-    onSuccess: () => router.push("/dashboard"),
-    onError: (err: unknown) =>
-      setError(err instanceof ApiError ? err.message : "Something went wrong"),
+    onSuccess: () => {
+      toast.success("Profile saved");
+      router.push("/dashboard");
+    },
+    onError: (err: unknown) => {
+      const msg = err instanceof ApiError ? err.message : "Something went wrong";
+      setError(msg);
+      toast.error(msg);
+    },
   });
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     if (facultyId === "" || departmentId === "" || levelId === "") {
-      setError("Please choose a faculty, department and level");
+      const msg = "Choose your faculty, department and level to continue.";
+      setError(msg);
+      toast.error(msg);
       return;
     }
     submitMutation.mutate(
@@ -265,16 +311,24 @@ function AspirantForm() {
   const submitMutation = useMutation({
     mutationFn: (body: string) =>
       apiFetch("/auth/onboarding", { method: "POST", body }),
-    onSuccess: () => router.push("/dashboard"),
-    onError: (err: unknown) =>
-      setError(err instanceof ApiError ? err.message : "Something went wrong"),
+    onSuccess: () => {
+      toast.success("Profile saved");
+      router.push("/dashboard");
+    },
+    onError: (err: unknown) => {
+      const msg = err instanceof ApiError ? err.message : "Something went wrong";
+      setError(msg);
+      toast.error(msg);
+    },
   });
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     if (aspirationDepartmentId === "") {
-      setError("Please choose a department of aspiration");
+      const msg = "Choose your department of aspiration to continue.";
+      setError(msg);
+      toast.error(msg);
       return;
     }
     submitMutation.mutate(

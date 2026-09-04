@@ -1,5 +1,6 @@
 "use client";
 
+import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
@@ -57,12 +58,11 @@ export default function LeaderboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Leaderboard</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Student and Aspirant rankings are kept separate. Only released weeks appear here.
-        </p>
-      </div>
+      <AdminPageHeader
+        kicker="Rankings"
+        title="Leaderboard"
+        description="Student and Aspirant rankings are kept separate. Only released weeks appear here."
+      />
 
       <Tabs value={track} onValueChange={(value) => setTrack(value as Track)}>
         <TabsList>

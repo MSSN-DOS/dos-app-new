@@ -1,5 +1,6 @@
 "use client";
 
+import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarClock, CheckCircle2 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -113,34 +114,32 @@ export default function ScoreReleasePage() {
 
   return (
     <div>
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Score Release</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Quiz scores stay hidden until you release them. Releasing also updates CGPA and
-            Post-UTME records.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <CalendarClock aria-hidden="true" className="size-4 text-muted-foreground" />
-          <Select
-            value={activeWeek ?? ""}
-            onValueChange={(value) => setSelectedWeek(value)}
-            disabled={weeks.length === 0}
-          >
-            <SelectTrigger className="w-full min-h-11 sm:w-52" aria-label="Week">
-              <SelectValue placeholder={heldQuery.isPending ? "Loading…" : "Pick a week"} />
-            </SelectTrigger>
-            <SelectContent>
-              {weeks.map((week) => (
-                <SelectItem key={week} value={week}>
-                  Week of {week}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+      <AdminPageHeader
+        kicker="Results"
+        title="Score Release"
+        description="Quiz scores stay hidden until you release them. Releasing also updates CGPA and Post-UTME records."
+        actions={
+          <div className="flex items-center gap-2">
+            <CalendarClock aria-hidden="true" className="size-4 text-sub" />
+            <Select
+              value={activeWeek ?? ""}
+              onValueChange={(value) => setSelectedWeek(value)}
+              disabled={weeks.length === 0}
+            >
+              <SelectTrigger className="w-full min-h-11 sm:w-52" aria-label="Week">
+                <SelectValue placeholder={heldQuery.isPending ? "Loading…" : "Pick a week"} />
+              </SelectTrigger>
+              <SelectContent>
+                {weeks.map((week) => (
+                  <SelectItem key={week} value={week}>
+                    Week of {week}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        }
+      />
 
       <div className="mt-6 space-y-3">
         {heldQuery.isPending ? (

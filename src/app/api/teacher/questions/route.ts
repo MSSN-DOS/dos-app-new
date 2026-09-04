@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, ilike, notInArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 
@@ -11,6 +11,8 @@ import {
   questionBlanks,
   questionOptions,
   questions,
+  quizQuestions,
+  quizzes,
 } from "@/lib/db/schema";
 import {
   questionDraftSchema,
@@ -71,6 +73,13 @@ export async function GET(request: Request): Promise<NextResponse> {
     const type = params.get("type");
     const status = params.get("status");
     const topicId = params.get("topicId");
+    const search = params.get("search")?.trim() ?? null;
+    // unattachedOnly=1 hides questions that are already attached to any quiz the
+    // caller created — the reusable pool, so used questions don't masquerade as available.
+    const unattachedOnly = params.get("unattachedOnly") === "1";
+    // excludeQuizId hides questions already attached to one specific quiz (builder's
+    // "Available" tab), even when the same question may exist on other quizzes.
+    const excludeQuizIdRaw = params.get("excludeQuizId");
 
     const ownerQ = ownershipScope(auth);
     const conds = [
@@ -88,7 +97,37 @@ export async function GET(request: Request): Promise<NextResponse> {
         ? eq(questions.status, status)
         : undefined,
       ownerQ !== null ? eq(questions.createdBy, ownerQ) : undefined,
+      search !== null && search.length > 0
+        ? ilike(questions.bodyRichText, `%${search.slice(0, 200)}%`)
+        : undefined,
     ].filter((c) => c !== undefined);
+
+    // Subqueries must reference only the "empty" selection shapes drizzle accepts
+    // inside notInArray; both are scoped to quizzes, never across tenants.
+    if (unattachedOnly) {
+      const usedSub = db
+        .select({ questionId: quizQuestions.questionId })
+        .from(quizQuestions)
+        .innerJoin(quizzes, eq(quizzes.id, quizQuestions.quizId));
+      // Teachers only "use up" a question on their own quizzes; an admin sees every
+      // attachment. ownerQ is null for admins, so skip the filter then.
+      conds.push(
+        ownerQ !== null
+          ? notInArray(
+              questions.id,
+              usedSub.where(eq(quizzes.createdBy, ownerQ)),
+            )
+          : notInArray(questions.id, usedSub),
+      );
+    }
+
+    if (excludeQuizIdRaw !== null && /^\d+$/.test(excludeQuizIdRaw)) {
+      const quizSub = db
+        .select({ questionId: quizQuestions.questionId })
+        .from(quizQuestions)
+        .where(eq(quizQuestions.quizId, Number(excludeQuizIdRaw)));
+      conds.push(notInArray(questions.id, quizSub));
+    }
 
     const base = db
       .select({

@@ -8,6 +8,7 @@ export interface DbMock {
   insert: Mock;
   update: Mock;
   delete: Mock;
+  transaction: Mock;
 }
 
 export type Row = Record<string, unknown>;
@@ -25,6 +26,7 @@ export function makeDbMock(): DbMock {
     insert: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
+    transaction: vi.fn(),
   };
 }
 
@@ -67,6 +69,7 @@ export function stubInsert(db: DbMock, row: Row | Row[]): void {
     return {
       values: () => ({
         returning,
+        onConflictDoNothing: () => ({ rowCount: 0 }),
         onConflictDoUpdate: () => {
           const promise = Promise.resolve(result) as Promise<Row[]> & {
             returning: typeof returning;
@@ -102,6 +105,17 @@ export function stubDelete(db: DbMock, row: Row | null): void {
       return promise;
     },
   }));
+}
+
+/**
+ * Makes db.transaction(cb) invoke cb with the supplied tx mock. Bulk routes run
+ * their writes inside db.transaction(async (tx) => ...); script tx.insert etc.
+ * exactly like you would on a bare db mock.
+ */
+export function stubTransaction(db: DbMock, tx: DbMock): void {
+  db.transaction.mockImplementation(
+    (cb: (inner: DbMock) => Promise<unknown>) => cb(tx),
+  );
 }
 
 export function jsonRequest(
