@@ -29,12 +29,13 @@ export interface AppNavItem {
 // behavior as the admin shell: off-canvas Sheet drawer below md, icon rail at md+.
 export function AppSidebar({
   homeHref,
-  title,
   subtitle,
   items,
 }: {
   homeHref: string;
-  title: string;
+  // title stays in the type for call-site compatibility; the wordmark is
+  // the fixed DOS Site brand (gold accent), not a per-role string.
+  title?: string;
   subtitle: string;
   items: AppNavItem[];
 }) {
@@ -54,19 +55,18 @@ export function AppSidebar({
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
               <Link href={homeHref}>
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                  {/* Placeholder logo: Vercel triangle mark. Replace with MSSN logo (tracked in STATE.md). */}
-                  <svg
-                    aria-label="DOS Site logo placeholder"
-                    viewBox="0 0 76 65"
-                    className="size-4"
-                    fill="currentColor"
-                  >
-                    <path d="M37.59.25l36.95 64H.64l36.95-64z" />
-                  </svg>
-                </span>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/dos-icon.svg"
+                  alt="DOS Site"
+                  width={32}
+                  height={32}
+                  className="size-8 shrink-0 rounded-lg"
+                />
                 <span className="flex flex-col gap-0.5 leading-none">
-                  <span className="font-semibold">{title}</span>
+                  <span className="font-semibold">
+                    DOS <span className="text-gold">Site</span>
+                  </span>
                   <span className="text-xs text-muted-foreground">{subtitle}</span>
                 </span>
               </Link>
