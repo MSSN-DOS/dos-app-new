@@ -9,6 +9,7 @@ import { ApiError } from "@/lib/auth/client-fetch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
 
 export function LoginForm() {
   const { login } = useAuth();
@@ -20,35 +21,62 @@ export function LoginForm() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    if (submitting) return;
+    if (!identifier.trim() || !password) {
+      setError("Enter your identifier and password to continue.");
+      return;
+    }
     setError(null);
     setSubmitting(true);
     try {
-      const data = await login(identifier, password);
+      const data = await login(identifier.trim(), password);
       const role = data.user.role;
+      toast.success("Logged in");
       if (role === "admin") router.push("/admin");
       else if (role === "teacher") router.push("/teacher");
       else router.push("/onboarding");
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Something went wrong");
+      let msg: string;
+      if (err instanceof ApiError) {
+        if (err.status === 401) msg = "Invalid identifier or password. Check and try again.";
+        else if (err.status === 429) msg = "Too many attempts. Try again in a minute.";
+        else if (err.status >= 500) msg = "Service temporarily unavailable. Try again.";
+        else msg = err.message;
+      } else if (err instanceof TypeError) {
+        msg = "Network error. Check your connection and try again.";
+      } else {
+        msg = "Something went wrong. Try again.";
+      }
+      setError(msg);
+      toast.error(msg);
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
+    <form onSubmit={onSubmit} className="space-y-4" noValidate>
       <div className="space-y-2">
-        <Label htmlFor="identifier">Matric No. / JAMB Reg No. / Staff ID</Label>
+        <Label htmlFor="identifier">
+          Identifier — Matric / JAMB / Staff ID <span aria-hidden="true" className="text-destructive">*</span>
+        </Label>
         <Input
           id="identifier"
           value={identifier}
           onChange={(e) => setIdentifier(e.target.value)}
           required
           autoComplete="username"
+          maxLength={24}
+          inputMode="text"
+          aria-invalid={Boolean(error) || undefined}
+          aria-describedby={error ? "login-error" : undefined}
+          className="wrap-break-word"
         />
       </div>
       <div className="space-y-2">
-        <Label htmlFor="password">Password</Label>
+        <Label htmlFor="password">
+          Password <span aria-hidden="true" className="text-destructive">*</span>
+        </Label>
         <Input
           id="password"
           type="password"
@@ -56,17 +84,20 @@ export function LoginForm() {
           onChange={(e) => setPassword(e.target.value)}
           required
           autoComplete="current-password"
+          maxLength={128}
+          aria-invalid={Boolean(error) || undefined}
+          aria-describedby={error ? "login-error" : undefined}
         />
       </div>
       {error ? (
-        <p role="alert" className="text-sm text-destructive">
+        <p id="login-error" role="alert" aria-live="assertive" className="wrap-break-word rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {error}
         </p>
       ) : null}
-      <Button type="submit" disabled={submitting} className="w-full">
+      <Button type="submit" disabled={submitting} aria-busy={submitting} className="w-full min-h-11">
         {submitting ? (
           <>
-            <Loader2 className="animate-spin" aria-hidden="true" />
+            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
             Logging in…
           </>
         ) : (

@@ -3,7 +3,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -37,6 +36,32 @@ interface SubjectOption {
   name: string;
 }
 
+function EmptyDashed({ text }: { text: string }) {
+  return (
+    <div className="rounded-[18px] border border-dashed border-edge bg-transparent px-5 py-[30px] text-center">
+      <div className="mx-auto mb-[14px] flex size-[46px] items-center justify-center rounded-full bg-gold/13">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.8}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="size-5 text-gold"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 7v5l3.5 2" />
+        </svg>
+      </div>
+      <p className="mb-1 text-[14.5px] text-ink" style={{ fontFamily: "var(--font-fraunces), serif" }}>
+        No resources yet
+      </p>
+      <p className="mx-auto max-w-[32ch] break-words text-[12px] leading-[1.55] text-sub">{text}</p>
+    </div>
+  );
+}
+
 export default function ResourcesPage() {
   const { user } = useAuth();
   const isAspirant = user?.role === "aspirant";
@@ -45,10 +70,7 @@ export default function ResourcesPage() {
   const [subjectId, setSubjectId] = useState<string>("all");
 
   const resourcesQuery = useQuery({
-    queryKey: [
-      "resources",
-      { track: isAspirant ? "aspirant" : "student", courseId, subjectId },
-    ],
+    queryKey: ["resources", { track: isAspirant ? "aspirant" : "student", courseId, subjectId }],
     queryFn: () => {
       const params = new URLSearchParams();
       if (isAspirant && subjectId !== "all") params.set("jambSubjectId", subjectId);
@@ -58,8 +80,6 @@ export default function ResourcesPage() {
     },
   });
 
-  // Filter options come from the same read-only structure endpoints used by
-  // onboarding; failures degrade to an unfiltered list.
   const coursesQuery = useQuery({
     queryKey: ["structure", "courses"],
     queryFn: () => apiFetch<{ data: CourseOption[] }>("/structure/courses"),
@@ -74,24 +94,26 @@ export default function ResourcesPage() {
   const rows = resourcesQuery.data?.data ?? [];
 
   return (
-    <div>
+    <div className="mx-auto w-full max-w-4xl">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Resources</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Reading materials posted for{" "}
-            {isAspirant ? "your JAMB subjects" : "your courses"}.
+          <h1 className="text-[26px] font-medium tracking-[-0.01em] text-ink" style={{ fontFamily: "var(--font-fraunces), serif" }}>
+            Resources
+          </h1>
+          <p className="mt-1 break-words text-[13px] leading-relaxed text-sub">
+            Board-published reading for {isAspirant ? "your JAMB subjects" : "your courses"} — PDFs and articles.
           </p>
         </div>
         <div className="w-full sm:w-64">
           {isAspirant ? (
             <Select value={subjectId} onValueChange={setSubjectId}>
-              <SelectTrigger className="min-h-11 w-full" aria-label="JAMB subject filter">
-                <SelectValue
-                  placeholder={subjectsQuery.isPending ? "Loading…" : "All subjects"}
-                />
+              <SelectTrigger
+                className="min-h-11 w-full rounded-md border-line bg-panel text-ink data-[placeholder]:text-faint focus:ring-brand"
+                aria-label="JAMB subject filter"
+              >
+                <SelectValue placeholder={subjectsQuery.isPending ? "Loading…" : "All subjects"} />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="border-line bg-panel text-ink">
                 <SelectItem value="all">All subjects</SelectItem>
                 {(subjectsQuery.data?.data ?? []).map((subject) => (
                   <SelectItem key={subject.id} value={String(subject.id)}>
@@ -102,12 +124,13 @@ export default function ResourcesPage() {
             </Select>
           ) : (
             <Select value={courseId} onValueChange={setCourseId}>
-              <SelectTrigger className="min-h-11 w-full" aria-label="Course filter">
-                <SelectValue
-                  placeholder={coursesQuery.isPending ? "Loading…" : "All courses"}
-                />
+              <SelectTrigger
+                className="min-h-11 w-full rounded-md border-line bg-panel text-ink data-[placeholder]:text-faint focus:ring-brand"
+                aria-label="Course filter"
+              >
+                <SelectValue placeholder={coursesQuery.isPending ? "Loading…" : "All courses"} />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="border-line bg-panel text-ink">
                 <SelectItem value="all">All courses</SelectItem>
                 {(coursesQuery.data?.data ?? []).map((course) => (
                   <SelectItem key={course.id} value={String(course.id)}>
@@ -124,67 +147,60 @@ export default function ResourcesPage() {
         {resourcesQuery.isPending ? (
           <div className="space-y-2" aria-busy="true" aria-label="Loading resources">
             {[0, 1, 2].map((i) => (
-              <Skeleton key={i} className="h-16 w-full" />
+              <Skeleton key={i} className="h-16 w-full rounded-[18px] bg-line" />
             ))}
           </div>
         ) : resourcesQuery.isError ? (
-          <div className="rounded-md border p-6 text-center">
-            <p role="alert" className="text-sm text-muted-foreground">
+          <div className="rounded-[18px] border border-line bg-panel p-6 text-center">
+            <p role="alert" className="break-words text-sm text-sub">
               {resourcesQuery.error instanceof ApiError
                 ? resourcesQuery.error.message
-                : "Something went wrong"}
+                : "Resources couldn't be loaded. Check your connection and try again."}
             </p>
-            <Button
-              variant="outline"
-              size="sm"
-              className="mt-3 min-h-11"
+            <button
+              type="button"
+              className="mt-3 inline-flex min-h-11 items-center rounded-md border border-edge bg-line px-4 text-sm font-medium text-ink hover:bg-edge focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
               onClick={() => void resourcesQuery.refetch()}
             >
-              Retry
-            </Button>
+              Retry loading resources
+            </button>
           </div>
         ) : rows.length === 0 ? (
-          <div className="rounded-md border border-dashed p-8 text-center">
-            <p className="text-sm text-muted-foreground">
-              No resources posted yet for your {isAspirant ? "subjects" : "courses"}.
-            </p>
-          </div>
+          <EmptyDashed
+            text={`No resources posted yet for your ${isAspirant ? "subjects" : "courses"}. Check back — the Board publishes materials per course/subject.`}
+          />
         ) : (
           <ul role="list" className="space-y-3">
             {rows.map((row) => (
-              <li key={row.id} className="rounded-md border p-4">
+              <li key={row.id} className="rounded-[18px] border border-line bg-panel p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
-                    <p className="text-base font-medium">{row.title}</p>
-                    <p className="mt-0.5 text-sm text-muted-foreground">
-                      {row.courseCode ?? row.subjectName} ·{" "}
-                      {row.type === "pdf" ? "PDF" : "Article"}
+                    <p className="break-words text-[15px] font-medium leading-snug text-ink">{row.title}</p>
+                    <p className="mt-0.5 text-[12px] text-sub">
+                      {row.courseCode ?? row.subjectName} · {row.type === "pdf" ? "PDF" : "Article"}
                     </p>
                   </div>
                   {row.type === "pdf" ? (
                     row.fileUrl ? (
-                      <Button
-                        asChild
-                        size="sm"
-                        className="min-h-11 shrink-0 self-start sm:self-auto"
+                      <a
+                        href={row.fileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex min-h-11 shrink-0 items-center justify-center self-start rounded-md bg-brand px-4 text-sm font-medium text-white hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-0 sm:self-auto"
                       >
-                        <a href={row.fileUrl} target="_blank" rel="noopener noreferrer">
-                          Download
-                        </a>
-                      </Button>
+                        Download PDF
+                      </a>
                     ) : (
-                      <span className="self-start text-sm text-destructive sm:self-auto">
-                        File unavailable
-                      </span>
+                      <span className="self-start text-sm text-ruby sm:self-auto">File unavailable</span>
                     )
                   ) : null}
                 </div>
                 {row.type === "article" && (
-                  <details className="mt-2 min-w-0">
-                    <summary className="min-h-11 cursor-pointer text-sm font-medium leading-[2.75rem] sm:leading-normal">
-                      Read
+                  <details className="mt-2 min-w-0 rounded-md border border-line bg-canvas/50">
+                    <summary className="inline-flex min-h-11 cursor-pointer list-none items-center rounded-md px-3 text-sm font-medium text-ink hover:bg-line/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand">
+                      Read article
                     </summary>
-                    <div className="mt-2 whitespace-pre-wrap rounded-md bg-muted/40 p-3 text-base">
+                    <div className="whitespace-pre-wrap border-t border-line p-3 text-[15px] leading-relaxed text-ink">
                       {row.body ?? ""}
                     </div>
                   </details>

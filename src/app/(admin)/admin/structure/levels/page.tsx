@@ -1,5 +1,6 @@
 "use client";
 
+import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Pencil, Trash2 } from "lucide-react";
@@ -155,15 +156,16 @@ export default function LevelsPage() {
 
   return (
     <div>
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Levels</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Academic levels (e.g. 100–600) available for departments and students.
-          </p>
-        </div>
-        <Button onClick={openAdd} className="shrink-0">Add level</Button>
-      </div>
+      <AdminPageHeader
+        kicker="Structure"
+        title="Levels"
+        description="Academic levels (e.g. 100–600) available for departments and students."
+        actions={
+          <Button onClick={openAdd} className="min-h-11 shrink-0 rounded-xl">
+            Add level
+          </Button>
+        }
+      />
 
       <div className="mt-6">
         {query.isPending ? (

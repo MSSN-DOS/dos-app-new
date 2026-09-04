@@ -1,5 +1,6 @@
 "use client";
 
+import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Pencil, Trash2 } from "lucide-react";
@@ -142,15 +143,16 @@ export default function FacultiesPage() {
 
   return (
     <div>
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Faculties</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Faculties group departments; courses can also be scoped to a faculty.
-          </p>
-        </div>
-        <Button onClick={openAdd} className="shrink-0">Add faculty</Button>
-      </div>
+      <AdminPageHeader
+        kicker="Structure"
+        title="Faculties"
+        description="Faculties group departments; courses can also be scoped to a faculty."
+        actions={
+          <Button onClick={openAdd} className="min-h-11 shrink-0 rounded-xl">
+            Add faculty
+          </Button>
+        }
+      />
 
       <div className="mt-6">
         {query.isPending ? (

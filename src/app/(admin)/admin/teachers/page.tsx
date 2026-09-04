@@ -1,5 +1,6 @@
 "use client";
 
+import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ShieldCheck, ShieldOff } from "lucide-react";
 import { useState } from "react";
@@ -107,17 +108,16 @@ export default function TeachersPage() {
 
   return (
     <div>
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Teachers</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Teachers don&rsquo;t self-register — you create their accounts here.
-          </p>
-        </div>
-        <Button onClick={openAdd} className="shrink-0">
-          Add teacher
-        </Button>
-      </div>
+      <AdminPageHeader
+        kicker="Users"
+        title="Teachers"
+        description="Teachers don&rsquo;t self-register — you create their accounts here."
+        actions={
+          <Button onClick={openAdd} className="min-h-11 shrink-0 rounded-xl">
+            Add teacher
+          </Button>
+        }
+      />
 
       {actionError && (
         <p role="alert" className="mt-4 text-sm text-destructive">{actionError}</p>

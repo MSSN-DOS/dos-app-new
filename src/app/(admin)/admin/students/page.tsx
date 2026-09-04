@@ -1,5 +1,6 @@
 "use client";
 
+import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Eye } from "lucide-react";
 import Link from "next/link";
@@ -95,12 +96,11 @@ export default function StudentsPage() {
 
   return (
     <div>
-      <div>
-        <h1 className="text-2xl font-bold">Students</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Directory of enrolled students with their performance.
-        </p>
-      </div>
+      <AdminPageHeader
+        kicker="Users"
+        title="Students"
+        description="Directory of enrolled students with their performance."
+      />
 
       <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="grid gap-1.5 sm:col-span-2 lg:col-span-1">

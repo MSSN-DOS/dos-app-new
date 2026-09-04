@@ -1,5 +1,6 @@
 "use client";
 
+import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { useQuery } from "@tanstack/react-query";
 import { FileText, GraduationCap, ShieldCheck, Target, Users } from "lucide-react";
 import Link from "next/link";
@@ -28,12 +29,11 @@ export default function AdminDashboardPage() {
 
   return (
     <div>
-      <div>
-        <h1 className="text-2xl font-bold">Dashboard</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Platform overview and the things that need your attention.
-        </p>
-      </div>
+      <AdminPageHeader
+        kicker="Overview"
+        title="Dashboard"
+        description="Platform overview and the things that need your attention."
+      />
 
       {query.isPending ? (
         <div

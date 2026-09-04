@@ -9,3 +9,4 @@ export * from "./quizzes";
 export * from "./performance";
 export * from "./semester";
 export * from "./content";
+export * from "./tours";

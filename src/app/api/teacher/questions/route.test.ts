@@ -81,6 +81,44 @@ describe("GET /api/teacher/questions", () => {
     const res = await GET(jsonRequest("http://localhost/x", "GET"));
     expect(res.status).toBe(403);
   });
+
+  it("accepts a search term without erroring", async () => {
+    stubSelect(db, [[{ id: 1, questionType: "options", status: "published", courseId: 2 }]]);
+    const res = await GET(jsonRequest("http://localhost/x?search=2+%2B+2", "GET"));
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      data: [{ id: 1, questionType: "options", status: "published", courseId: 2 }],
+      meta: { page: 1, pageSize: 1, total: 1, totalPages: 1 },
+    });
+  });
+
+  it("hides attached questions when unattachedOnly=1 (teacher scope)", async () => {
+    requireAuth.mockResolvedValue({ userId: 5, roleId: 2, roleName: "teacher" });
+    stubSelect(db, [[{ id: 2, questionType: "fill_in_gap", status: "draft", courseId: 2 }]]);
+    const res = await GET(jsonRequest("http://localhost/x?unattachedOnly=1", "GET"));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: { id: number }[] };
+    expect(body.data).toEqual([{ id: 2, questionType: "fill_in_gap", status: "draft", courseId: 2 }]);
+  });
+
+  it("accepts unattachedOnly=1 for an admin caller (no ownership scope)", async () => {
+    stubSelect(db, [[{ id: 1, questionType: "options", status: "published", courseId: 2 }]]);
+    const res = await GET(jsonRequest("http://localhost/x?unattachedOnly=1", "GET"));
+    expect(res.status).toBe(200);
+  });
+
+  it("combines unattachedOnly with an excludeQuizId filter", async () => {
+    requireAuth.mockResolvedValue({ userId: 5, roleId: 2, roleName: "teacher" });
+    stubSelect(db, [[]]);
+    const res = await GET(
+      jsonRequest("http://localhost/x?unattachedOnly=1&excludeQuizId=3", "GET"),
+    );
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      data: [],
+      meta: { page: 1, pageSize: 0, total: 0, totalPages: 1 },
+    });
+  });
 });
 
 describe("POST /api/teacher/questions — draft (lenient)", () => {

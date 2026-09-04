@@ -1,5 +1,6 @@
 "use client";
 
+import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -149,12 +150,11 @@ export default function AdminContentPage() {
 
   return (
     <div>
-      <div>
-        <h1 className="text-2xl font-bold">Content</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Upload PDFs or write articles for students and aspirants.
-        </p>
-      </div>
+      <AdminPageHeader
+        kicker="Library"
+        title="Content"
+        description="Upload PDFs or write articles for students and aspirants."
+      />
 
       <section className="mt-6 rounded-md border p-4" aria-label="Upload content">
         <Tabs
