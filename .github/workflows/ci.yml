@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Verify Node >=20
+        run: |
+          node -v
+          node -e "const v=process.versions.node.split('.')[0]; if(Number(v)<20){console.error('Node <20');process.exit(1)}; console.log('Node version OK:', process.versions.node)"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Security - dependency audit (high+)
+        run: pnpm audit --audit-level=high
+
+      - name: Security - no secrets in repo
+        run: |
+          echo "Checking for committed secrets and .env leakage..."
+          if git ls-files | grep -q "^\.env$"; then echo "::error:: .env file is tracked!"; exit 1; fi
+          # .env.example is allowed (tracked placeholder per AGENTS.md); block any other .env.* file
+          if git ls-files | grep -E "^\.env\." | grep -v "^\.env\.example$" | grep -q .; then echo "::error:: .env.* file tracked!"; git ls-files | grep -E "^\.env\." | grep -v "^\.env\.example$"; exit 1; fi
+          # fail on hardcoded secrets in src (allow .env.example placeholders only)
+          if grep -R -n -E "(JWT_SECRET|SUPABASE_SERVICE_ROLE_KEY).*=.{8,}" src --include="*.ts" --include="*.tsx" | grep -v "process.env" | grep -v "placeholder" ; then
+            echo "::error:: Hardcoded secret found in src/"
+            exit 1
+          fi
+          echo "Secrets check passed"
+
+      - name: Security - obfuscation / suspicious pattern scan
+        run: |
+          echo "Scanning for obfuscated/suspicious patterns..."
+          # Fail on common obfuscation vectors in src (eval, Function constructor, large base64/hex blobs, atob/btoa abuse)
+          # Allowed: legitimate uses are rare in this codebase — flag for review
+          PATTERNS="(eval\s*\(|new Function\s*\(|atob\s*\(|btoa\s*\(|\\x[0-9a-fA-F]{2}.*\\x[0-9a-fA-F]{2})"
+          if grep -R -n -P "$PATTERNS" src --include="*.ts" --include="*.tsx" | grep -v "__tests__" | grep -v ".test.ts"; then
+            echo "::warning:: Suspicious obfuscation pattern found — review manually (see above). Failing CI."
+            exit 1
+          fi
+          # Large base64-like single-line blobs (>300 chars of base64 charset) often indicate bundled payloads
+          if grep -R -n -E "[A-Za-z0-9+/=]{300,}" src --include="*.ts" --include="*.tsx" | grep -v "generated" | head -5 | grep -q .; then
+            echo "::error:: Suspicious large base64 blob found in src/"
+            grep -R -n -E "[A-Za-z0-9+/=]{300,}" src --include="*.ts" --include="*.tsx" | head -5
+            exit 1
+          fi
+          echo "Obfuscation scan passed"
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build

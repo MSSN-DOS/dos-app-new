@@ -1,0 +1,155 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: hsl(var(--sidebar-ring));
+  --color-sidebar-border: hsl(var(--sidebar-border));
+  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
+  --color-sidebar-primary: hsl(var(--sidebar-primary));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar: hsl(var(--sidebar));
+  --color-chart-5: hsl(var(--chart-5));
+  --color-chart-4: hsl(var(--chart-4));
+  --color-chart-3: hsl(var(--chart-3));
+  --color-chart-2: hsl(var(--chart-2));
+  --color-chart-1: hsl(var(--chart-1));
+  --color-ring: hsl(var(--ring));
+  --color-input: hsl(var(--input));
+  --color-border: hsl(var(--border));
+  --color-destructive: hsl(var(--destructive));
+  --color-warning: hsl(var(--warning));
+  --color-success: hsl(var(--success));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-card: hsl(var(--card));
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* Design tokens — DESIGN.md §11. HSL triplets per shadcn convention. */
+:root {
+  --background: 0 0% 100%;
+  --foreground: 222 20% 12%;
+
+  --primary: 217 91% 45%; /* blue */
+  --primary-foreground: 0 0% 100%;
+
+  --accent: 27 96% 55%; /* orange */
+  --accent-foreground: 222 20% 12%;
+
+  --muted: 220 14% 96%;
+  --muted-foreground: 220 9% 46%;
+
+  --border: 220 13% 88%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 20% 12%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 20% 12%;
+  --secondary: 220 14% 96%;
+  --secondary-foreground: 222 20% 12%;
+  --input: 220 13% 88%;
+  --ring: 217 91% 45%;
+
+  --success: 142 71% 35%;
+  --warning: 38 92% 50%;
+  --destructive: 0 72% 51%;
+
+  /* Chart slots mapped to the §11 palette — no ad-hoc colors elsewhere. */
+  --chart-1: 217 91% 45%;
+  --chart-2: 27 96% 55%;
+  --chart-3: 142 71% 35%;
+  --chart-4: 38 92% 50%;
+  --chart-5: 0 72% 51%;
+
+  --radius: 0.625rem;
+
+  --sidebar: 220 14% 97%;
+  --sidebar-foreground: 222 20% 12%;
+  --sidebar-primary: 217 91% 45%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 220 14% 96%;
+  --sidebar-accent-foreground: 222 20% 12%;
+  --sidebar-border: 220 13% 88%;
+  --sidebar-ring: 217 91% 45%;
+}
+
+.dark {
+  --background: 222 25% 9%;
+  --foreground: 210 20% 96%;
+
+  --primary: 217 91% 60%;
+  --primary-foreground: 222 25% 9%;
+
+  --accent: 27 96% 62%;
+  --accent-foreground: 222 25% 9%;
+
+  --muted: 217 19% 18%;
+  --muted-foreground: 217 10% 65%;
+
+  --border: 217 19% 25%;
+  --card: 222 22% 12%;
+  --card-foreground: 210 20% 96%;
+  --popover: 222 22% 12%;
+  --popover-foreground: 210 20% 96%;
+  --secondary: 217 19% 18%;
+  --secondary-foreground: 210 20% 96%;
+  --input: 217 19% 28%;
+  --ring: 217 91% 60%;
+
+  --success: 142 60% 45%;
+  --warning: 38 92% 58%;
+  --destructive: 0 70% 60%;
+
+  --chart-1: 217 91% 60%;
+  --chart-2: 27 96% 62%;
+  --chart-3: 142 60% 45%;
+  --chart-4: 38 92% 58%;
+  --chart-5: 0 70% 60%;
+
+  --sidebar: 222 22% 12%;
+  --sidebar-foreground: 210 20% 96%;
+  --sidebar-primary: 217 91% 60%;
+  --sidebar-primary-foreground: 222 25% 9%;
+  --sidebar-accent: 217 19% 18%;
+  --sidebar-accent-foreground: 210 20% 96%;
+  --sidebar-border: 217 19% 22%;
+  --sidebar-ring: 217 91% 60%;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
