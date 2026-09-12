@@ -1,0 +1,3 @@
+#!/usr/bin/env sh
+# Blocks a commit if the project contains known PolinRider / TasksJacker IOCs.
+node scripts/guard.mjs

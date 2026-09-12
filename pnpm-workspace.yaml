@@ -7,3 +7,4 @@ allowBuilds:
 
 overrides:
   esbuild@<=0.24.2: ">=0.25.0"
+  js-yaml@>=4.0.0 <4.3.2: ">=4.3.2"
