@@ -1,0 +1,7 @@
+.next
+out
+build
+coverage
+drizzle
+pnpm-lock.yaml
+*.md

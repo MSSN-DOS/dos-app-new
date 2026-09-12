@@ -1,0 +1,567 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DOS Site — Wireframes</title>
+    <style>
+      :root {
+        --ink: #1b1f23;
+        --line: #8892a0;
+        --line-soft: #c7cdd6;
+        --paper: #eef1f5;
+        --accent: #2a6f5e;
+        --accent-soft: #dbe9e4;
+        --mono: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
+        --sans: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--paper);
+        font-family: var(--sans);
+        color: var(--ink);
+        padding-bottom: 60px;
+      }
+      header {
+        padding: 28px 20px 18px;
+        border-bottom: 1px solid var(--line-soft);
+        background: #fff;
+      }
+      header .kicker {
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--accent);
+        margin-bottom: 6px;
+      }
+      header h1 {
+        margin: 0 0 6px;
+        font-size: 22px;
+        letter-spacing: -0.01em;
+      }
+      header p {
+        margin: 0;
+        font-size: 13px;
+        color: #5a6472;
+        max-width: 60ch;
+      }
+      nav {
+        display: flex;
+        gap: 0;
+        overflow-x: auto;
+        background: #fff;
+        border-bottom: 1px solid var(--line-soft);
+        position: sticky;
+        top: 0;
+        z-index: 10;
+      }
+      nav button {
+        font-family: var(--mono);
+        font-size: 12px;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        background: none;
+        border: none;
+        padding: 14px 16px;
+        color: #5a6472;
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        white-space: nowrap;
+      }
+      nav button.active {
+        color: var(--accent);
+        border-bottom-color: var(--accent);
+      }
+      main {
+        max-width: 640px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      .screen {
+        display: none;
+      }
+      .screen.active {
+        display: block;
+      }
+      .frame {
+        border: 1px solid var(--line);
+        background: #fff;
+        margin-bottom: 20px;
+      }
+      .frame-label {
+        font-family: var(--mono);
+        font-size: 10px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #fff;
+        background: var(--ink);
+        padding: 4px 8px;
+        display: inline-block;
+      }
+      .frame-body {
+        padding: 14px;
+      }
+      .box {
+        border: 1px dashed var(--line-soft);
+        padding: 10px;
+        margin-bottom: 8px;
+        font-size: 12px;
+        color: #5a6472;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+      }
+      .row > * {
+        flex: 1;
+      }
+      .pill {
+        display: inline-block;
+        font-family: var(--mono);
+        font-size: 10px;
+        padding: 2px 8px;
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        color: #5a6472;
+        margin-right: 6px;
+      }
+      .btn {
+        display: inline-block;
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        padding: 8px 12px;
+        border: 1px solid var(--ink);
+        color: var(--ink);
+        background: #fff;
+      }
+      .btn.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
+      .field-label {
+        font-family: var(--mono);
+        font-size: 10px;
+        text-transform: uppercase;
+        color: #8892a0;
+        margin-bottom: 3px;
+      }
+      .stat {
+        border: 1px solid var(--line-soft);
+        padding: 10px;
+        text-align: center;
+      }
+      .stat .num {
+        font-family: var(--mono);
+        font-size: 20px;
+        color: var(--accent);
+      }
+      .stat .lbl {
+        font-size: 10px;
+        color: #8892a0;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .list-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--line-soft);
+        font-size: 12px;
+      }
+      .list-row:last-child {
+        border-bottom: none;
+      }
+      .note {
+        font-size: 11px;
+        color: #8892a0;
+        font-style: italic;
+        margin-top: 4px;
+      }
+      .draft-tag {
+        font-family: var(--mono);
+        font-size: 9px;
+        color: #b8862f;
+        border: 1px solid #b8862f;
+        padding: 1px 6px;
+      }
+      .lock {
+        font-family: var(--mono);
+        font-size: 9px;
+        color: #8892a0;
+      }
+      h2.frame-title {
+        font-size: 14px;
+        margin: 0 0 12px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--line-soft);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="kicker">MSSN Unilorin · Board of Studies</div>
+      <h1>DOS Site — Wireframes</h1>
+      <p>
+        Low-fidelity layout sketches for the four roles. These show structure and flow,
+        not final visual design — for developer scoping and Board review.
+      </p>
+      <p style="margin-top: 8px; font-size: 11px; color: #8892a0; font-style: italic">
+        Updated 2026-08-22: added the Score Release and Semester Settings admin frames —
+        new surfaces introduced when those two open questions were resolved. See DESIGN.md
+        for the full route map.
+      </p>
+    </header>
+
+    <nav id="tabs">
+      <button data-screen="admin" class="active">Admin</button>
+      <button data-screen="teacher">Teacher</button>
+      <button data-screen="student">Student</button>
+      <button data-screen="aspirant">Aspirant</button>
+    </nav>
+
+    <main>
+      <!-- ADMIN -->
+      <section class="screen active" id="admin">
+        <div class="frame">
+          <span class="frame-label">Admin — Dashboard</span>
+          <div class="frame-body">
+            <div class="row">
+              <div class="stat">
+                <div class="num">842</div>
+                <div class="lbl">Students</div>
+              </div>
+              <div class="stat">
+                <div class="num">1,204</div>
+                <div class="lbl">Aspirants</div>
+              </div>
+              <div class="stat">
+                <div class="num">6</div>
+                <div class="lbl">Teachers</div>
+              </div>
+            </div>
+            <div class="box">
+              Leaderboard (Admin-only) — ranked by CGPA / Post-UTME score, from Course
+              Quiz results only<br /><span class="note"
+                >Not visible to students or aspirants</span
+              >
+            </div>
+            <div class="list-row">
+              <span>Pending quiz approvals</span><span class="pill">3 waiting</span>
+            </div>
+            <div class="list-row">
+              <span>Weekly score release</span><span class="pill">Due Friday</span>
+            </div>
+            <div class="row" style="margin-top: 10px">
+              <button class="btn primary">Upload PDF / Article</button>
+              <button class="btn">Manage Teachers</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="frame">
+          <span class="frame-label">Admin — Student Directory</span>
+          <div class="frame-body">
+            <div class="field-label">Search / Filter</div>
+            <div class="box">
+              [ Search by name, reg no. / matric no. ] [ Track: Student ▾ ]
+            </div>
+            <div class="list-row">
+              <span>Bello, A. — MAT/2023/0142</span><span class="pill">CGPA 4.21</span>
+            </div>
+            <div class="list-row">
+              <span>Yusuf, F. — MAT/2023/0091</span><span class="pill">CGPA 3.85</span>
+            </div>
+            <div class="list-row">
+              <span>Suleiman, K. — MAT/2023/0203</span><span class="pill">CGPA 3.60</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="frame">
+          <span class="frame-label">Admin — Score Release (New)</span>
+          <div class="frame-body">
+            <div class="field-label">Held attempts — Week of Aug 22</div>
+            <div class="list-row">
+              <span>CHE 301 — Course Quiz, Week 4</span
+              ><span class="pill">214 attempts held</span>
+            </div>
+            <div class="list-row">
+              <span>CHE 305 — Course Quiz, Week 4</span
+              ><span class="pill">198 attempts held</span>
+            </div>
+            <div class="list-row">
+              <span>Physics (JAMB) — Course Quiz, Week 4</span
+              ><span class="pill">340 attempts held</span>
+            </div>
+            <div class="row" style="margin-top: 10px">
+              <button class="btn">Release CHE 301 only</button>
+              <button class="btn primary">Release all — Week 4</button>
+            </div>
+            <div class="note">
+              Scores are held on submission by default. Nothing is visible to a
+              Student/Aspirant until released here — per-quiz or in bulk by week.
+            </div>
+          </div>
+        </div>
+
+        <div class="frame">
+          <span class="frame-label">Admin — Semester Settings (New)</span>
+          <div class="frame-body">
+            <div class="field-label">Mode</div>
+            <div class="row" style="margin-bottom: 8px">
+              <span class="pill" style="border-color: var(--accent); color: var(--accent)"
+                >Auto (calendar-driven)</span
+              >
+              <span class="pill">Manual override</span>
+            </div>
+            <div class="box">
+              Auto mode — active semester: <strong>Rain (2nd Semester)</strong
+              ><br />Derived from today's date against the 2025/26 session calendar (Feb
+              23 – Jul 3, 2026).
+            </div>
+            <div class="field-label">Manual override (used if Mode = Manual)</div>
+            <div class="box">[ Harmattan ▾ / Rain ]</div>
+            <div class="note">
+              Auto mode is the default; manual override exists as a safety net for when
+              real dates drift from the calendar.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TEACHER -->
+      <section class="screen" id="teacher">
+        <div class="frame">
+          <span class="frame-label">Teacher — Quiz Builder</span>
+          <div class="frame-body">
+            <h2 class="frame-title">New Quiz</h2>
+            <div class="row" style="margin-bottom: 8px">
+              <span class="pill">Topic Quiz (practice)</span>
+              <span class="pill" style="border-color: var(--accent); color: var(--accent)"
+                >Course Quiz (weekly · counts)</span
+              >
+            </div>
+            <div class="field-label">Course / JAMB Subject</div>
+            <div class="box">
+              [ CHE 301 — Chemical Reaction Engineering ▾ ] (Chemical Engineering · 300L ·
+              Harmattan)
+            </div>
+            <div class="field-label">Topic (only for Topic Quiz)</div>
+            <div class="box">[ Mass Transfer ▾ — created by Admin or Teacher ]</div>
+            <div class="field-label">Title</div>
+            <div class="box">[ Course Quiz — Week 4 ]</div>
+            <div class="row">
+              <div>
+                <div class="field-label">Question count</div>
+                <div class="box">[ 50 — fixed for Course Quiz ]</div>
+              </div>
+              <div>
+                <div class="field-label">Time limit</div>
+                <div class="box">[ 45 min ]</div>
+              </div>
+            </div>
+            <div class="row">
+              <div>
+                <div class="field-label">Pass mark</div>
+                <div class="box">[ 50% ]</div>
+              </div>
+              <div>
+                <div class="field-label">Multiple attempts</div>
+                <div class="box">[ Toggle: On ]</div>
+              </div>
+            </div>
+            <div class="field-label">Lose-focus policy</div>
+            <div class="box">[ Ignore ▾ / Warn / Auto-submit ]</div>
+            <div class="field-label">Instructions</div>
+            <div class="box">[ Rich text: short description shown before start ]</div>
+            <div class="note">
+              Only Course Quiz results feed CGPA, Post-UTME, and the leaderboard. Topic
+              Quizzes are practice only.
+            </div>
+          </div>
+        </div>
+
+        <div class="frame">
+          <span class="frame-label">Teacher — Question Editor</span>
+          <div class="frame-body">
+            <div class="row" style="margin-bottom: 8px">
+              <span class="pill">Fill in the gap</span>
+              <span class="pill">Options</span>
+            </div>
+            <div class="box">
+              Question body — [B] [sub] [sup] formatting tools<br />"The powerhouse of the
+              cell is the ____."
+            </div>
+            <div class="field-label">Options (min. 2, expandable)</div>
+            <div class="box">○ Option A<br />○ Option B<br />+ Add option</div>
+            <div class="row" style="margin-top: 10px">
+              <button class="btn">
+                Save as Draft <span class="draft-tag">DRAFT</span>
+              </button>
+              <button class="btn primary" style="opacity: 0.4">
+                Publish (blocked — missing option)
+              </button>
+            </div>
+            <div class="note">
+              Publishing is blocked until question text and all required options are
+              filled in.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- STUDENT -->
+      <section class="screen" id="student">
+        <div class="frame">
+          <span class="frame-label">Student — Onboarding (right after registration)</span>
+          <div class="frame-body">
+            <div class="field-label">Faculty *</div>
+            <div class="box">[ Select faculty ▾ ]</div>
+            <div class="field-label">Department *</div>
+            <div class="box">[ Filtered by Faculty chosen above ▾ ]</div>
+            <div class="field-label">Level *</div>
+            <div class="box">
+              [ 100 / 200 / 300 / 400 / 500 ▾ — options depend on Department ]
+            </div>
+            <button class="btn primary">Continue to Dashboard</button>
+            <div class="note">
+              * Required. No GPA/CGPA entry — the platform calculates CGPA itself from
+              Course Quiz results.
+            </div>
+          </div>
+        </div>
+
+        <div class="frame">
+          <span class="frame-label">Student — Dashboard</span>
+          <div class="frame-body">
+            <div class="row">
+              <div class="stat">
+                <div class="num">4.21</div>
+                <div class="lbl">CGPA (this week)</div>
+              </div>
+              <div class="stat">
+                <div class="num">12</div>
+                <div class="lbl">Quizzes taken</div>
+              </div>
+            </div>
+            <div class="field-label">Registered as</div>
+            <div class="box">
+              Matric Number · Name · Faculty of Engineering · Chemical Engineering · 300
+              Level
+            </div>
+            <div class="row" style="margin-bottom: 8px">
+              <span class="pill">Harmattan (1st Semester)</span>
+              <span class="pill" style="opacity: 0.5">Rain (2nd Semester)</span>
+            </div>
+            <div class="field-label">Topic Quizzes — practice, doesn't count</div>
+            <div class="list-row">
+              <span>CHE 301 — Topic: Mass Transfer</span><span class="pill">Open</span>
+            </div>
+            <div class="field-label">Course Quiz — weekly, counts toward CGPA</div>
+            <div class="list-row">
+              <span>CHE 301 — Week 4 (50 questions)</span><span class="pill">Open</span>
+            </div>
+            <div class="list-row">
+              <span>CHE 305 — Week 4 (50 questions)</span><span class="pill">Open</span>
+            </div>
+            <div class="list-row">
+              <span>GNS 301 (General) — Week 3</span
+              ><span class="pill">Score pending</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="frame">
+          <span class="frame-label">Student — Quiz Attempt</span>
+          <div class="frame-body">
+            <div class="row" style="margin-bottom: 8px">
+              <span class="pill">Q 6 / 20</span>
+              <span class="pill">08:42 remaining</span>
+            </div>
+            <div class="box">
+              Fill in the gap:<br />"Salah is performed ____ times daily."
+            </div>
+            <div class="box">[ answer input field ]</div>
+            <button class="btn primary">Next question</button>
+            <div class="note">Best of all attempts is kept as the recorded score.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ASPIRANT -->
+      <section class="screen" id="aspirant">
+        <div class="frame">
+          <span class="frame-label"
+            >Aspirant — Onboarding (right after registration)</span
+          >
+          <div class="frame-body">
+            <div class="field-label">Department of Aspiration *</div>
+            <div class="box">[ Select from all Unilorin departments ▾ ]</div>
+            <button class="btn primary">Continue to Dashboard</button>
+            <div class="note">
+              * Required. No JAMB score entry — the platform calculates Post-UTME score
+              itself from Course Quiz results.
+            </div>
+          </div>
+        </div>
+
+        <div class="frame">
+          <span class="frame-label">Aspirant — Dashboard</span>
+          <div class="frame-body">
+            <div class="row">
+              <div class="stat">
+                <div class="num">38/50</div>
+                <div class="lbl">Post-UTME score (converted)</div>
+              </div>
+              <div class="stat">
+                <div class="num">9</div>
+                <div class="lbl">Quizzes taken</div>
+              </div>
+            </div>
+            <div class="field-label">Registered as</div>
+            <div class="box">JAMB Reg Number · Name · Aspiring: Medicine & Surgery</div>
+            <div class="field-label">Available quizzes — by JAMB subject</div>
+            <div class="list-row"><span>Physics</span><span class="pill">Open</span></div>
+            <div class="list-row">
+              <span>Use of English</span><span class="pill">Open</span>
+            </div>
+            <div class="note">
+              Leaderboard is not visible on this account — admin view only.
+            </div>
+          </div>
+        </div>
+
+        <div class="frame">
+          <span class="frame-label">Aspirant — Weekly Score Release</span>
+          <div class="frame-body">
+            <div class="box">
+              Raw JAMB score: 152/400<br />Converted (Unilorin 50-pt standard):
+              <strong>38/50</strong>
+            </div>
+            <div class="note">Released weekly by Admin.</div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      document.getElementById("tabs").addEventListener("click", (e) => {
+        const btn = e.target.closest("button");
+        if (!btn) return;
+        document
+          .querySelectorAll("nav button")
+          .forEach((b) => b.classList.remove("active"));
+        document.querySelectorAll(".screen").forEach((s) => s.classList.remove("active"));
+        btn.classList.add("active");
+        document.getElementById(btn.dataset.screen).classList.add("active");
+      });
+    </script>
+  </body>
+</html>

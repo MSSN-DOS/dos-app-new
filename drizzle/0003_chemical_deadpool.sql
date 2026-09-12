@@ -1,0 +1,1 @@
+ALTER TABLE "post_utme_scores" ALTER COLUMN "converted_score_50" SET DATA TYPE numeric(5, 2);

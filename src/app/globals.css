@@ -1,0 +1,267 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: hsl(var(--sidebar-ring));
+  --color-sidebar-border: hsl(var(--sidebar-border));
+  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
+  --color-sidebar-primary: hsl(var(--sidebar-primary));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar: hsl(var(--sidebar));
+  --color-chart-5: hsl(var(--chart-5));
+  --color-chart-4: hsl(var(--chart-4));
+  --color-chart-3: hsl(var(--chart-3));
+  --color-chart-2: hsl(var(--chart-2));
+  --color-chart-1: hsl(var(--chart-1));
+  --color-ring: hsl(var(--ring));
+  --color-input: hsl(var(--input));
+  --color-border: hsl(var(--border));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-warning: hsl(var(--warning));
+  --color-success: hsl(var(--success));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-card: hsl(var(--card));
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* DOS semantic surface palette (DESIGN.md §12 spirit) — used by the
+     hand-built role screens. Values flip with the active theme so the same
+     utility class reads correctly in light and dark. */
+  --color-canvas: var(--dos-canvas);
+  --color-panel: var(--dos-panel);
+  --color-sunk: var(--dos-sunk);
+  --color-line: var(--dos-line);
+  --color-edge: var(--dos-edge);
+  --color-ink: var(--dos-ink);
+  --color-sub: var(--dos-sub);
+  --color-faint: var(--dos-faint);
+  --color-brand: var(--dos-brand);
+  --color-brand-hover: var(--dos-brand-hover);
+  --color-brand-press: var(--dos-brand-press);
+  --color-brand-soft: var(--dos-brand-soft);
+  --color-gold: var(--dos-gold);
+  --color-ruby: var(--dos-ruby);
+  --color-ruby-hover: var(--dos-ruby-hover);
+  --color-wash: var(--dos-wash);
+}
+
+/* DOS palette — LIGHT (html without .dark) */
+:root {
+  --dos-canvas: #f4f6fb;
+  --dos-panel: #ffffff;
+  --dos-sunk: #e9edf6;
+  --dos-line: #d8dfee;
+  --dos-edge: #c6cfdd;
+  --dos-ink: #111a2b;
+  --dos-sub: #4c5a72;
+  --dos-faint: #8490a6;
+  --dos-brand: #3f54e6;
+  --dos-brand-hover: #3748cf;
+  --dos-brand-press: #3140b5;
+  --dos-brand-soft: #4056db;
+  --dos-gold: #9a5b00;
+  --dos-ruby: #c23434;
+  --dos-ruby-hover: #a72a2a;
+  --dos-wash: #10182814;
+  --dos-brand-glow: #5b7fff08;
+  --dos-gold-glow: #e8a35506;
+  --dos-aura: #5b7fff12;
+}
+
+/* DOS palette — DARK */
+.dark {
+  --dos-canvas: #0a0e14;
+  --dos-panel: #161d2c;
+  --dos-sunk: #0d1219;
+  --dos-line: #1f2838;
+  --dos-edge: #242e40;
+  --dos-ink: #eef1f7;
+  --dos-sub: #9aa5b8;
+  --dos-faint: #5c6579;
+  --dos-brand: #5b7fff;
+  --dos-brand-hover: #4f6fe6;
+  --dos-brand-press: #3a56c9;
+  --dos-brand-soft: #7a93ff;
+  --dos-gold: #e8a355;
+  --dos-ruby: #e06c6c;
+  --dos-ruby-hover: #c95a5a;
+  --dos-wash: #ffffff0f;
+  --dos-brand-glow: #5b7fff14;
+  --dos-gold-glow: #e8a35512;
+  --dos-aura: #5b7fff40;
+}
+
+/* Design tokens — DESIGN.md §11. HSL triplets per shadcn convention. */
+:root {
+  --background: 0 0% 100%;
+  --foreground: 222 20% 12%;
+
+  --primary: 217 91% 45%; /* blue */
+  --primary-foreground: 0 0% 100%;
+
+  --accent: 27 96% 55%; /* orange */
+  --accent-foreground: 222 20% 12%;
+
+  --muted: 220 14% 96%;
+  --muted-foreground: 220 9% 46%;
+
+  --border: 220 13% 88%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 20% 12%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 20% 12%;
+  --secondary: 220 14% 96%;
+  --secondary-foreground: 222 20% 12%;
+  --input: 220 13% 88%;
+  --ring: 217 91% 45%;
+
+  --success: 142 71% 35%;
+  --warning: 38 92% 50%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+
+  /* Chart slots mapped to the §11 palette — no ad-hoc colors elsewhere. */
+  --chart-1: 217 91% 45%;
+  --chart-2: 27 96% 55%;
+  --chart-3: 142 71% 35%;
+  --chart-4: 38 92% 50%;
+  --chart-5: 0 72% 51%;
+
+  --radius: 0.625rem;
+
+  --sidebar: 222 42% 94%;
+  --sidebar-foreground: 219 43% 12%;
+  --sidebar-primary: 232 77% 57%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 220 26% 89%;
+  --sidebar-accent-foreground: 219 43% 12%;
+  --sidebar-border: 221 39% 89%;
+  --sidebar-ring: 232 77% 57%;
+}
+
+.dark {
+  --background: 222 25% 9%;
+  --foreground: 210 20% 96%;
+
+  --primary: 217 91% 60%;
+  --primary-foreground: 222 25% 9%;
+
+  --accent: 27 96% 62%;
+  --accent-foreground: 222 25% 9%;
+
+  --muted: 217 19% 18%;
+  --muted-foreground: 217 10% 65%;
+
+  --border: 217 19% 25%;
+  --card: 222 22% 12%;
+  --card-foreground: 210 20% 96%;
+  --popover: 222 22% 12%;
+  --popover-foreground: 210 20% 96%;
+  --secondary: 217 19% 18%;
+  --secondary-foreground: 210 20% 96%;
+  --input: 217 19% 28%;
+  --ring: 217 91% 60%;
+
+  --success: 142 60% 45%;
+  --warning: 38 92% 58%;
+  --destructive: 0 70% 60%;
+  --destructive-foreground: 0 0% 100%;
+
+  --chart-1: 217 91% 60%;
+  --chart-2: 27 96% 62%;
+  --chart-3: 142 60% 45%;
+  --chart-4: 38 92% 58%;
+  --chart-5: 0 70% 60%;
+
+  --sidebar: 215 32% 7%;
+  --sidebar-foreground: 220 36% 95%;
+  --sidebar-primary: 227 100% 68%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 215 18% 13%;
+  --sidebar-accent-foreground: 220 36% 95%;
+  --sidebar-border: 218 29% 17%;
+  --sidebar-ring: 227 100% 68%;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+    scrollbar-color: hsl(var(--border)) transparent;
+    scrollbar-width: thin;
+  }
+  a {
+    text-underline-offset: 3px;
+  }
+  /* Safe-area for notched devices */
+  body {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+  ::selection {
+    background: hsl(var(--primary) / 0.22);
+  }
+  ::-moz-selection {
+    background: hsl(var(--primary) / 0.22);
+  }
+  * {
+    caret-color: hsl(var(--primary));
+  }
+  :focus-visible {
+    outline-color: hsl(var(--ring));
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+    /* Keep focus-ring transitions for keyboard users even under reduced motion */
+    :focus-visible {
+      transition-duration: 0.15s !important;
+    }
+  }
+  /* Performance: isolate paint for below-fold and lattice */
+  section {
+    contain: layout style;
+  }
+  [data-slot="card"] {
+    contain: layout paint;
+  }
+}

@@ -1,0 +1,1 @@
+ALTER TABLE "cgpa_records" ALTER COLUMN "cgpa_value" SET DATA TYPE numeric(5, 2);

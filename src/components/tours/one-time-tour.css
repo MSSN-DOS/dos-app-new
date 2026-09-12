@@ -1,0 +1,87 @@
+.driver-popover.dos-tour-popover {
+  background-color: var(--dos-panel);
+  color: var(--dos-ink);
+  border: 1px solid var(--dos-line);
+  border-radius: 14px;
+  box-shadow: 0 10px 36px rgb(0 0 0 / 0.35);
+  max-width: 340px;
+  min-width: 260px;
+  padding: 18px 16px 12px;
+  font-family: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+}
+
+.dos-tour-popover .driver-popover-title {
+  color: var(--dos-ink);
+  font-family: var(--font-fraunces), serif;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.35;
+  padding-right: 24px;
+  margin: 0 0 6px;
+}
+
+.dos-tour-popover .driver-popover-description {
+  color: var(--dos-sub);
+  font-size: 13.5px;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.dos-tour-popover .driver-popover-progress-text {
+  color: var(--dos-faint);
+  font-size: 12px;
+}
+
+.dos-tour-popover .driver-popover-close-btn {
+  color: var(--dos-faint);
+}
+
+.dos-tour-popover .driver-popover-close-btn:hover,
+.dos-tour-popover .driver-popover-close-btn:focus {
+  color: var(--dos-ink);
+}
+
+.dos-tour-popover .driver-popover-footer-btn {
+  color: var(--dos-ink);
+  background-color: transparent;
+  border: 1px solid var(--dos-line);
+  border-radius: 10px;
+  min-height: 36px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.dos-tour-popover .driver-popover-footer-btn:hover,
+.dos-tour-popover .driver-popover-footer-btn:focus {
+  background-color: var(--dos-wash);
+}
+
+.dos-tour-popover .driver-popover-navigation-btns button:last-child {
+  background-color: var(--dos-brand);
+  border-color: var(--dos-brand);
+  color: #fff;
+}
+
+.dos-tour-popover .driver-popover-navigation-btns button:last-child:hover,
+.dos-tour-popover .driver-popover-navigation-btns button:last-child:focus {
+  background-color: var(--dos-brand-hover);
+  border-color: var(--dos-brand-hover);
+}
+
+.dos-tour-popover .driver-popover-arrow-side-top {
+  border-top-color: var(--dos-panel);
+}
+
+.dos-tour-popover .driver-popover-arrow-side-bottom {
+  border-bottom-color: var(--dos-panel);
+}
+
+.dos-tour-popover .driver-popover-arrow-side-left {
+  border-left-color: var(--dos-panel);
+}
+
+.dos-tour-popover .driver-popover-arrow-side-right {
+  border-right-color: var(--dos-panel);
+}
