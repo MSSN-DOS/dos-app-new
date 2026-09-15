@@ -32,6 +32,7 @@ Work top to bottom. Don't check a later phase's box before every task above it i
 - [x] P1-7 — Client auth: localStorage storage, fetch wrapper, auth context
 - [x] P1-8 — `/login`, `/register/student`, `/register/aspirant` pages
   - Auth UI refactored to shadcn primitives (Card/Input/Label) instead of raw HTML.
+  - 2026-09-15: password fields gained a show/hide eye toggle (`components/auth/password-input.tsx`) on `/login` and both `/register` pages (password + confirm).
   - 2026-08-24 Board feedback pass: auth screens + landing redesigned — khatam-lattice signature (`components/ui/geo-lattice.tsx`), dark `--input`/`--border` contrast raised, landing got real CTAs + two-track cards, in-button submit spinner. `DESIGN.md` §12 expanded with type scale / spacing / elevation / states so the next screen isn't designed from five HSL variables and a hope.
 - [x] P1-9 — `POST /api/auth/onboarding` + `/onboarding` page (full e2e check deferred to P2-8)
   - Onboarding form refactored to shadcn Select primitives; cascading selects tolerant of missing P2 structure endpoints (show "not available yet" empty state).

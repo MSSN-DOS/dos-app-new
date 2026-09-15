@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 
 import { useAuth } from "@/components/auth/auth-provider";
+import { PasswordInput } from "@/components/auth/password-input";
 import { ApiError } from "@/lib/auth/client-fetch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -77,9 +78,8 @@ export function LoginForm() {
         <Label htmlFor="password">
           Password <span aria-hidden="true" className="text-destructive">*</span>
         </Label>
-        <Input
+        <PasswordInput
           id="password"
-          type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
