@@ -1,5 +1,5 @@
 import { QuestionsView } from "@/components/teaching/questions-view";
 
-export default function TeacherQuestionsPage() {
+export default function AdminQuestionsPage() {
   return <QuestionsView />;
 }

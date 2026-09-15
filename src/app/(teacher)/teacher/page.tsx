@@ -95,8 +95,9 @@ export default function TeacherDashboardPage() {
   const { user: authUser, loading: authLoading } = useAuth();
   const router = useRouter();
 
-  // The teacher shell also admits admins (so they can manage quizzes from /teacher/quizzes),
-  // but the dashboard itself is teacher-only data. A non-teacher must not see this page.
+  // The teacher shell also admits admins (topic authoring under /teacher/topics has
+  // no admin-shell twin), but the dashboard itself is teacher-only data. A
+  // non-teacher must not see this page.
   const isTeacher = !authLoading && authUser?.role === "teacher";
   useEffect(() => {
     if (!authLoading && authUser?.role !== undefined && authUser.role !== "teacher") {

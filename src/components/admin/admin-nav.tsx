@@ -5,9 +5,11 @@ import { usePathname } from "next/navigation";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import {
+  BookOpen,
   Building2,
   ChevronRight,
   ClipboardList,
+  FileQuestion,
   FileText,
   GraduationCap,
   LayoutDashboard,
@@ -69,7 +71,9 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Teachers", href: "/admin/teachers", icon: Users },
   { label: "Students", href: "/admin/students", icon: GraduationCap },
   { label: "Aspirants", href: "/admin/aspirants", icon: Target },
-  { label: "Quizzes", href: "/teacher/quizzes", icon: ClipboardList },
+  { label: "Topics", href: "/admin/topics", icon: BookOpen },
+  { label: "Questions", href: "/admin/questions", icon: FileQuestion },
+  { label: "Quizzes", href: "/admin/quizzes", icon: ClipboardList },
   { label: "Content", href: "/admin/content", icon: FileText },
   { label: "Leaderboard", href: "/admin/leaderboard", icon: Trophy },
   { label: "Score Release", href: "/admin/scores/release", icon: ShieldCheck },
