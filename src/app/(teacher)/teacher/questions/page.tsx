@@ -19,10 +19,11 @@ import {
   X,
   FilePlus2,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { apiFetch, ApiError } from "@/lib/auth/client-fetch";
+import { BULK_ROW_LIMIT, parseBulkRows } from "@/lib/questions/bulk-rows";
 import { sanitizeRichText } from "@/lib/sanitize";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -82,7 +83,6 @@ const TYPE_LABEL: Record<QuestionType, string> = { fill_in_gap: "Fill-in-gap", o
 const NONE = "__none__";
 const ALL = "__all__";
 const PAGE_SIZE = 10;
-const BULK_LIMIT = 50;
 type PageMeta = { page: number; pageSize: number; total: number; totalPages: number };
 type PaginatedQuestions = { data: QuestionRow[]; meta: PageMeta };
 
@@ -188,10 +188,28 @@ export default function QuestionsPage() {
   // ── bulk create state ───────────────────────────────────────────────
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkText, setBulkText] = useState("");
+  const [bulkType, setBulkType] = useState<QuestionType>("fill_in_gap");
   const [bulkCourseId, setBulkCourseId] = useState("");
   const [bulkTopicId, setBulkTopicId] = useState(NONE);
   const [bulkStatus, setBulkStatus] = useState<"draft" | "published">("draft");
   const [bulkError, setBulkError] = useState<string | null>(null);
+  const bulkTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // The bulk rows format is "text<Tab>answer<Tab>answer…", but the browser's Tab
+  // default moves focus to the next input. Insert a literal tab character at the
+  // caret instead (and keep Shift+Tab / non-Tab keys untouched).
+  const insertBulkSeparator = (el: HTMLTextAreaElement | null) => {
+    if (el === null) return;
+    const start = el.selectionStart ?? bulkText.length;
+    const end = el.selectionEnd ?? bulkText.length;
+    const next = `${bulkText.slice(0, start)}\t${bulkText.slice(end)}`;
+    setBulkText(next);
+    // The re-render replaces the value, so restore the caret one past the tab.
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(start + 1, start + 1);
+    });
+  };
 
   const bulkTopicsQuery = useQuery({
     queryKey: ["teacher", "bulk-topics", bulkCourseId],
@@ -202,43 +220,34 @@ export default function QuestionsPage() {
     enabled: bulkOpen && bulkCourseId !== "",
   });
 
-  const bulkParsed = useMemo(() => {
-    const lines = bulkText
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter((l) => l.length > 0);
-    const rows = lines.slice(0, BULK_LIMIT).map((line, idx) => {
-      const parts = line.split("\t").map((p) => p.trim());
-      const body = parts[0] ?? "";
-      const answers = parts.slice(1);
-      const errors: string[] = [];
-      if (body === "") errors.push("No question text");
-      else if (body.length > 20000) errors.push("Question text over 20,000 characters");
-      if (answers.length === 0) errors.push('Press Tab, then type the accepted answer');
-      answers.forEach((a, i) => {
-        if (a === "") errors.push(`Answer ${i + 1} is empty`);
-        else if (a.length > 255) errors.push(`Answer ${i + 1} over 255 characters`);
-      });
-      return { line: idx + 1, body, answers, errors };
-    });
-    return { rows, ignored: Math.max(0, lines.length - BULK_LIMIT) };
-  }, [bulkText]);
+  const bulkParsed = useMemo(() => parseBulkRows(bulkText, bulkType), [bulkText, bulkType]);
 
   const bulkRowsOk = bulkParsed.rows.length > 0 && bulkParsed.rows.every((r) => r.errors.length === 0);
   const bulkCanSubmit = bulkRowsOk && bulkCourseId !== "";
 
   const bulkMutation = useMutation({
     mutationFn: async () => {
-      const items = bulkParsed.rows.map((r) => ({
-        questionType: "fill_in_gap",
-        bodyRichText: sanitizeRichText(
-          r.body.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\r?\n/g, "<br>"),
-        ),
-        courseId: Number(bulkCourseId),
-        topicId: bulkTopicId !== NONE ? Number(bulkTopicId) : null,
-        status: bulkStatus,
-        blanks: r.answers.map((a) => ({ acceptedAnswer: a })),
-      }));
+      const items = bulkParsed.rows.map((r) => {
+        const common = {
+          bodyRichText: sanitizeRichText(
+            r.body.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\r?\n/g, "<br>"),
+          ),
+          courseId: Number(bulkCourseId),
+          topicId: bulkTopicId !== NONE ? Number(bulkTopicId) : null,
+          status: bulkStatus,
+        };
+        return r.kind === "options"
+          ? {
+              ...common,
+              questionType: "options" as const,
+              options: r.options.map((o) => ({ optionText: o.text, isCorrect: o.correct })),
+            }
+          : {
+              ...common,
+              questionType: "fill_in_gap" as const,
+              blanks: r.answers.map((a) => ({ acceptedAnswer: a })),
+            };
+      });
       const res = await apiFetch<{ data: QuestionDetail[] }>("/teacher/questions/bulk", {
         method: "POST",
         body: JSON.stringify({ questions: items }),
@@ -249,6 +258,7 @@ export default function QuestionsPage() {
       void queryClient.invalidateQueries({ queryKey: ["teacher", "questions"] });
       setBulkOpen(false);
       setBulkText("");
+      setBulkType("fill_in_gap");
       setBulkCourseId("");
       setBulkTopicId(NONE);
       setBulkError(null);
@@ -451,7 +461,7 @@ export default function QuestionsPage() {
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <Button onClick={() => { setBulkError(null); setBulkTopicId(NONE); setBulkText(""); setBulkOpen(true); }} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-line bg-panel px-4 text-sm font-semibold text-ink hover:bg-line">
+            <Button onClick={() => { setBulkError(null); setBulkType("fill_in_gap"); setBulkTopicId(NONE); setBulkText(""); setBulkOpen(true); }} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-line bg-panel px-4 text-sm font-semibold text-ink hover:bg-line">
               <FilePlus2 className="size-4" /> Bulk add
             </Button>
             <Button onClick={openAdd} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-brand px-5 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(91,127,255,0.35)] hover:bg-brand-hover">
@@ -863,24 +873,66 @@ export default function QuestionsPage() {
               Bulk add questions
             </DialogTitle>
             <DialogDescription className="text-xs leading-relaxed text-sub">
-              Paste rows from a spreadsheet — one question per line. The question text comes first, then press <span className="rounded bg-line px-1 py-0.5 font-mono text-ink">Tab</span> and type its accepted answer. Add more columns for extra blanks. Mark each blank in the text with <span className="rounded bg-line px-1 py-0.5 font-mono text-ink">[gap]</span>.
+              {bulkType === "options" ? (
+                <>Paste rows from a spreadsheet — one question per line. The question text comes first, then press <span className="rounded bg-line px-1 py-0.5 font-mono text-ink">Tab</span> and type each option. Start the correct option with <span className="rounded bg-line px-1 py-0.5 font-mono text-ink">*</span> — exactly one per row.</>
+              ) : (
+                <>Paste rows from a spreadsheet — one question per line. The question text comes first, then press <span className="rounded bg-line px-1 py-0.5 font-mono text-ink">Tab</span> and type its accepted answer. Add more columns for extra blanks. Mark each blank in the text with <span className="rounded bg-line px-1 py-0.5 font-mono text-ink">[gap]</span>.</>
+              )}
             </DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-5">
+            <div className="grid gap-2">
+              <Label className="text-xs font-semibold uppercase tracking-wide text-sub" style={{ fontFamily: "JetBrains Mono, monospace" }}>Question type</Label>
+              <div className="grid grid-cols-2 gap-2 rounded-2xl border border-line bg-canvas p-1.5">
+                {(Object.keys(TYPE_LABEL) as QuestionType[]).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    aria-pressed={bulkType === t}
+                    onClick={() => setBulkType(t)}
+                    className={`min-h-11 rounded-xl text-sm font-semibold transition-colors ${bulkType === t ? "bg-brand text-white shadow" : "text-sub hover:bg-line hover:text-ink"}`}
+                  >
+                    {TYPE_LABEL[t]}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="bulk-paste" className="text-xs font-semibold uppercase tracking-wide text-sub" style={{ fontFamily: "JetBrains Mono, monospace" }}>Rows — text then answers</Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="bulk-paste" className="text-xs font-semibold uppercase tracking-wide text-sub" style={{ fontFamily: "JetBrains Mono, monospace" }}>Rows — text then answers</Label>
+                <button
+                  type="button"
+                  onClick={() => insertBulkSeparator(bulkTextareaRef.current)}
+                  className="inline-flex items-center gap-1 rounded-lg border border-line bg-panel px-2.5 py-1 text-[11px] font-semibold text-sub hover:border-brand/40 hover:text-ink"
+                  title="Insert the answer separator at the caret"
+                >
+                  ⭾ Insert separator
+                </button>
+              </div>
               <Textarea
+                ref={bulkTextareaRef}
                 id="bulk-paste"
                 value={bulkText}
                 onChange={(e) => setBulkText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key !== "Tab") return;
+                  e.preventDefault();
+                  insertBulkSeparator(e.currentTarget);
+                }}
                 rows={7}
                 spellCheck={false}
-                placeholder={"Water boils at [gap]°C.\t100\nThe oxidation state of Fe in Fe₂O₃ is [gap].\t+3\nPhotosynthesis releases [gap].\tOxygen"}
+                placeholder={bulkType === "options"
+                  ? "The SI unit of resistance is\t*Ohm\tAmpere\tVolt\nPlants absorb which gas?\t*Carbon dioxide\tOxygen\tNitrogen"
+                  : "Water boils at [gap]°C.\t100\nThe oxidation state of Fe in Fe₂O₃ is [gap].\t+3\nPhotosynthesis releases [gap].\tOxygen"}
                 className="min-h-28 w-full rounded-xl border-line bg-canvas px-3 py-3 font-mono text-[13px] leading-6 text-ink placeholder:text-faint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                 aria-label="Paste rows"
               />
-              <p className="text-[11px] text-faint">Tabs separate answers from the text and each other. Empty lines are skipped.</p>
+              <p className="text-[11px] text-faint">
+                {bulkType === "options"
+                  ? "Tabs separate the options — question text first, then one option per column, * marks the correct one. Empty lines are skipped."
+                  : "Tabs separate answers from the text and each other — press Tab (or Insert separator) mid-row. Empty lines are skipped."}
+              </p>
             </div>
 
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -921,7 +973,7 @@ export default function QuestionsPage() {
               <div className="grid gap-2">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs font-semibold uppercase tracking-wide text-sub" style={{ fontFamily: "JetBrains Mono, monospace" }}>Preview — {bulkParsed.rows.length} rows</p>
-                  {bulkParsed.ignored > 0 && <p className="text-[11px] text-gold">+{bulkParsed.ignored} more lines ignored (max {BULK_LIMIT})</p>}
+                  {bulkParsed.ignored > 0 && <p className="text-[11px] text-gold">+{bulkParsed.ignored} more lines ignored (max {BULK_ROW_LIMIT})</p>}
                 </div>
                 <div className="max-h-52 space-y-1.5 overflow-y-auto rounded-xl border border-line bg-canvas p-2">
                   {bulkParsed.rows.map((r) => (
@@ -930,9 +982,19 @@ export default function QuestionsPage() {
                       <div className="min-w-0 flex-1">
                         <p className="line-clamp-2 text-[13px] leading-5 text-ink">{r.body || "(empty)"}</p>
                         <p className="mt-1 flex flex-wrap gap-1">
-                          {r.answers.map((a, i) => (
-                            <span key={i} className="rounded-md border border-brand/25 bg-brand/10 px-1.5 py-0.5 text-[11px] text-brand-soft" style={{ fontFamily: "JetBrains Mono, monospace" }}>{i + 1}·{a}</span>
-                          ))}
+                          {r.kind === "options"
+                            ? r.options.map((o, i) => (
+                                <span
+                                  key={i}
+                                  className={`rounded-md border px-1.5 py-0.5 text-[11px] ${o.correct ? "border-brand/40 bg-brand/15 font-semibold text-brand-soft" : "border-line bg-panel text-sub"}`}
+                                  style={{ fontFamily: "JetBrains Mono, monospace" }}
+                                >
+                                  {o.correct ? "✓ " : ""}{i + 1}·{o.text || "(empty)"}
+                                </span>
+                              ))
+                            : r.answers.map((a, i) => (
+                                <span key={i} className="rounded-md border border-brand/25 bg-brand/10 px-1.5 py-0.5 text-[11px] text-brand-soft" style={{ fontFamily: "JetBrains Mono, monospace" }}>{i + 1}·{a}</span>
+                              ))}
                         </p>
                         {r.errors.length > 0 && (
                           <p className="mt-1 text-[11px] font-medium text-ruby">{r.errors.join(" · ")}</p>
