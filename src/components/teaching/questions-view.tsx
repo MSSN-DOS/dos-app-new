@@ -196,22 +196,28 @@ export function QuestionsView() {
   const [bulkStatus, setBulkStatus] = useState<"draft" | "published">("draft");
   const [bulkError, setBulkError] = useState<string | null>(null);
   const bulkTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const [bulkSymbolGroup, setBulkSymbolGroup] = useState<"chemistry" | "physics" | "mathematics">("chemistry");
 
   // The bulk rows format is "text<Tab>answer<Tab>answer…", but the browser's Tab
-  // default moves focus to the next input. Insert a literal tab character at the
-  // caret instead (and keep Shift+Tab / non-Tab keys untouched).
-  const insertBulkSeparator = (el: HTMLTextAreaElement | null) => {
-    if (el === null) return;
+  // default moves focus to the next input. Insert literal text (a tab, or a
+  // science symbol) at the caret instead.
+  const insertBulkText = (text: string) => {
+    const el = bulkTextareaRef.current;
+    if (el === null) {
+      setBulkText((prev) => prev + text);
+      return;
+    }
     const start = el.selectionStart ?? bulkText.length;
     const end = el.selectionEnd ?? bulkText.length;
-    const next = `${bulkText.slice(0, start)}\t${bulkText.slice(end)}`;
+    const next = `${bulkText.slice(0, start)}${text}${bulkText.slice(end)}`;
     setBulkText(next);
-    // The re-render replaces the value, so restore the caret one past the tab.
+    // The re-render replaces the value, so restore the caret past the insert.
     requestAnimationFrame(() => {
       el.focus();
-      el.setSelectionRange(start + 1, start + 1);
+      el.setSelectionRange(start + text.length, start + text.length);
     });
   };
+  const insertBulkSeparator = () => insertBulkText("\t");
 
   const bulkTopicsQuery = useQuery({
     queryKey: ["teacher", "bulk-topics", bulkCourseId],
@@ -905,7 +911,7 @@ export function QuestionsView() {
                 <Label htmlFor="bulk-paste" className="text-xs font-semibold uppercase tracking-wide text-sub" style={{ fontFamily: "JetBrains Mono, monospace" }}>Rows — text then answers</Label>
                 <button
                   type="button"
-                  onClick={() => insertBulkSeparator(bulkTextareaRef.current)}
+                  onClick={() => insertBulkSeparator()}
                   className="inline-flex items-center gap-1 rounded-lg border border-line bg-panel px-2.5 py-1 text-[11px] font-semibold text-sub hover:border-brand/40 hover:text-ink"
                   title="Insert the answer separator at the caret"
                 >
@@ -920,7 +926,7 @@ export function QuestionsView() {
                 onKeyDown={(e) => {
                   if (e.key !== "Tab") return;
                   e.preventDefault();
-                  insertBulkSeparator(e.currentTarget);
+                  insertBulkText("\t");
                 }}
                 rows={7}
                 spellCheck={false}
@@ -935,6 +941,39 @@ export function QuestionsView() {
                   ? "Tabs separate the options — question text first, then one option per column, * marks the correct one. Empty lines are skipped."
                   : "Tabs separate answers from the text and each other — press Tab (or Insert separator) mid-row. Empty lines are skipped."}
               </p>
+            </div>
+
+            <div className="grid gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Label className="text-xs font-semibold uppercase tracking-wide text-sub" style={{ fontFamily: "JetBrains Mono, monospace" }}>Science symbols</Label>
+                <div className="flex gap-1.5">
+                  {(Object.keys(toolbarGroups) as Array<ToolbarKey>).map((k) => (
+                    <button
+                      key={k}
+                      type="button"
+                      aria-pressed={bulkSymbolGroup === k}
+                      onClick={() => setBulkSymbolGroup(k)}
+                      className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors ${bulkSymbolGroup === k ? "border-brand bg-brand text-white" : "border-line bg-panel text-sub hover:border-brand/30 hover:text-ink"}`}
+                    >
+                      {toolbarGroups[k].title}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-1.5 rounded-xl border border-line bg-canvas p-2.5">
+                {toolbarGroups[bulkSymbolGroup].glyphs.map((g) => (
+                  <button
+                    key={`${bulkSymbolGroup}-${g.label}-${g.hint}`}
+                    type="button"
+                    title={`${g.hint} — ${g.label}`}
+                    onClick={() => insertBulkText(g.insert)}
+                    className="inline-flex min-h-8 min-w-8 items-center justify-center rounded-lg border border-line bg-panel px-2.5 py-1 font-mono text-sm font-medium text-ink hover:border-brand/40 hover:bg-line active:scale-95"
+                  >
+                    {g.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-faint">Tap a symbol to insert it at the caret — inside the question text or any answer/option.</p>
             </div>
 
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
