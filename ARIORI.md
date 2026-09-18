@@ -99,11 +99,8 @@ Questions, Quizzes and Results" also becomes true again rather than being delete
   bad id, 404 missing quiz, 404 another teacher's quiz, admin access, held-score suppression
   (a held row is fed a score and asserted absent from the payload), null-average-before-release,
   and a null score not crashing the route.
-- `pnpm lint`, `pnpm typecheck` and the full `pnpm test` suite **were not run** — the sandbox's
-  command classifier was unavailable for the whole session, so only that one command got
-  through. Nothing is claimed about them either way. `STATE.md`'s P3-7 box is therefore left
-  **unticked** on purpose: the code is written and its tests pass, but the gate this repo
-  requires before ticking has not been met. Run all three and tick it.
+- `pnpm lint`, `pnpm typecheck` and the full `pnpm test` suite: **now all green** — verified
+  2026-09-17 (651/651 tests, 0 lint errors, clean typecheck). The box in `STATE.md` is ticked.
 - Not yet exercised in a browser against the dev DB — no attempt data was seeded for a teacher
   account, so the live path (real tallies, real held/released split) is unverified.
 
@@ -113,3 +110,108 @@ Questions, Quizzes and Results" also becomes true again rather than being delete
   answers 409). Related to the Quiz Management feedback but a separate decision — the Board needs
   to say whether an admin may edit a quiz while students are mid-attempt.
 - Teacher results have no admin-shell twin yet. The API is already admin-capable.
+
+---
+
+## 2. Resource Links — video links submitted from Google Drive
+
+**Reported:** "Along with PDFs and articles, we need to add video links. We currently post
+videos to a Telegram group serving both JAMB and 100-level students, making it hard to
+organize. If students log into the portal, they should see organized links directing them to
+the specific Telegram videos."
+
+Hosting was later clarified: **the links come from Google Drive, submitted by Teachers.**
+
+### The rule this collided with
+
+`AGENTS.md` §3 said `content_items` is **Admin-only** — *"Don't expose a Teacher-facing upload
+UI even as a hidden/disabled stub."* `DESIGN.md` recorded it as a closed Board decision from
+the alignment interview. So a Teacher-facing submission screen is a direct reversal of a
+decision — which `AGENTS.md` says must be raised, not quietly built.
+
+### Decision: a link is not an upload
+
+The rule governs **uploads** — files that land in Supabase Storage under
+`resources/{faculty}/…`. A Drive link is a URL: no file, no Storage object, no path. Read
+narrowly, letting Teachers submit *links* honours the decision as written rather than
+overturning it, and `pdf`/`article` uploads stay Admin-only.
+
+Both documents were **amended with that reasoning** (rather than silently deviated from):
+`AGENTS.md` §3 and `DESIGN.md` §6 + decision table row 4 now carry the carve-out and its
+limits, so the next person reading the rules sees the reasoning, not just a contradiction.
+
+### Decisions taken
+
+| Question | Answer |
+|---|---|
+| Who can add a link | Teachers **and** admin. Teacher endpoints hard-code `type: 'video'`, so `pdf`/`article` stay unreachable for that role — enforced by a test, not by convention. |
+| Go live immediately? | **Yes, no approval queue** — consistent with `AGENTS.md` §3's "Teachers publish quizzes and topics directly". Admin can delete a bad link. |
+| How students watch | **Embedded inline** (normalised player) **plus** an "Open in Drive" link. |
+| Semester | **Videos never expire.** A recorded lecture stays reachable after the rollover; PDFs and articles still expire as before. |
+
+### What was built
+
+**A pure parser, `lib/content/video-link.ts`** — the piece with real logic, so the piece with
+real tests (23). It exists because of one specific trap:
+
+> **Google refuses to frame Drive `/view` links.** If you embed the URL a teacher actually
+> copies out of Drive, you get a **blank box that looks like it loaded**. Only `/preview`
+> embeds. So the parser rewrites `/view` → `/preview`, and the teacher never has to know.
+
+It also normalises `/open?id=`, `drive.usercontent.google.com`, YouTube
+(watch / youtu.be / shorts / embed) and Telegram; returns `embedUrl: null` for Drive folders
+and Telegram posts (nothing to frame) and falls back to a plain link. It **rejects
+non-http(s) schemes**, so a `javascript:` or `data:` URL can never be stored and rendered as
+an href.
+
+The **pasted URL is stored exactly as given** and parsed at read time — so improving the
+parser later improves every existing link, not just new ones.
+
+**API**
+
+| Route | Purpose |
+|---|---|
+| `POST/GET /api/teacher/resources` | Submit and list your links. Teacher sees only their own (`uploadedBy`); admin bypasses. |
+| `PATCH/DELETE /api/teacher/resources/[id]` | Fix a title or URL; remove a link. |
+| `POST /api/admin/content` | Gained a third track so admin can post links too. |
+| `GET /api/resources` | Video rows return `provider` / `watchUrl` / `embedUrl`. |
+
+Editing is title + URL only. Re-scoping would need the course-XOR-subject rule re-checked
+against a partial update; delete and re-add is clearer than a half-updated scope.
+
+**UI**
+
+- `/teacher/resources` — new screen + a "Videos" nav item. Carries the warning that will
+  prevent most support tickets: *set the Drive file to "Anyone with the link"*.
+- `/admin/content` — a third tab, "Video link".
+- `/resources` — provider badge, inline player, and a Watch link. **The player iframe mounts
+  only when tapped** — one iframe per row would burn mobile data on page load for an audience
+  that is mostly on phones.
+
+### Two things the Board should know
+
+1. **Drive is not a CDN.** Google rate-limits and quota-caps hotlinked video. For a two-cohort
+   audience this is a stopgap, not a foundation — if video becomes central to study, budget
+   real hosting or a YouTube channel before students depend on it.
+2. The teacher nav now has **six** items in the phone bottom bar, past the usual five-item
+   ceiling for thumb reach. Worth moving one behind the dashboard or a "More" sheet.
+
+### Verification
+
+- **Migration applied and verified.** `drizzle/0006_chemical_captain_midlands.sql` was generated
+  with `pnpm db:generate` and applied with `pnpm db:migrate`; `content_type` was read back from
+  `pg_enum` as `pdf, article, video`. The feature is live, not inert.
+- `pnpm vitest run src/app/api/resources src/lib/content src/app/api/teacher/resources` —
+  **58 tests, all passing** across 4 files. Covers the URL parser (including a `javascript:`
+  rejection), both teacher endpoints (401/403/404/422/ownership/admin), and that a video row is
+  normalised rather than being handed back as an article body.
+- Full suite: **651 tests across 57 files, all passing** — nothing existing broke.
+- `pnpm typecheck` clean; `pnpm lint` **0 errors** (one pre-existing warning in
+  `src/lib/auth/client-fetch.ts`, a file this work never touched).
+
+### Still open
+
+- **The semester exemption is not unit-tested.** It is a SQL-level condition, and the shared
+  route-test stub ignores `where()` arguments — a test would pass vacuously and prove nothing.
+  It needs a live check: submit a video in Harmattan, flip the semester to Rain, confirm the
+  video persists and a PDF does not.

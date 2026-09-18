@@ -1,0 +1,39 @@
+P6-4: teacher-submitted video links
+
+Board feedback: PDFs and articles exist, but study videos only live in a
+Telegram group serving both JAMB and 100-level students, so they are hard
+to organize. Hosting clarified to Google Drive, submitted by Teachers.
+
+A link is not an upload. AGENTS.md §3 and DESIGN.md §6 previously made
+content_items Admin-only outright; the reading adopted is that the rule
+governs uploads (files landing in Supabase Storage), so Teachers
+submitting video links honours the decision as written while pdf and
+article uploads stay Admin-only. Both docs amended with that reasoning
+rather than silently deviated from.
+
+- content_type gains 'video' (migration 0006, applied).
+- lib/content/video-link.ts normalises a pasted URL at READ time, so the
+  URL is stored exactly as given and improving the parser improves every
+  existing link. Drive /view is rewritten to /preview because Google
+  refuses to frame /view - embedding the URL a teacher actually copies
+  renders a blank box that looks like it loaded. Also handles /open?id=,
+  drive.usercontent, YouTube (watch/youtu.be/shorts/embed) and Telegram;
+  folders and Telegram posts get embedUrl null. Rejects non-http(s)
+  schemes, so javascript: and data: URLs can never be stored and rendered
+  as an href.
+- /api/teacher/resources + /[id]: admin+teacher, ownership-scoped, and
+  the create schema hard-codes type 'video' so a Teacher cannot reach
+  pdf/article through this endpoint. /api/admin/content gains a video
+  track for admins.
+- Videos are exempt from the /api/resources active-semester filter, so a
+  recorded lecture survives the Harmattan->Rain rollover while PDFs and
+  articles still expire.
+- UI: /teacher/resources + a "Videos" nav item, a "Video link" tab on
+  /admin/content, and a video row on /resources whose player iframe
+  mounts only on tap (an always-on iframe per row would burn mobile data
+  on load for an audience that is mostly on phones).
+
+Verified: 651 tests pass, pnpm lint 0 errors, pnpm typecheck clean, and
+pg_enum read back as pdf, article, video after db:migrate.
+
+Co-Authored-By: Claude Code <noreply@anthropic.com>

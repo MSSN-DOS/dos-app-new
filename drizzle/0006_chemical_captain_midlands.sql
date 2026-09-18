@@ -1,0 +1,1 @@
+ALTER TYPE "public"."content_type" ADD VALUE 'video';

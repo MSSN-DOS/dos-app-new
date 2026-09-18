@@ -1,0 +1,15 @@
+{
+  "default_branch": "main",
+  "branches": [
+    "ariori-dev",
+    "main"
+  ],
+  "parent": {
+    "ariori-dev": "main",
+    "main": null
+  },
+  "order": [
+    "main",
+    "ariori-dev"
+  ]
+}
