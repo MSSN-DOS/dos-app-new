@@ -4,8 +4,10 @@ import { ZodError } from "zod";
 
 import { errorResponse } from "@/lib/api/response";
 import { paginate, parsePagination } from "@/lib/api/pagination";
+import { ForbiddenError } from "@/lib/auth/errors";
 import { requireAuth } from "@/lib/auth/guard";
 import { ownershipScope } from "@/lib/auth/ownership";
+import { getTeachingScope, isTrackAllowed } from "@/lib/auth/teaching-scope";
 import { getDb } from "@/lib/db";
 import {
   questionBlanks,
@@ -178,6 +180,12 @@ export async function POST(request: Request): Promise<NextResponse> {
         : questionDraftSchema.parse(raw);
 
     const db = getDb();
+
+    const scope = await getTeachingScope(db, auth);
+    if (!isTrackAllowed(scope, data)) {
+      throw new ForbiddenError("You do not teach this course or JAMB subject");
+    }
+
     const [row] = await db
       .insert(questions)
       .values({

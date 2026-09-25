@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { ZodError, z } from "zod";
 
 import { errorResponse } from "@/lib/api/response";
+import { ForbiddenError } from "@/lib/auth/errors";
 import { requireAuth } from "@/lib/auth/guard";
+import { getTeachingScope, isTrackAllowed } from "@/lib/auth/teaching-scope";
 import { getDb } from "@/lib/db";
 import {
   questionBlanks,
@@ -107,6 +109,21 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
 
     const db = getDb();
+
+    // Every item must land in a subject this caller teaches. Checked per item and before the
+    // transaction, so a batch can't partially write into a subject the Teacher doesn't own.
+    const scope = await getTeachingScope(db, auth);
+    const disallowed = parsed
+      .map((entry, i) => (entry && !isTrackAllowed(scope, entry.data) ? i : -1))
+      .filter((i) => i >= 0);
+    if (disallowed.length > 0) {
+      throw new ForbiddenError(
+        `You do not teach the course or JAMB subject on row ${
+          disallowed.map((i) => i + 1).join(", ")
+        }`,
+      );
+    }
+
     const created = await db.transaction(async (tx) => {
       const rows: (typeof questions.$inferSelect & {
         options: (typeof questionOptions.$inferSelect)[];

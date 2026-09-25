@@ -42,7 +42,7 @@ These come straight out of `DESIGN.md` §2–8. Restating the ones most likely t
 - Options questions are single-select. Exactly one `question_options` row per question should have `is_correct = true` — validate this at question-save time in the Zod/server logic, don't assume the UI alone prevents it.
 - A question with missing text or a required option can be saved as a draft but **cannot** be published. Enforce this as two different validation levels (a lenient "draft" schema and a strict "publish" schema), not one schema with a boolean bypass flag.
 - Teachers publish quizzes and topics directly — no approval queue. Don't add a `pending_approval` status "for safety" unless a future task explicitly asks for it.
-- Content uploads (`content_items`) are Admin-only. Don't expose a Teacher-facing upload UI even as a hidden/disabled stub — it doesn't exist for this role at all.
+- Content **uploads** (`content_items` of type `pdf` / `article`) are Admin-only. Don't expose a Teacher-facing upload UI even as a hidden/disabled stub — it doesn't exist for this role at all. **One carve-out (Board decision 2026-09-17):** Teachers may submit `type = 'video'` **links** — an external URL, not an upload, so nothing reaches Supabase Storage — through `/api/teacher/resources`, which hard-codes `type: 'video'` in its schema. `pdf`/`article` stay unreachable for that role, and an Admin can delete any link. "A link is not an upload" is the reasoning; don't widen it to files without the Board saying so.
 - Active semester resolution always goes through the single `getActiveSemester()` resolver in `lib/semester/`. Never call `new Date()` and compare it against semester dates inline anywhere else in the codebase.
 
 ## 4. Code conventions

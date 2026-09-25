@@ -89,6 +89,34 @@ describe("GET /api/resources — aspirant branch", () => {
     const body: unknown = await res.json();
     expect((body as { data: unknown[] }).data).toHaveLength(0);
   });
+
+  it("normalises a video link instead of treating it as an article body", async () => {
+    requireAuth.mockResolvedValue({ userId: 9, roleId: 4 });
+    stubSelect(db, [
+      [{ name: "aspirant" }],
+      [
+        {
+          id: 3,
+          type: "video",
+          title: "Limits and Continuity",
+          bodyOrFileUrl: "https://drive.google.com/file/d/ABCFILE123/view?usp=sharing",
+          subjectName: "Mathematics",
+        },
+      ],
+    ]);
+
+    const res = await GET(jsonRequest(url()));
+    expect(res.status).toBe(200);
+    const body: unknown = await res.json();
+    const row = (body as { data: Array<Record<string, unknown>> }).data[0];
+
+    expect(row.provider).toBe("google_drive");
+    expect(row.embedUrl).toBe("https://drive.google.com/file/d/ABCFILE123/preview");
+    expect(row.watchUrl).toBe("https://drive.google.com/file/d/ABCFILE123/view");
+    // The `type !== "pdf"` fallback would otherwise hand a video back as an article body.
+    expect(row.body).toBeUndefined();
+    expect(createResourceSignedUrl).not.toHaveBeenCalled();
+  });
 });
 
 describe("GET /api/resources — student branch", () => {

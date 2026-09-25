@@ -15,7 +15,7 @@ This is the single source of truth for how the product behaves and how the code 
 | 1 | Admin vs Teacher publishing boundary | Teachers publish quizzes and topics directly. No Admin approval step. |
 | 2 | Fill-in-the-gap grading | Case-insensitive exact match, auto-graded at submission. |
 | 3 | Identifier validation | Format-validated only (regex below), no cross-check against an external membership/JAMB list. |
-| 4 | Content upload permissions | Admin-only. Teachers cannot upload PDFs/articles. |
+| 4 | Content upload permissions | Admin-only. Teachers cannot upload PDFs/articles. **Amended 2026-09-17:** Teachers *may* submit video **links** (an external URL — not an upload; see §6). |
 | 5 | Topic Quiz question count | Free-form — Teacher sets it per topic when building the quiz. |
 | 6 | Weekly Course Quiz release window | Fixed: opens Saturday 00:00, closes Sunday 23:59 (server timezone, see §8). |
 | 7 | Notifications | In-app only for MVP. No email/SMS. |
@@ -126,11 +126,12 @@ Rules that apply to both:
 
 ## 6. Content / Resources
 
-- `content_items` (`pdf` | `article`), Admin-only to create.
+- `content_items` (`pdf` | `article` | `video`). `pdf`/`article` are Admin-only to create. `video` is a **link to externally-hosted video** (Google Drive, YouTube, Telegram) — an external URL, not a file, so nothing lands in Storage. Teachers may create `video` rows via `/api/teacher/resources` (Board decision 2026-09-17); that endpoint's schema hard-codes `type = 'video'`, so `pdf`/`article` stay out of reach for the role. Live on save — no approval queue, matching how Teachers already publish quizzes and topics.
 - Files land in Supabase Storage under:
   - Students: `/resources/{faculty}/{department}/{level}/{semester}/{course}/`
   - Aspirants: `/resources/jamb/{subject}/`
-- `content_items.body_or_file_url` stores the resulting Storage URL (or the article body directly for `type = 'article'` — treat that column as either a URL or inline markdown depending on `type`, and branch on it explicitly in the UI, never guess from the string shape).
+- `content_items.body_or_file_url` is dual-use by `type` — a Storage object path (`pdf`), an inline markdown body (`article`), or the external URL exactly as pasted (`video`). Treat it as whichever the `type` says, and branch on `type` explicitly in the UI, never guess from the string shape. The `video` URL is stored **un-normalised** and parsed at read time by `lib/content/video-link.ts`, so improving that parser improves existing links too.
+- **Video links are not semester-bound.** Every other student-scoped resource is filtered to the active semester (`/api/resources` joins `courses.semester`); `video` rows are exempt so a recorded lecture stays reachable after the semester rolls over (Board decision 2026-09-17). Drive links must be shared "Anyone with the link" or students see a request-access screen; Drive also rate-limits hotlinked video, so it is a stopgap, not a CDN.
 
 ## 7. Auth flow
 

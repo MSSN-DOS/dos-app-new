@@ -6,6 +6,7 @@ import { ForbiddenError, UnauthorizedError } from "@/lib/auth/errors";
 import {
   jsonRequest,
   makeDbMock,
+  stubSelect,
   stubTransaction,
 } from "@/lib/testing/route-test";
 
@@ -49,7 +50,12 @@ const publishedItem = (over: Record<string, unknown> = {}) => ({
 });
 
 describe("POST /api/teacher/questions/bulk", () => {
+  // The handler resolves the caller's teaching scope before opening the transaction, so every
+  // happy path stubs it as the first select slot.
+  const SCOPE = [{ courseId: 2, jambSubjectId: null }];
+
   it("creates several questions inside one transaction and returns 201", async () => {
+    stubSelect(db, [SCOPE]);
     const seq: { table: string; rows: Record<string, unknown>[] }[] = [];
     const makeInsert = () => (table: unknown) => {
       const name = getTableName(table as never);
@@ -84,6 +90,7 @@ describe("POST /api/teacher/questions/bulk", () => {
   });
 
   it("keeps blank answers and options in row order for fill-in-gap items", async () => {
+    stubSelect(db, [SCOPE]);
     const blankRows: Record<string, unknown>[] = [];
     tx.insert.mockImplementation(
       (table: unknown) => {
@@ -189,5 +196,12 @@ describe("POST /api/teacher/questions/bulk", () => {
     requireAuthMock.mockRejectedValue(new ForbiddenError());
     const res = await POST(jsonRequest(URL, "POST", { questions: [draftItem()] }));
     expect(res.status).toBe(403);
+  });
+
+  it("403s when the teacher does not teach the authoring course", async () => {
+    stubSelect(db, [[]]);
+    const res = await POST(jsonRequest(URL, "POST", { questions: [draftItem()] }));
+    expect(res.status).toBe(403);
+    expect(db.transaction).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { ExternalLink, Play } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -13,16 +14,23 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/components/auth/auth-provider";
 import { apiFetch, ApiError } from "@/lib/auth/client-fetch";
+import { PROVIDER_LABEL } from "@/lib/content/video-link";
+import type { VideoProvider } from "@/lib/content/video-link";
 
 interface ResourceRow {
   id: number;
-  type: "pdf" | "article";
+  type: "pdf" | "article" | "video";
   title: string;
   createdAt: string;
   courseCode?: string;
   subjectName?: string;
   fileUrl?: string | null;
   body?: string;
+  provider?: VideoProvider;
+  /** Normalised page to open. */
+  watchUrl?: string;
+  /** iframe-safe player URL; absent/null when the link must not be embedded. */
+  embedUrl?: string | null;
 }
 type ResourcesResponse = { data: ResourceRow[] };
 
@@ -62,12 +70,31 @@ function EmptyDashed({ text }: { text: string }) {
   );
 }
 
+/** "PDF" / "Article" / the video host's name, e.g. "Google Drive". */
+function kindLabelFor(row: ResourceRow): string {
+  if (row.type === "pdf") return "PDF";
+  if (row.type === "article") return "Article";
+  return PROVIDER_LABEL[row.provider ?? "other"];
+}
+
 export default function ResourcesPage() {
   const { user } = useAuth();
   const isAspirant = user?.role === "aspirant";
 
   const [courseId, setCourseId] = useState<string>("all");
   const [subjectId, setSubjectId] = useState<string>("all");
+  // Players mount only when asked for. An iframe per video would load every player (and
+  // burn data) the moment the page opens, which is the wrong default on a phone.
+  const [openEmbeds, setOpenEmbeds] = useState<ReadonlySet<number>>(new Set());
+
+  function toggleEmbed(id: number) {
+    setOpenEmbeds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   const resourcesQuery = useQuery({
     queryKey: ["resources", { track: isAspirant ? "aspirant" : "student", courseId, subjectId }],
@@ -101,7 +128,8 @@ export default function ResourcesPage() {
             Resources
           </h1>
           <p className="mt-1 break-words text-[13px] leading-relaxed text-sub">
-            Board-published reading for {isAspirant ? "your JAMB subjects" : "your courses"} — PDFs and articles.
+            Board-published material for {isAspirant ? "your JAMB subjects" : "your courses"} —
+            PDFs, articles and video links.
           </p>
         </div>
         <div className="w-full sm:w-64">
@@ -177,10 +205,41 @@ export default function ResourcesPage() {
                   <div className="min-w-0">
                     <p className="break-words text-[15px] font-medium leading-snug text-ink">{row.title}</p>
                     <p className="mt-0.5 text-[12px] text-sub">
-                      {row.courseCode ?? row.subjectName} · {row.type === "pdf" ? "PDF" : "Article"}
+                      {row.courseCode ?? row.subjectName} · {kindLabelFor(row)}
                     </p>
                   </div>
-                  {row.type === "pdf" ? (
+                  {row.type === "video" ? (
+                    <div className="flex shrink-0 flex-wrap items-center gap-2 self-start sm:self-auto">
+                      {row.embedUrl ? (
+                        <button
+                          type="button"
+                          aria-expanded={openEmbeds.has(row.id)}
+                          aria-label={`${openEmbeds.has(row.id) ? "Hide" : "Play"} ${row.title} here`}
+                          onClick={() => toggleEmbed(row.id)}
+                          className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md border border-edge bg-line px-4 text-sm font-medium text-ink hover:bg-edge focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                        >
+                          <Play className="size-3.5" aria-hidden="true" />
+                          {openEmbeds.has(row.id) ? "Hide player" : "Play here"}
+                        </button>
+                      ) : null}
+                      {row.watchUrl ? (
+                        <a
+                          href={row.watchUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={`Watch ${row.title} on ${kindLabelFor(row)}`}
+                          className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md bg-brand px-4 text-sm font-medium text-white hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-0"
+                        >
+                          <ExternalLink className="size-3.5" aria-hidden="true" />
+                          Watch
+                        </a>
+                      ) : (
+                        <span className="self-start text-sm text-ruby sm:self-auto">
+                          Link unavailable
+                        </span>
+                      )}
+                    </div>
+                  ) : row.type === "pdf" ? (
                     row.fileUrl ? (
                       <a
                         href={row.fileUrl}
@@ -205,6 +264,23 @@ export default function ResourcesPage() {
                     </div>
                   </details>
                 )}
+                {row.type === "video" && row.embedUrl && openEmbeds.has(row.id) ? (
+                  <div className="mt-3 overflow-hidden rounded-md border border-line bg-canvas/50">
+                    <iframe
+                      src={row.embedUrl}
+                      title={row.title}
+                      loading="lazy"
+                      allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+                      allowFullScreen
+                      referrerPolicy="strict-origin-when-cross-origin"
+                      className="aspect-video w-full"
+                    />
+                    <p className="border-t border-line px-3 py-2 text-[11.5px] leading-relaxed text-faint">
+                      Player not loading? The host may not have shared the video publicly —
+                      use <strong className="font-semibold text-sub">Watch</strong> instead.
+                    </p>
+                  </div>
+                ) : null}
               </li>
             ))}
           </ul>

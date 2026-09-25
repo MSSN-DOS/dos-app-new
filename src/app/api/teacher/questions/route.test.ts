@@ -122,7 +122,15 @@ describe("GET /api/teacher/questions", () => {
 });
 
 describe("POST /api/teacher/questions — draft (lenient)", () => {
+  // The first select the POST handler makes is the caller's teaching scope. This teacher
+  // teaches MAT-equivalent course 2 (and the JAMB 3 track, for good measure).
+  const SCOPE = [
+    { courseId: 2, jambSubjectId: null },
+    { courseId: null, jambSubjectId: 3 },
+  ];
+
   it("saves an empty-body draft with no options or blanks", async () => {
+    stubSelect(db, [SCOPE]);
     const inserted: Record<string, unknown> = {};
     db.insert.mockImplementation(() => ({
       values: (v: Record<string, unknown>) => {
@@ -146,6 +154,7 @@ describe("POST /api/teacher/questions — draft (lenient)", () => {
   });
 
   it("stores blanks for a fill-in-gap draft and trims answers", async () => {
+    stubSelect(db, [SCOPE]);
     const blankValues: Record<string, unknown>[] = [];
     db.insert.mockImplementation((table: unknown) => {
       void table;
@@ -246,9 +255,23 @@ describe("POST /api/teacher/questions — draft (lenient)", () => {
     );
     expect(res.status).toBe(403);
   });
+
+  it("returns 403 when the teacher does not teach the course", async () => {
+    stubSelect(db, [[]]);
+    const res = await POST(
+      jsonRequest("http://localhost/x", "POST", {
+        ...courseTrack,
+        questionType: "options",
+        bodyRichText: "",
+      }),
+    );
+    expect(res.status).toBe(403);
+    expect(db.insert).not.toHaveBeenCalled();
+  });
 });
 
 describe("POST /api/teacher/questions — publish (strict)", () => {
+  const SCOPE = [{ courseId: 2, jambSubjectId: null }];
   const publishedOptionsBody = {
     ...courseTrack,
     questionType: "options",
@@ -261,6 +284,7 @@ describe("POST /api/teacher/questions — publish (strict)", () => {
   };
 
   it("publishes a valid options question and stores sorted options", async () => {
+    stubSelect(db, [SCOPE]);
     const optionValues: Record<string, unknown>[] = [];
     db.insert.mockImplementation(() => ({
       values: (v: Record<string, unknown> | Record<string, unknown>[]) => {
@@ -390,6 +414,7 @@ describe("POST /api/teacher/questions — publish (strict)", () => {
   });
 
   it("publishes a valid fill-in-gap question", async () => {
+    stubSelect(db, [SCOPE]);
     db.insert.mockImplementation(() => ({
       values: (v: Record<string, unknown> | Record<string, unknown>[]) => {
         const rows = Array.isArray(v) ? v : [v];

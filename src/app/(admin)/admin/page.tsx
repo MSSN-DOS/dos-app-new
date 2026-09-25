@@ -2,7 +2,7 @@
 
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { useQuery } from "@tanstack/react-query";
-import { FileText, GraduationCap, ShieldCheck, Target, Users } from "lucide-react";
+import { ClipboardList, FileText, GraduationCap, ShieldCheck, Target, Users } from "lucide-react";
 import Link from "next/link";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -125,6 +125,12 @@ export default function AdminDashboardPage() {
               <Link href="/admin/content">
                 <FileText aria-hidden="true" />
                 Upload PDF / Article
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className="min-h-11 sm:flex-1">
+              <Link href="/admin/quizzes">
+                <ClipboardList aria-hidden="true" />
+                Build a Quiz
               </Link>
             </Button>
             <Button asChild variant="outline" className="min-h-11 sm:flex-1">

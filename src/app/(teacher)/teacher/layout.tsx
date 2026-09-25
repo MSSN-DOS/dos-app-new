@@ -179,7 +179,7 @@ const TEACHER_TOPICS_STEPS: DriveStep[] = [
     popover: {
       title: "Ready when you are",
       description:
-        "The sidebar always lists Dashboard, Topics, Questions, Quizzes and Results.",
+        "The sidebar always lists Dashboard, Topics, Questions, Quizzes, Results and Videos.",
     },
   },
 ];

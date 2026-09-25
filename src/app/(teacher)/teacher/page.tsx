@@ -1,8 +1,12 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
+import { useAuth } from "@/components/auth/auth-provider";
+import { roleDashboardPath } from "@/components/auth/redirect-if-authenticated";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError, apiFetch } from "@/lib/auth/client-fetch";
 
@@ -88,15 +92,34 @@ function EmptyDashed({ headline, sub }: { headline: string; sub: string }) {
 }
 
 export default function TeacherDashboardPage() {
+  const { user: authUser, loading: authLoading } = useAuth();
+  const router = useRouter();
+
+  // The teacher shell also admits admins (topic authoring under /teacher/topics has
+  // no admin-shell twin), but the dashboard itself is teacher-only data. A
+  // non-teacher must not see this page.
+  const isTeacher = !authLoading && authUser?.role === "teacher";
+  useEffect(() => {
+    if (!authLoading && authUser?.role !== undefined && authUser.role !== "teacher") {
+      router.replace(roleDashboardPath(authUser.role));
+    }
+  }, [authLoading, authUser?.role, router]);
+
   const meQuery = useQuery({
     queryKey: ["me"],
     queryFn: () => apiFetch<MeResponse>("/me"),
+    enabled: isTeacher,
   });
 
   const dashQuery = useQuery({
     queryKey: ["teacher-dashboard"],
     queryFn: () => apiFetch<DashboardResponse>("/teacher/dashboard"),
+    enabled: isTeacher,
   });
+
+  if (!isTeacher) {
+    return null;
+  }
 
   const fullName = meQuery.data?.data.fullName ?? "";
   const firstName = fullName ? firstNameOf(fullName) : "";

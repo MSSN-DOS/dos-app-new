@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { parseVideoLink } from "@/lib/content/video-link";
+
 // Scope rule mirrors the DB `content_items_track_check`: exactly one of
 // course_id / jamb_subject_id — never both, never neither (DESIGN.md §6).
 export const contentScopeSchema = z
@@ -40,3 +42,36 @@ export function isPdfFile(file: File): boolean {
     file.name.toLowerCase().endsWith(".pdf")
   );
 }
+
+// Video entries are a link, not an upload: nothing lands in Supabase Storage. The URL is
+// validated through the shared parser so the server and the form agree on what a usable
+// link is, and so `javascript:`/`data:` URLs are rejected before they can be stored and
+// rendered as an href.
+export const videoCreateSchema = contentScopeSchema
+  .extend({
+    type: z.literal("video"),
+    title: z.string().trim().min(1).max(200),
+    url: z.string().trim().min(1).max(2000),
+  })
+  .superRefine((val, ctx) => {
+    const parsed = parseVideoLink(val.url);
+    if (!parsed.ok) {
+      ctx.addIssue({ code: "custom", path: ["url"], message: parsed.message });
+    }
+  });
+
+// Editing is deliberately limited to the title and the link. Re-scoping an existing item
+// would need the course XOR subject rule re-checked against a partial update; deleting and
+// re-adding is clearer than a half-updated scope.
+export const videoUpdateSchema = z
+  .object({
+    title: z.string().trim().min(1).max(200),
+    url: z.string().trim().min(1).max(2000),
+  })
+  .strict()
+  .superRefine((val, ctx) => {
+    const parsed = parseVideoLink(val.url);
+    if (!parsed.ok) {
+      ctx.addIssue({ code: "custom", path: ["url"], message: parsed.message });
+    }
+  });

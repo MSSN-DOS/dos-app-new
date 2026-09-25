@@ -4,8 +4,10 @@ import { ZodError } from "zod";
 
 import { errorResponse } from "@/lib/api/response";
 import { paginate, parsePagination } from "@/lib/api/pagination";
+import { ForbiddenError } from "@/lib/auth/errors";
 import { requireAuth } from "@/lib/auth/guard";
 import { ownershipScope } from "@/lib/auth/ownership";
+import { getTeachingScope, isCourseAllowed } from "@/lib/auth/teaching-scope";
 import { getDb } from "@/lib/db";
 import { courses, topics } from "@/lib/db/schema";
 import { topicCreateSchema } from "@/lib/validation/topics";
@@ -82,6 +84,12 @@ export async function POST(request: Request): Promise<NextResponse> {
     const data = topicCreateSchema.parse(await request.json());
 
     const db = getDb();
+
+    const scope = await getTeachingScope(db, auth);
+    if (!isCourseAllowed(scope, data.courseId)) {
+      throw new ForbiddenError("You do not teach this course");
+    }
+
     // Titles are unique within a course (no DB constraint — enforced here).
     const [existing] = await db
       .select({ id: topics.id })

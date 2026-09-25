@@ -39,4 +39,7 @@ export const loseFocusPolicyEnum = pgEnum("lose_focus_policy", [
 
 export const semesterModeEnum = pgEnum("semester_mode", ["auto", "manual"]);
 
-export const contentTypeEnum = pgEnum("content_type", ["pdf", "article"]);
+// `video` is a *link* to externally-hosted video (Google Drive, YouTube, Telegram), not an
+// upload — nothing lands in Supabase Storage. Teachers may create this one; pdf/article
+// remain Admin-only (DESIGN.md §6, Board decision 2026-09-17).
+export const contentTypeEnum = pgEnum("content_type", ["pdf", "article", "video"]);

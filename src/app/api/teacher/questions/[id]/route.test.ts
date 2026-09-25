@@ -77,6 +77,8 @@ describe("GET /api/teacher/questions/[id]", () => {
 });
 
 describe("PATCH /api/teacher/questions/[id]", () => {
+  // The first select the PATCH handler makes is the caller's teaching scope.
+  const SCOPE = [{ courseId: 2, jambSubjectId: null }];
   const draftBody = {
     courseId: 2,
     questionType: "fill_in_gap",
@@ -86,6 +88,7 @@ describe("PATCH /api/teacher/questions/[id]", () => {
   };
 
   it("updates a question and set-replaces its blanks", async () => {
+    stubSelect(db, [SCOPE]);
     stubUpdate(db, { id: 1, bodyRichText: "Updated body" });
     stubDelete(db, { id: 1, bodyRichText: "x" });
     const blankValues: Record<string, unknown>[] = [];
@@ -112,11 +115,21 @@ describe("PATCH /api/teacher/questions/[id]", () => {
   });
 
   it("returns 404 when the question does not exist", async () => {
+    stubSelect(db, [SCOPE]);
     stubUpdate(db, null);
     const res = await PATCH(jsonRequest(url, "PATCH", draftBody), {
       params: Promise.resolve({ id: "1" }),
     });
     expect(res.status).toBe(404);
+  });
+
+  it("returns 403 when the teacher does not teach the course", async () => {
+    stubSelect(db, [[]]);
+    const res = await PATCH(jsonRequest(url, "PATCH", draftBody), {
+      params: Promise.resolve({ id: "1" }),
+    });
+    expect(res.status).toBe(403);
+    expect(db.update).not.toHaveBeenCalled();
   });
 
   it.each(["abc", "0", "-3"])("returns 400 for invalid id %s", async (badId) => {

@@ -3,8 +3,10 @@ import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 
 import { errorResponse } from "@/lib/api/response";
+import { ForbiddenError } from "@/lib/auth/errors";
 import { requireAuth, type AuthContext } from "@/lib/auth/guard";
 import { ownershipScope } from "@/lib/auth/ownership";
+import { getTeachingScope, isCourseAllowed } from "@/lib/auth/teaching-scope";
 import { getDb } from "@/lib/db";
 import { questions, quizzes, topics } from "@/lib/db/schema";
 import { topicUpdateSchema } from "@/lib/validation/topics";
@@ -53,6 +55,13 @@ export async function PATCH(
 
     const data = topicUpdateSchema.parse(await request.json());
     const db = getDb();
+
+    // Covers moving a topic to a different course, not just editing its title.
+    const scope = await getTeachingScope(db, auth);
+    if (!isCourseAllowed(scope, data.courseId)) {
+      throw new ForbiddenError("You do not teach this course");
+    }
+
     const [row] = await db
       .update(topics)
       .set({ courseId: data.courseId, title: data.title })
