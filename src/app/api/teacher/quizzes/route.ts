@@ -4,8 +4,10 @@ import { ZodError } from "zod";
 
 import { errorResponse } from "@/lib/api/response";
 import { paginate, parsePagination } from "@/lib/api/pagination";
+import { ForbiddenError } from "@/lib/auth/errors";
 import { requireAuth } from "@/lib/auth/guard";
 import { ownershipScope } from "@/lib/auth/ownership";
+import { getTeachingScope, isTrackAllowed } from "@/lib/auth/teaching-scope";
 import { getDb } from "@/lib/db";
 import { courses, jambSubjects, quizzes } from "@/lib/db/schema";
 import { quizCreateSchema } from "@/lib/validation/quizzes";
@@ -101,6 +103,14 @@ export async function POST(request: Request): Promise<NextResponse> {
     const body = await request.json();
     const input = quizCreateSchema.parse(body);
     const db = getDb();
+
+    // A Teacher may only build quizzes for the subjects an Admin assigned them (Admin is
+    // unrestricted). 403 rather than 404: the catalogue isn't secret and the picker is
+    // filtered, so reaching here means a stale or forged request.
+    const scope = await getTeachingScope(db, auth);
+    if (!isTrackAllowed(scope, input)) {
+      throw new ForbiddenError("You do not teach this course or JAMB subject");
+    }
 
     const [row] = await db
       .insert(quizzes)

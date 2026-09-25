@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { LogOut } from "lucide-react";
+import { KeyRound, LogOut } from "lucide-react";
 
 import { useAuth } from "@/components/auth/auth-provider";
 import {
@@ -153,6 +153,13 @@ export function StudentUserMenu() {
           </div>
           <DropdownMenuLabel className="sr-only">Account</DropdownMenuLabel>
           <DropdownMenuSeparator className="bg-line" />
+          <DropdownMenuItem
+            className="min-h-[44px] cursor-pointer gap-2 text-sm focus:bg-wash focus:text-ink"
+            onSelect={() => router.push("/account/password")}
+          >
+            <KeyRound className="size-4" aria-hidden="true" />
+            Change password
+          </DropdownMenuItem>
           <DropdownMenuItem
             variant="destructive"
             className="min-h-[44px] cursor-pointer gap-2 text-sm focus:bg-wash focus:text-ink data-[variant=destructive]:text-ruby data-[variant=destructive]:focus:bg-ruby/10 data-[variant=destructive]:focus:text-ruby"

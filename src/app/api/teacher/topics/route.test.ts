@@ -83,9 +83,12 @@ describe("GET /api/teacher/topics", () => {
 
 describe("POST /api/teacher/topics", () => {
   const validBody = { title: "Trigonometry", courseId: 2 };
+  // The first select the POST handler makes is the caller's teaching scope, so every happy
+  // path stubs it as the first slot. Course 2 is the one these tests author for.
+  const SCOPE = [{ courseId: 2, jambSubjectId: null }];
 
   it("creates a topic owned by the caller and returns 201", async () => {
-    stubSelect(db, [[]]);
+    stubSelect(db, [SCOPE, []]);
     const inserted: Record<string, unknown> = {};
     db.insert.mockImplementation(() => ({
       values: (v: Record<string, unknown>) => {
@@ -103,7 +106,7 @@ describe("POST /api/teacher/topics", () => {
   });
 
   it("trims surrounding whitespace from the title", async () => {
-    stubSelect(db, [[]]);
+    stubSelect(db, [SCOPE, []]);
     const inserted: Record<string, unknown> = {};
     db.insert.mockImplementation(() => ({
       values: (v: Record<string, unknown>) => {
@@ -119,12 +122,20 @@ describe("POST /api/teacher/topics", () => {
   });
 
   it("returns 409 when the topic already exists in the course", async () => {
-    stubSelect(db, [[{ id: 7 }]]);
+    stubSelect(db, [SCOPE, [{ id: 7 }]]);
     const res = await POST(jsonRequest("http://localhost/x", "POST", validBody));
     expect(res.status).toBe(409);
     const body = await res.json();
     expect(body.error.code).toBe("CONFLICT");
     expect(body.error.message).toMatch(/already exists in this course/i);
+  });
+
+  it("returns 403 when the caller does not teach the course", async () => {
+    stubSelect(db, [[]]);
+    const res = await POST(jsonRequest("http://localhost/x", "POST", validBody));
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error.code).toBe("FORBIDDEN");
   });
 
   it.each([

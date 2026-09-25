@@ -3,8 +3,10 @@ import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 
 import { errorResponse } from "@/lib/api/response";
+import { ForbiddenError } from "@/lib/auth/errors";
 import { requireAuth, type AuthContext } from "@/lib/auth/guard";
 import { ownershipScope } from "@/lib/auth/ownership";
+import { getTeachingScope, isTrackAllowed } from "@/lib/auth/teaching-scope";
 import { getDb } from "@/lib/db";
 import {
   attemptAnswers,
@@ -141,6 +143,13 @@ export async function PATCH(
         : questionDraftSchema.parse(raw);
 
     const db = getDb();
+
+    // Covers re-filing a question under a different course or JAMB subject.
+    const scope = await getTeachingScope(db, auth);
+    if (!isTrackAllowed(scope, data)) {
+      throw new ForbiddenError("You do not teach this course or JAMB subject");
+    }
+
     const [row] = await db
       .update(questions)
       .set({

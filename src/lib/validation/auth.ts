@@ -28,3 +28,23 @@ export const loginSchema = z.object({
   identifier: z.string().trim(),
   password: z.string().min(1),
 });
+
+// Changing your own password. There is no self-service reset by design (no email/SMS for MVP),
+// so knowing the current password is the only proof of ownership we have.
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1),
+    newPassword: z.string().min(8).max(72),
+  })
+  .strict()
+  .superRefine((val, ctx) => {
+    if (val.currentPassword === val.newPassword) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["newPassword"],
+        message: "Choose a password different from your current one",
+      });
+    }
+  });
+
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;

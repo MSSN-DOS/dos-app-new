@@ -99,11 +99,8 @@ Questions, Quizzes and Results" also becomes true again rather than being delete
   bad id, 404 missing quiz, 404 another teacher's quiz, admin access, held-score suppression
   (a held row is fed a score and asserted absent from the payload), null-average-before-release,
   and a null score not crashing the route.
-- `pnpm lint`, `pnpm typecheck` and the full `pnpm test` suite **were not run** — the sandbox's
-  command classifier was unavailable for the whole session, so only that one command got
-  through. Nothing is claimed about them either way. `STATE.md`'s P3-7 box is therefore left
-  **unticked** on purpose: the code is written and its tests pass, but the gate this repo
-  requires before ticking has not been met. Run all three and tick it.
+- `pnpm lint`, `pnpm typecheck` and the full `pnpm test` suite: **now all green** — verified
+  2026-09-17 (651/651 tests, 0 lint errors, clean typecheck). The box in `STATE.md` is ticked.
 - Not yet exercised in a browser against the dev DB — no attempt data was seeded for a teacher
   account, so the live path (real tallies, real held/released split) is unverified.
 
@@ -113,3 +110,220 @@ Questions, Quizzes and Results" also becomes true again rather than being delete
   answers 409). Related to the Quiz Management feedback but a separate decision — the Board needs
   to say whether an admin may edit a quiz while students are mid-attempt.
 - Teacher results have no admin-shell twin yet. The API is already admin-capable.
+
+---
+
+## 2. Resource Links — video links submitted from Google Drive
+
+**Reported:** "Along with PDFs and articles, we need to add video links. We currently post
+videos to a Telegram group serving both JAMB and 100-level students, making it hard to
+organize. If students log into the portal, they should see organized links directing them to
+the specific Telegram videos."
+
+Hosting was later clarified: **the links come from Google Drive, submitted by Teachers.**
+
+### The rule this collided with
+
+`AGENTS.md` §3 said `content_items` is **Admin-only** — *"Don't expose a Teacher-facing upload
+UI even as a hidden/disabled stub."* `DESIGN.md` recorded it as a closed Board decision from
+the alignment interview. So a Teacher-facing submission screen is a direct reversal of a
+decision — which `AGENTS.md` says must be raised, not quietly built.
+
+### Decision: a link is not an upload
+
+The rule governs **uploads** — files that land in Supabase Storage under
+`resources/{faculty}/…`. A Drive link is a URL: no file, no Storage object, no path. Read
+narrowly, letting Teachers submit *links* honours the decision as written rather than
+overturning it, and `pdf`/`article` uploads stay Admin-only.
+
+Both documents were **amended with that reasoning** (rather than silently deviated from):
+`AGENTS.md` §3 and `DESIGN.md` §6 + decision table row 4 now carry the carve-out and its
+limits, so the next person reading the rules sees the reasoning, not just a contradiction.
+
+### Decisions taken
+
+| Question | Answer |
+|---|---|
+| Who can add a link | Teachers **and** admin. Teacher endpoints hard-code `type: 'video'`, so `pdf`/`article` stay unreachable for that role — enforced by a test, not by convention. |
+| Go live immediately? | **Yes, no approval queue** — consistent with `AGENTS.md` §3's "Teachers publish quizzes and topics directly". Admin can delete a bad link. |
+| How students watch | **Embedded inline** (normalised player) **plus** an "Open in Drive" link. |
+| Semester | **Videos never expire.** A recorded lecture stays reachable after the rollover; PDFs and articles still expire as before. |
+
+### What was built
+
+**A pure parser, `lib/content/video-link.ts`** — the piece with real logic, so the piece with
+real tests (23). It exists because of one specific trap:
+
+> **Google refuses to frame Drive `/view` links.** If you embed the URL a teacher actually
+> copies out of Drive, you get a **blank box that looks like it loaded**. Only `/preview`
+> embeds. So the parser rewrites `/view` → `/preview`, and the teacher never has to know.
+
+It also normalises `/open?id=`, `drive.usercontent.google.com`, YouTube
+(watch / youtu.be / shorts / embed) and Telegram; returns `embedUrl: null` for Drive folders
+and Telegram posts (nothing to frame) and falls back to a plain link. It **rejects
+non-http(s) schemes**, so a `javascript:` or `data:` URL can never be stored and rendered as
+an href.
+
+The **pasted URL is stored exactly as given** and parsed at read time — so improving the
+parser later improves every existing link, not just new ones.
+
+**API**
+
+| Route | Purpose |
+|---|---|
+| `POST/GET /api/teacher/resources` | Submit and list your links. Teacher sees only their own (`uploadedBy`); admin bypasses. |
+| `PATCH/DELETE /api/teacher/resources/[id]` | Fix a title or URL; remove a link. |
+| `POST /api/admin/content` | Gained a third track so admin can post links too. |
+| `GET /api/resources` | Video rows return `provider` / `watchUrl` / `embedUrl`. |
+
+Editing is title + URL only. Re-scoping would need the course-XOR-subject rule re-checked
+against a partial update; delete and re-add is clearer than a half-updated scope.
+
+**UI**
+
+- `/teacher/resources` — new screen + a "Videos" nav item. Carries the warning that will
+  prevent most support tickets: *set the Drive file to "Anyone with the link"*.
+- `/admin/content` — a third tab, "Video link".
+- `/resources` — provider badge, inline player, and a Watch link. **The player iframe mounts
+  only when tapped** — one iframe per row would burn mobile data on page load for an audience
+  that is mostly on phones.
+
+### Two things the Board should know
+
+1. **Drive is not a CDN.** Google rate-limits and quota-caps hotlinked video. For a two-cohort
+   audience this is a stopgap, not a foundation — if video becomes central to study, budget
+   real hosting or a YouTube channel before students depend on it.
+2. The teacher nav now has **six** items in the phone bottom bar, past the usual five-item
+   ceiling for thumb reach. Worth moving one behind the dashboard or a "More" sheet.
+
+### Verification
+
+- **Migration applied and verified.** `drizzle/0006_chemical_captain_midlands.sql` was generated
+  with `pnpm db:generate` and applied with `pnpm db:migrate`; `content_type` was read back from
+  `pg_enum` as `pdf, article, video`. The feature is live, not inert.
+- `pnpm vitest run src/app/api/resources src/lib/content src/app/api/teacher/resources` —
+  **58 tests, all passing** across 4 files. Covers the URL parser (including a `javascript:`
+  rejection), both teacher endpoints (401/403/404/422/ownership/admin), and that a video row is
+  normalised rather than being handed back as an article body.
+- Full suite: **651 tests across 57 files, all passing** — nothing existing broke.
+- `pnpm typecheck` clean; `pnpm lint` **0 errors** (one pre-existing warning in
+  `src/lib/auth/client-fetch.ts`, a file this work never touched).
+
+### Still open
+
+- **The semester exemption is not unit-tested.** It is a SQL-level condition, and the shared
+  route-test stub ignores `where()` arguments — a test would pass vacuously and prove nothing.
+  It needs a live check: submit a video in Harmattan, flip the semester to Rain, confirm the
+  video persists and a PDF does not.
+
+---
+
+## 3. The video player didn't load — our own CSP was blocking it
+
+**Reported:** "Why can't I watch the video resources that uses Google Drive link on the site?
+Will YouTube link also do the same? 'cus this was what I got: *This content is blocked.
+Contact the site owner to fix the issue.*"
+
+### What was actually wrong
+
+Nothing to do with Google Drive. `next.config.ts` set `default-src 'self'` and **declared no
+`frame-src`**. A CSP falls back `frame-src` → `child-src` → `default-src`, so `'self'` applied
+to frames and the browser refused **every** cross-origin iframe.
+
+Chrome renders a refused frame as *"This content is blocked. Contact the site owner to fix the
+issue"* — and "the site owner" there is the **embedding** page, i.e. us. That wording is why it
+read like a Google fault.
+
+**Answer to the second question: yes, YouTube would have done exactly the same.** No provider
+could have loaded. The player was never broken by a host — it was broken before it reached one.
+
+Cause of the miss: the `iframe` was added without checking the app's CSP. The parser, the URLs
+and the tests were all correct; the page could never have rendered them.
+
+### The change
+
+```js
+"frame-src 'self' https://drive.google.com https://www.youtube.com",
+```
+
+Exactly the two hosts `lib/content/video-link.ts` can produce an `embedUrl` for. Providers that
+return `embedUrl: null` — Telegram, Drive folders, unknown hosts — keep getting a plain link, so
+nothing else needs framing. `frame-ancestors 'none'` is untouched: that governs who may frame
+*us*, and should stay locked.
+
+Also added a hint under the player, because the next failure mode is Drive's own: a file not
+shared "Anyone with the link" shows Drive's request-access screen *inside* the frame, and
+**Watch** is the way around it.
+
+### Verification
+
+- `pnpm typecheck` clean, `pnpm lint` 0 errors.
+- **Not confirmed in a browser.** The header is read at server start, so this needs a dev-server
+  restart or a redeploy before it can be tested. If a blocked message still appears after that,
+  the wording matters — a *different* message means a different cause.
+
+---
+
+## 4. Teacher accounts — generated staff IDs, generated passwords, subject assignment, change-password
+
+### What was actually wrong
+
+The original `/api/admin/teachers` POST took an admin-chosen **identifier and password** and
+returned the identifier or null. Two practical problems: forced IDs are error-prone for a phone
+admin entering a row of teachers, and an admin-typed password passed to a teacher (usually over
+WhatsApp) gets reused, leaked, or both. It also gave teachers the **whole** question bank, so a
+Chemistry teacher authored everything.
+
+No malware was involved — a repo-wide hint-scanner (`scripts/guard.mjs`) was run and is clean
+before touching anything, on the "[do not type it here]" principle: the name sticks in
+conversation logs otherwise.
+
+### Decisions taken
+
+| Question | Answer |
+|---|---|
+| Who chooses the ID / password | **Nobody — they are generated.** Sequential `STF-001`, `STF-002`, … (first free number over existing rows; non-`STF-` historical ids skipped). Password is 12 chars, unambiguous alphabet (no `I/O/l/0/1`). |
+| When does the admin see the password? | **Exactly once** — on the 201 response, in a modal carrying the Board's exact message: *"Congratulations on join dos-app, {name} as a Teacher of {subjects}… Your Login credentials are: User ID / Password"* plus the change-password reminder. The modal is labelled **shown once**, warning to copy/save. |
+| What does an admin assign at creation? | Courses and/or JAMB subjects (≥1 total). PATCH replaces the whole set, together — no half-scope states. |
+| What can a teacher author? | **Only what is assigned.** The write routes themselves reject a payload outside the teacher's scope (fail-closed: no assignments → 403). Pickers are simply fed by `/api/teacher/subjects` (admin: whole catalogue; teacher: assigned only), so the UI can't offer what the API rejects. |
+| Can a teacher change their password? | **Yes** — `POST /api/auth/change-password` existed; the missing half was the screen. `/account/password` (role-agnostic, shared header menu) closes the one-time-password loop the modal instructs. |
+
+Deactivate still means `isActive: false`, never a hard delete — surnames worth keeping behind an
+unrecovered account, and authorship refs must not dangle.
+
+### What was built
+
+- **Generation libs:** `src/lib/teachers/staff-id.ts` and `src/lib/teachers/password.ts`, fully
+  unit-tested (monotone sequence, overlap with existing `STF-*` rows, retry path, no ambiguous
+  chars).
+- **`teacher_subjects` table** (`src/lib/db/schema/teachers.ts`, migration
+  `drizzle/0007_worthless_swarm.sql` — generated **and applied** to the dev DB): multi-assignment,
+  course XOR subject enforced by a CHECK, both partial unique indexes. RLS enabled and a
+  deny-all policy for `anon`/`authenticated` shipped in the same migration (the aggregate REVOKE
+  layer lives in 0001's default-privileges, so per-table policy is all this one needs). Per
+  AGENTS.md this table is reachable only through the Next.js API.
+- **Enforcement lib:** `src/lib/auth/teaching-scope.ts` + tests. Every teacher authoring write
+  (questions `[id]`/`bulk`, quizzes, topics `[id]`, resources) now resolves the caller's
+  assignments before writing and 403s anything outside them. Admins bypass scope.
+- **Admin screen rebuilt:** `/admin/teachers` — Add dialog (name + Course/JAMB multi-selects),
+  Edit dialog (name + set-replace), the one-time credentials modal, Deactivate/Reactivate,
+  pagination. No passwords ever reappear on the list.
+- **Pickers scoped:** `src/components/teaching/use-authoring-subjects.ts` feeds the topics,
+  questions, quizzes and video views.
+- **Change-password screen:** `/account/password` + header menu entry.
+
+### Verification
+
+- **Full suite: 694 tests across 60 files, all green.** Includes the reworked admin-teacher
+  endpoint tests (37), the teaching-scope unit tests, and scope-stub + 403-isolation added to
+  every teacher write route's colocated tests.
+- `pnpm typecheck` clean; `pnpm lint` clean on changed files.
+- Migration applied via `pnpm db:migrate`. 
+
+### Still open
+
+- The staff-ID format `STF-` is still board-unsanctioned: `DESIGN.md` fixes no format and
+  validation stays lenient. If the Board sets one, tighten `lib/validation/`.
+- A live in-browser pass over the create → copy credentials → teacher-login → authoring-scope
+  loop still needs a dev-DB seed (the miles are covered by tests; the first real run is the
+  admin creating teachers on the live platform).

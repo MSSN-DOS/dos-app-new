@@ -25,6 +25,7 @@ import {
   isPdfFile,
   MAX_PDF_BYTES,
   pdfMetaSchema,
+  videoCreateSchema,
 } from "@/lib/validation/content";
 
 function validationError(err: ZodError): NextResponse {
@@ -93,9 +94,11 @@ async function resolveAspirantFolder(
 }
 
 type ParsedInput = {
-  type: "pdf" | "article";
+  type: "pdf" | "article" | "video";
   title: string;
   body?: string;
+  /** Video links only: the pasted external URL. */
+  url?: string;
   courseId?: number;
   jambSubjectId?: number;
   file?: File;
@@ -148,13 +151,14 @@ export async function POST(request: Request): Promise<NextResponse> {
         file: file instanceof File ? file : undefined,
       };
     } else {
-      // JSON body: articles only — PDFs must go through multipart.
+      // JSON body: articles and video links — PDFs must go through multipart.
       const json: unknown = await request.json();
       const record = json as Record<string, unknown>;
       input = {
-        type: "article",
+        type: record.type === "video" ? "video" : "article",
         title: String(record.title ?? ""),
         body: record.body === undefined ? undefined : String(record.body),
+        url: record.url === undefined ? undefined : String(record.url),
         courseId: record.courseId === undefined ? undefined : Number(record.courseId),
         jambSubjectId:
           record.jambSubjectId === undefined
@@ -163,7 +167,17 @@ export async function POST(request: Request): Promise<NextResponse> {
       };
     }
 
-    if (input.type === "article") {
+    if (input.type === "video") {
+      const result = videoCreateSchema.safeParse({
+        type: "video",
+        title: input.title,
+        url: input.url,
+        courseId: input.courseId,
+        jambSubjectId: input.jambSubjectId,
+      });
+      if (!result.success) return validationError(result.error);
+      input = { ...input, ...result.data };
+    } else if (input.type === "article") {
       const result = articleCreateSchema.safeParse({
         type: "article",
         title: input.title,
@@ -249,7 +263,8 @@ export async function POST(request: Request): Promise<NextResponse> {
       }
     }
 
-    // PDFs land in Storage at the §6 path; articles store their body inline.
+    // PDFs land in Storage at the §6 path; articles store their body inline; video links
+    // store the external URL as pasted.
     let storedValue: string;
     if (input.type === "pdf" && input.file) {
       folder =
@@ -259,6 +274,8 @@ export async function POST(request: Request): Promise<NextResponse> {
       const objectPath = resourceFilePath(folder, input.file.name);
       await uploadResourceObject(objectPath, input.file);
       storedValue = objectPath;
+    } else if (input.type === "video") {
+      storedValue = input.url as string;
     } else {
       storedValue = input.body as string;
     }

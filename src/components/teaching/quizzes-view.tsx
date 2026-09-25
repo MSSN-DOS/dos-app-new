@@ -25,6 +25,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ApiError, apiFetch } from "@/lib/auth/client-fetch";
+import { useAuthoringSubjects } from "@/components/teaching/use-authoring-subjects";
 
 type QuizRow = {
   id: number;
@@ -40,8 +41,6 @@ type QuizRow = {
   subjectName: string | null;
 };
 
-type CourseOption = { id: number; code: string; title: string };
-type SubjectOption = { id: number; name: string };
 type TopicOption = { id: number; title: string; courseId: number };
 
 const ALL = "__all__";
@@ -76,17 +75,10 @@ export function QuizzesView({ basePath }: { basePath: string }) {
   const [formWeekStart, setFormWeekStart] = useState("");
   const [formError, setFormError] = useState("");
 
-  const coursesQuery = useQuery({
-    queryKey: ["structure", "courses"],
-    queryFn: () => apiFetch<{ data: CourseOption[] }>("/structure/courses").then((r) => r.data ?? []),
-  });
-  const subjectsQuery = useQuery({
-    queryKey: ["jamb", "subjects"],
-    queryFn: () => apiFetch<{ data: SubjectOption[] }>("/jamb/subjects").then((r) => r.data ?? []),
-  });
-
-  const courses = [...(coursesQuery.data ?? [])].sort((a, b) => a.code.localeCompare(b.code));
-  const subjects = [...(subjectsQuery.data ?? [])].sort((a, b) => a.name.localeCompare(b.name));
+  const {
+    courses,
+    jambSubjects: subjects,
+  } = useAuthoringSubjects();
 
   const quizzesQuery = useQuery({
     queryKey: ["teacher", "quizzes", filterType, filterCourse, page],

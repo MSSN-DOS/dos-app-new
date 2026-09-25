@@ -57,6 +57,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { useAuthoringSubjects } from "@/components/teaching/use-authoring-subjects";
 
 // ── types ────────────────────────────────────────────────────────────────────
 interface QuestionRow {
@@ -72,10 +73,7 @@ interface QuestionDetail extends QuestionRow {
   options: { id: number; optionText: string; isCorrect: boolean }[];
   blanks: { id: number; blankIndex: number; acceptedAnswer: string }[];
 }
-interface CourseRow { id: number; code: string; title: string }
 interface TopicOptionRow { id: number; title: string }
-interface SubjectRow { id: number; name: string }
-
 type QuestionType = "fill_in_gap" | "options";
 type TrackMode = "course" | "jamb";
 
@@ -157,20 +155,12 @@ export function QuestionsView() {
   const [unattachedOnly, setUnattachedOnly] = useState(true);
   const [page, setPage] = useState(1);
 
-  const coursesQuery = useQuery({
-    queryKey: ["structure", "courses"],
-    queryFn: async () => {
-      const res = await apiFetch<{ data: CourseRow[] }>("/structure/courses");
-      return [...res.data].sort((a, b) => a.code.localeCompare(b.code));
-    },
-  });
-  const subjectsQuery = useQuery({
-    queryKey: ["jamb", "subjects"],
-    queryFn: async () => {
-      const res = await apiFetch<{ data: SubjectRow[] }>("/jamb/subjects");
-      return res.data;
-    },
-  });
+  const {
+    courses,
+    jambSubjects: subjects,
+    isPending: subjectsLoading,
+    isError: subjectsError,
+  } = useAuthoringSubjects();
   const questionsQuery = useQuery({
     queryKey: ["teacher", "questions", filterCourse, filterType, filterStatus, unattachedOnly, page],
     queryFn: async () => {
@@ -429,12 +419,10 @@ export function QuestionsView() {
     if (blanks.some((b) => b.trim() === "")) blockers.push("Every blank needs an accepted answer.");
   }
 
-  const courses = coursesQuery.data ?? [];
-  const subjects = subjectsQuery.data ?? [];
   const filtersActive = filterCourse !== ALL || filterType !== ALL || filterStatus !== ALL;
   const paginated = questionsQuery.data;
-  const isLoading = coursesQuery.isPending || questionsQuery.isPending;
-  const isError = coursesQuery.isError || subjectsQuery.isError || questionsQuery.isError;
+  const isLoading = subjectsLoading || questionsQuery.isPending;
+  const isError = subjectsError || questionsQuery.isError;
   const total = paginated?.meta.total ?? 0;
   const publishedCount = paginated?.data.filter((q) => q.status === "published").length ?? 0;
   const draftCount = paginated?.data.filter((q) => q.status === "draft").length ?? 0;

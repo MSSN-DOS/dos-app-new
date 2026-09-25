@@ -1,4 +1,4 @@
-import { BookOpen, ClipboardList, FileQuestion, FolderOpen, History, LayoutDashboard } from "lucide-react";
+import { BarChart3, BookOpen, ClipboardList, FileQuestion, FolderOpen, History, LayoutDashboard, Video } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export interface AppNavItemConfig {
@@ -12,7 +12,9 @@ export const TEACHER_NAV_ITEMS: AppNavItemConfig[] = [
   { label: "Topics", href: "/teacher/topics", icon: BookOpen },
   { label: "Questions", href: "/teacher/questions", icon: FileQuestion },
   { label: "Quizzes", href: "/teacher/quizzes", icon: ClipboardList },
-  { label: "Results", href: "/teacher/results", icon: ClipboardList },
+  // Distinct icons: Results and Quizzes both used ClipboardList before.
+  { label: "Results", href: "/teacher/results", icon: BarChart3 },
+  { label: "Videos", href: "/teacher/resources", icon: Video },
 ];
 
 // Student and Aspirant share the same URLs and nav (screens-aspirant.md).

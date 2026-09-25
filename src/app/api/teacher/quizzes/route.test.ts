@@ -105,6 +105,14 @@ describe("GET /api/teacher/quizzes", () => {
 });
 
 describe("POST /api/teacher/quizzes", () => {
+  // The first select the POST handler makes is the caller's teaching scope, so every happy
+  // path stubs it as the first slot. This scope teaches MAT-equivalent course 2 and the
+  // Chemistry (jamb 3) track — exactly the two tracks the happy paths author for.
+  const SCOPE = [
+    { courseId: 2, jambSubjectId: null },
+    { courseId: null, jambSubjectId: 3 },
+  ];
+
   it("returns 401 when unauthenticated", async () => {
     requireAuth.mockRejectedValue(new UnauthorizedError());
     const res = await POST(
@@ -121,7 +129,22 @@ describe("POST /api/teacher/quizzes", () => {
     expect(res.status).toBe(403);
   });
 
+  it("returns 403 when the caller does not teach the course or subject", async () => {
+    stubSelect(db, [[]]);
+    const res = await POST(
+      jsonRequest("http://localhost/api/teacher/quizzes", "POST", {
+        title: "Not mine",
+        quizType: "course",
+        courseId: 2,
+        weekStart: "2026-08-22",
+      }),
+    );
+    expect(res.status).toBe(403);
+    expect(db.insert).not.toHaveBeenCalled();
+  });
+
   it("creates a topic quiz draft shell and returns 201", async () => {
+    stubSelect(db, [SCOPE]);
     const inserted: Record<string, unknown> = {};
     db.insert.mockImplementation(() => ({
       values: (v: Record<string, unknown>) => {
@@ -153,6 +176,7 @@ describe("POST /api/teacher/quizzes", () => {
   });
 
   it("trims the title before saving", async () => {
+    stubSelect(db, [SCOPE]);
     const inserted: Record<string, unknown> = {};
     db.insert.mockImplementation(() => ({
       values: (v: Record<string, unknown>) => {
@@ -172,6 +196,7 @@ describe("POST /api/teacher/quizzes", () => {
   });
 
   it("creates a course quiz with a Saturday week start", async () => {
+    stubSelect(db, [SCOPE]);
     const inserted: Record<string, unknown> = {};
     db.insert.mockImplementation(() => ({
       values: (v: Record<string, unknown>) => {
@@ -193,6 +218,7 @@ describe("POST /api/teacher/quizzes", () => {
   });
 
   it("creates a JAMB-subject course quiz", async () => {
+    stubSelect(db, [SCOPE]);
     const inserted: Record<string, unknown> = {};
     db.insert.mockImplementation(() => ({
       values: (v: Record<string, unknown>) => {

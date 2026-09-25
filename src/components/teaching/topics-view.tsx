@@ -43,18 +43,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useAuthoringSubjects } from "@/components/teaching/use-authoring-subjects";
 
 interface TopicRow {
   id: number;
   title: string;
   courseId: number;
   courseCode: string;
-}
-
-interface CourseRow {
-  id: number;
-  code: string;
-  title: string;
 }
 
 type FormMode = { kind: "add" } | { kind: "edit"; topic: TopicRow };
@@ -71,13 +66,12 @@ export function TopicsView() {
   const [courseId, setCourseId] = useState<string>("");
   const [page, setPage] = useState(1);
 
-  const coursesQuery = useQuery({
-    queryKey: ["structure", "courses"],
-    queryFn: async () => {
-      const res = await apiFetch<{ data: CourseRow[] }>("/structure/courses");
-      return [...res.data].sort((a, b) => a.code.localeCompare(b.code));
-    },
-  });
+  const {
+    courses,
+    isPending: coursesLoading,
+    isError: coursesError,
+    refetch: coursesRefetch,
+  } = useAuthoringSubjects();
 
   const topicsQuery = useQuery({
     queryKey: ["teacher", "topics", courseId, page],
@@ -137,7 +131,6 @@ export function TopicsView() {
     },
   });
 
-  const courses = coursesQuery.data ?? [];
   const courseLabel = (id: number) =>
     courses.find((c) => c.id === id)?.code ?? `#${id}`;
 
@@ -205,30 +198,28 @@ export function TopicsView() {
       </div>
 
       <div className="mt-4">
-        {!coursesQuery.isPending && courseId === "" ? (
+        {!coursesLoading && courseId === "" ? (
           <div className="rounded-md border border-dashed p-8 text-center">
             <p className="text-sm text-muted-foreground">
               Pick a course above to see its topics.
             </p>
           </div>
-        ) : coursesQuery.isPending || topicsQuery.isPending ? (
+        ) : coursesLoading || topicsQuery.isPending ? (
           <div className="space-y-2" aria-busy="true" aria-label="Loading topics">
             {[0, 1, 2].map((i) => (
               <Skeleton key={i} className="h-12 w-full" />
             ))}
           </div>
-        ) : coursesQuery.isError ? (
+        ) : coursesError ? (
           <div className="rounded-md border p-6 text-center">
             <p className="text-sm text-muted-foreground">
-              {coursesQuery.error instanceof ApiError
-                ? coursesQuery.error.message
-                : "Something went wrong"}
+              Could not load your courses. Try again.
             </p>
             <Button
               variant="outline"
               size="sm"
               className="mt-3"
-              onClick={() => void coursesQuery.refetch()}
+              onClick={() => void coursesRefetch()}
             >
               Retry
             </Button>

@@ -29,6 +29,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { apiFetch, ApiError } from "@/lib/auth/client-fetch";
+import { isValidVideoLink } from "@/lib/content/video-link";
 import { MAX_PDF_BYTES } from "@/lib/validation/content";
 
 interface CourseOption {
@@ -42,7 +43,7 @@ interface SubjectOption {
 }
 interface ContentRow {
   id: number;
-  type: "pdf" | "article";
+  type: "pdf" | "article" | "video";
   title: string;
   courseCode: string | null;
   subjectName: string | null;
@@ -54,9 +55,10 @@ const ACCEPTED_TYPES = ["application/pdf"];
 export default function AdminContentPage() {
   const queryClient = useQueryClient();
 
-  const [contentType, setContentType] = useState<"pdf" | "article">("pdf");
+  const [contentType, setContentType] = useState<"pdf" | "article" | "video">("pdf");
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
+  const [url, setUrl] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [track, setTrack] = useState<"course" | "subject">("course");
   const [courseId, setCourseId] = useState<string>("");
@@ -98,9 +100,9 @@ export default function AdminContentPage() {
       return apiFetch("/admin/content", {
         method: "POST",
         body: JSON.stringify({
-          type: "article",
+          type: contentType,
           title,
-          body,
+          ...(contentType === "video" ? { url } : { body }),
           ...(track === "course"
             ? { courseId: Number(courseId) }
             : { jambSubjectId: Number(jambSubjectId) }),
@@ -108,9 +110,16 @@ export default function AdminContentPage() {
       });
     },
     onSuccess: () => {
-      toast.success(contentType === "pdf" ? "PDF published" : "Article published");
+      toast.success(
+        contentType === "pdf"
+          ? "PDF published"
+          : contentType === "video"
+            ? "Video link published"
+            : "Article published",
+      );
       setTitle("");
       setBody("");
+      setUrl("");
       setFile(null);
       void queryClient.invalidateQueries({ queryKey: ["admin", "content"] });
     },
@@ -144,7 +153,8 @@ export default function AdminContentPage() {
     title.trim() === "" ||
     !scopeReady ||
     (contentType === "pdf" && file === null) ||
-    (contentType === "article" && body.trim() === "");
+    (contentType === "article" && body.trim() === "") ||
+    (contentType === "video" && !isValidVideoLink(url));
 
   const rows = listQuery.data?.data ?? [];
 
@@ -153,13 +163,13 @@ export default function AdminContentPage() {
       <AdminPageHeader
         kicker="Library"
         title="Content"
-        description="Upload PDFs or write articles for students and aspirants."
+        description="Upload PDFs, write articles, or post video links for students and aspirants."
       />
 
       <section className="mt-6 rounded-md border p-4" aria-label="Upload content">
         <Tabs
           value={contentType}
-          onValueChange={(value) => setContentType(value as "pdf" | "article")}
+          onValueChange={(value) => setContentType(value as "pdf" | "article" | "video")}
         >
           <TabsList>
             <TabsTrigger value="pdf" className="min-h-11">
@@ -167,6 +177,9 @@ export default function AdminContentPage() {
             </TabsTrigger>
             <TabsTrigger value="article" className="min-h-11">
               Article
+            </TabsTrigger>
+            <TabsTrigger value="video" className="min-h-11">
+              Video link
             </TabsTrigger>
           </TabsList>
         </Tabs>
@@ -193,6 +206,29 @@ export default function AdminContentPage() {
                 className="min-h-11"
                 onChange={(event) => setFile(event.target.files?.[0] ?? null)}
               />
+            </div>
+          ) : contentType === "video" ? (
+            <div className="grid gap-2">
+              <Label htmlFor="content-url">Video link</Label>
+              <Input
+                id="content-url"
+                value={url}
+                onChange={(event) => setUrl(event.target.value)}
+                placeholder="https://drive.google.com/file/d/…/view"
+                inputMode="url"
+                className="min-h-11"
+              />
+              <p className="text-sm text-muted-foreground">
+                Google Drive, YouTube and Telegram links all work. On a Drive file, set sharing
+                to &ldquo;Anyone with the link&rdquo; or students will be asked to request
+                access.
+              </p>
+              {url.trim() !== "" && !isValidVideoLink(url) ? (
+                <p role="alert" className="text-sm text-destructive">
+                  That doesn&apos;t look like a usable link — paste the full address starting
+                  with https://
+                </p>
+              ) : null}
             </div>
           ) : (
             <div className="grid gap-2">
@@ -328,7 +364,8 @@ export default function AdminContentPage() {
           ) : rows.length === 0 ? (
             <div className="rounded-md border border-dashed p-8 text-center">
               <p className="text-sm text-muted-foreground">
-                No content posted yet. Upload a PDF or write an article above.
+                No content posted yet. Upload a PDF, write an article, or paste a video link
+                above.
               </p>
             </div>
           ) : (
@@ -341,7 +378,11 @@ export default function AdminContentPage() {
                   <div className="min-w-0">
                     <p className="text-base font-medium">{row.title}</p>
                     <p className="mt-0.5 text-sm text-muted-foreground">
-                      {row.type === "pdf" ? "PDF" : "Article"}
+                      {row.type === "pdf"
+                        ? "PDF"
+                        : row.type === "video"
+                          ? "Video link"
+                          : "Article"}
                       {row.courseCode ? ` · ${row.courseCode}` : ""}
                       {row.subjectName ? ` · ${row.subjectName}` : ""}
                     </p>

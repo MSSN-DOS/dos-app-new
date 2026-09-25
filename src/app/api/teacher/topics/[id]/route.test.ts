@@ -29,7 +29,11 @@ beforeEach(() => {
 const validBody = { title: "Trigonometry", courseId: 2 };
 
 describe("PATCH /api/teacher/topics/[id]", () => {
+  // The first select the PATCH handler makes is the caller's teaching scope.
+  const SCOPE = [{ courseId: 2, jambSubjectId: null }];
+
   it("updates the topic and returns it", async () => {
+    stubSelect(db, [SCOPE]);
     stubUpdate(db, { id: 5, title: "Trigonometry", courseId: 2, createdBy: 5 });
     const res = await PATCH(
       jsonRequest("http://localhost/x/5", "PATCH", validBody),
@@ -42,6 +46,7 @@ describe("PATCH /api/teacher/topics/[id]", () => {
   });
 
   it("returns 404 when the topic does not exist", async () => {
+    stubSelect(db, [SCOPE]);
     stubUpdate(db, null);
     const res = await PATCH(
       jsonRequest("http://localhost/x/99", "PATCH", validBody),
@@ -50,6 +55,16 @@ describe("PATCH /api/teacher/topics/[id]", () => {
     expect(res.status).toBe(404);
     const body = await res.json();
     expect(body.error.code).toBe("NOT_FOUND");
+  });
+
+  it("returns 403 when the caller does not teach the course", async () => {
+    stubSelect(db, [[]]);
+    const res = await PATCH(
+      jsonRequest("http://localhost/x/5", "PATCH", validBody),
+      { params: Promise.resolve({ id: "5" }) },
+    );
+    expect(res.status).toBe(403);
+    expect(db.update).not.toHaveBeenCalled();
   });
 
   it.each(["abc", "0", "-3"])("returns 400 for invalid id %s", async (id) => {
