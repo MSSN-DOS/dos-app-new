@@ -203,6 +203,17 @@ Work top to bottom. Don't check a later phase's box before every task above it i
 - [ ] P8-5 — Vercel production deploy (needs user involvement: Vercel project + env vars)
 - [ ] P8-6 — Replace placeholder logo (not launch-blocking)
 
+## Phase 9 — Admin-controlled Course Quiz availability
+- [x] P9-1 — Admin can override the weekly Course Quiz window per quiz (Board request 2026-09-28)
+  - **Decision change:** DESIGN.md decision #6 was "Fixed: opens Saturday 00:00, closes Sunday 23:59". It is now a *default* that an Admin can override per quiz. Amended the decision row, the §4 cadence row, the §11 API map, and the §13 changelog.
+  - Schema: `quizzes.opens_at` + `quizzes.closes_at`, both nullable timestamps, plus a `quizzes_window_check` CHECK (`closes_at > opens_at` when both set). Migration `0008_handy_marvel_apes.sql` — additive only, no drops/renames. `quizzes` already had RLS + deny-all, so no new policy.
+  - Resolver: `lib/quizzes/window.ts` — new `resolveCourseQuizWindow(weekStart, override)` returns the effective instants (override wins per-side, falls back to Sat 00:00 → Mon 00:00 WAT). `isCourseQuizWindowOpen` takes an optional 4th `override` arg, so the existing 3-arg call signature and tests are unchanged.
+  - API: `PATCH /api/admin/quizzes/[id]/window`, body `{ opensAt, closesAt }` (both nullable; both null = clear the override). Admin-only via `requireAuth(request, ["admin"])`. 422 with `error.details` when close ≤ open, 404 unknown quiz, 409 on a Topic Quiz ("Only Course Quizzes have an availability window"). Colocated `route.test.ts`: 10 cases.
+  - Enforcement: all three window checks in `api/quizzes/[id]/attempt/route.ts` now pass the override (`:232` stale-attempt auto-submit, `:252` block starting an attempt, `:481` block submitting). The 409 message distinguishes an admin-set window from the default so students aren't told "Saturday-Sunday" when it isn't.
+  - UI: `components/admin/quiz-availability-panel.tsx`, rendered from the shared `QuizBuilderView` **only** when `basePath.startsWith("/admin")` and the quiz is a Course Quiz — Teachers never see it. Two `datetime-local` inputs (opens/closes), Save + "Reset to default", all times shown and parsed in `Africa/Lagos` explicitly so a Nigerian admin isn't shown their device timezone instead of WAT. TanStack Query mutation + `apiFetch`; local edit state held separately so there's no effect-driven mirroring.
+  - Tests: `lib/quizzes/window.test.ts` +8 cases (early open, default close retained, early close, extension past Monday, clearing, degenerate close≤open, topic-quiz immunity, `resolveCourseQuizWindow` defaults). Full suite 723 passed / 61 files.
+  - Spec gap: `.agents/design/screens-admin.md` has **no** `/admin/quizzes` entry — that screen reuses the teacher's `QuizBuilderView`. The panel follows the existing page's token vocabulary (`border-line`/`bg-panel`/`text-ink`/`bg-brand`) rather than inventing a new admin pattern. Worth a spec entry at the next design pass.
+
 ---
 
 ## Open items still needing a real answer from the Board (not blocking dev, but don't let these go silently forgotten)

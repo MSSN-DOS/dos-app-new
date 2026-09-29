@@ -17,7 +17,7 @@ This is the single source of truth for how the product behaves and how the code 
 | 3 | Identifier validation | Format-validated only (regex below), no cross-check against an external membership/JAMB list. |
 | 4 | Content upload permissions | Admin-only. Teachers cannot upload PDFs/articles. **Amended 2026-09-17:** Teachers *may* submit video **links** (an external URL — not an upload; see §6). |
 | 5 | Topic Quiz question count | Free-form — Teacher sets it per topic when building the quiz. |
-| 6 | Weekly Course Quiz release window | Fixed: opens Saturday 00:00, closes Sunday 23:59 (server timezone, see §8). |
+| 6 | Weekly Course Quiz release window | Default: opens Saturday 00:00, closes Monday 00:00 (Africa/Lagos, see §8). **Amended 2026-09-28:** an Admin may override either boundary per quiz (`quizzes.opens_at` / `quizzes.closes_at`, both nullable); NULL on both restores the default. Set on either side replaces that boundary only. |
 | 7 | Notifications | In-app only for MVP. No email/SMS. |
 | 8 | Department/Faculty list source | Board enters manually via Admin UI. No external import. |
 | 9 | Course catalogue ownership | Board/Admin owns it, entered manually via Admin UI. |
@@ -81,7 +81,7 @@ Two types, same `quizzes` table, discriminated by `quiz_type`:
 |---|---|---|
 | Tied to | One `topic_id` | A `course_id` (or `jamb_subject_id` for Aspirants) + `week_start` |
 | Question count | Free-form, Teacher decides | Fixed 50 |
-| Cadence | Ad hoc, whenever a Teacher publishes one | Weekly, opens Saturday 00:00 / closes Sunday 23:59 |
+| Cadence | Ad hoc, whenever a Teacher publishes one | Weekly, opens Saturday 00:00 / closes Monday 00:00 WAT (Admin-overridable per quiz, decision 6) |
 | Counts toward CGPA / Post-UTME / leaderboard | No | Yes — only source that counts |
 
 Rules that apply to both:
@@ -201,6 +201,7 @@ Rules that apply to both:
 - `/api/admin/content`
 - `/api/admin/leaderboard`
 - `/api/admin/scores/release`
+- `/api/admin/quizzes/[id]/window` — PATCH the Course Quiz availability override (decision 6)
 - `/api/admin/settings/semester`
 - `/api/teacher/topics`, `/api/teacher/questions`, `/api/teacher/quizzes`, `/api/teacher/quizzes/[id]`, `/api/teacher/results/[quizId]`
 - `/api/quizzes` (list, scoped server-side to the caller's role/structure — Student/Aspirant), `/api/quizzes/[id]/attempt` (POST to submit)
@@ -307,3 +308,4 @@ Icons: **lucide-react only** — the one sanctioned icon library (shadcn uses it
 
 - Added `quiz_attempts.released_at` and `semester_settings` — not in `DOS-Site-Database-Schema.sql`, both needed to implement resolved decisions #10 and #11 above.
 - Post-UTME conversion formula (`raw / 2`) is a placeholder pending explicit Board confirmation — everything else in this document is resolved and final for MVP scope.
+- Added `quizzes.opens_at` / `quizzes.closes_at` (nullable, plus a `quizzes_window_check` CHECK constraint) — not in `DOS-Site-Database-Schema.sql`. Needed to implement the 2026-09-28 Board amendment to resolved decision #6, which made the weekly Course Quiz window Admin-overridable instead of fixed. Resolution lives in `lib/quizzes/window.ts` (`resolveCourseQuizWindow`); the API is `PATCH /api/admin/quizzes/[id]/window`, Admin-only, Course Quizzes only (Topic Quizzes have no window → 409).

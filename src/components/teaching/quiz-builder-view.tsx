@@ -15,6 +15,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { QuizAvailabilityPanel } from "@/components/admin/quiz-availability-panel";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -27,8 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { apiFetch, ApiError } from "@/lib/auth/client-fetch";
-import { ArrowLeft, Sparkles, GraduationCap, Layers, Clock3, Calendar, AlertCircle, Check, SearchX, Plus, Trash2, Search } from "lucide-react";
+import { apiFetch, ApiError } from "@/lib/auth/client-fetch";import { ArrowLeft, Sparkles, GraduationCap, Layers, Clock3, Calendar, AlertCircle, Check, SearchX, Plus, Trash2, Search } from "lucide-react";
 
 type QuizDetail = {
   id: number;
@@ -40,6 +40,8 @@ type QuizDetail = {
   topicId: number | null;
   jambSubjectId: number | null;
   weekStart: string | null;
+  opensAt: string | null;
+  closesAt: string | null;
   questionCount: number;
   timeLimitMinutes: number;
   passMark: number;
@@ -216,6 +218,7 @@ function Builder({ quiz, quizId, basePath }: { quiz: QuizDetail; quizId: string;
 
   const attachedIds = new Set(quiz.questions.map((q) => q.questionId));
   const isCourse = quiz.quizType === "course";
+  const isAdmin = basePath.startsWith("/admin");
   const parsedCount = Number(questionCount);
   const parsedTime = Number(timeLimit);
   const parsedPass = Number(passMark);
@@ -386,6 +389,17 @@ function Builder({ quiz, quizId, basePath }: { quiz: QuizDetail; quizId: string;
           )}
         </div>
       </section>
+
+      {/* Admin-only: Course Quiz availability override (DESIGN.md §4 decision 6).
+          Teachers never see this — only /admin/quizzes renders it. */}
+      {isAdmin && isCourse && (
+        <QuizAvailabilityPanel
+          quizId={quiz.id}
+          weekStart={quiz.weekStart}
+          opensAt={quiz.opensAt}
+          closesAt={quiz.closesAt}
+        />
+      )}
 
       {/* attach */}
       <section className="rounded-2xl border border-line bg-panel p-4 sm:p-6">
