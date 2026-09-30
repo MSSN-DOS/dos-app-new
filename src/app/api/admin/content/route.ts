@@ -6,6 +6,7 @@ import { errorResponse } from "@/lib/api/response";
 import { requireAuth } from "@/lib/auth/guard";
 import { getDb } from "@/lib/db";
 import {
+  academicSessions,
   contentItems,
   courses,
   departments,
@@ -13,7 +14,6 @@ import {
   jambSubjects,
   levels,
 } from "@/lib/db/schema";
-import { getActiveSemester } from "@/lib/semester";
 import {
   aspirantResourcePath,
   resourceFilePath,
@@ -48,6 +48,14 @@ function validationError(err: ZodError): NextResponse {
 // Resolve the §6 storage folder for a course-scoped item. General/interfaculty
 // courses have no single faculty/department — their scope_type stands in for
 // those segments (flagged in STATE.md pending a Board ruling on path shape).
+//
+// The folder is keyed on the COURSE's own session and semester, never the active
+// ones. It used to call getActiveSemester() here, which put an upload for a
+// Harmattan course into a `rain/` folder whenever the calendar had rolled over —
+// and once sessions exist, would have filed it under the wrong year too. An
+// upload belongs to the offering it was uploaded against, not to the day it was
+// uploaded. content_items stores the resulting path on the row, so existing
+// objects keep resolving; only new uploads use the new shape.
 async function resolveStudentFolder(
   db: ReturnType<typeof getDb>,
   courseId: number,
@@ -56,6 +64,7 @@ async function resolveStudentFolder(
     .select({
       code: courses.code,
       semester: courses.semester,
+      sessionLabel: academicSessions.label,
       scopeType: courses.scopeType,
       levelValue: levels.value,
       departmentName: departments.name,
@@ -63,6 +72,7 @@ async function resolveStudentFolder(
     })
     .from(courses)
     .innerJoin(levels, eq(courses.levelId, levels.id))
+    .innerJoin(academicSessions, eq(courses.sessionId, academicSessions.id))
     .leftJoin(departments, eq(courses.departmentId, departments.id))
     .leftJoin(faculties, eq(courses.facultyId, faculties.id))
     .where(eq(courses.id, courseId))
@@ -70,12 +80,12 @@ async function resolveStudentFolder(
 
   if (!row) throw new Error("Course not found");
 
-  const semester = await getActiveSemester(db);
   return studentResourcePath({
     faculty: row.facultyName ?? row.scopeType,
     department: row.departmentName ?? row.scopeType,
     level: String(row.levelValue),
-    semester,
+    session: row.sessionLabel,
+    semester: row.semester,
     course: row.code,
   });
 }

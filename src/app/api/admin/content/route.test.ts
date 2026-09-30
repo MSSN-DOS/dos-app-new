@@ -48,6 +48,9 @@ function pdfRequest(body: Record<string, string>, file?: File): Request {
 const COURSE_ROW = {
   code: "MAT 101",
   semester: "harmattan",
+  // The folder comes from the *course's own* session, not from whichever session happens to be
+  // active at upload time — a Harmattan course's PDF must not land in a rain/ folder.
+  sessionLabel: "2025/26",
   scopeType: "department",
   levelValue: 100,
   departmentName: "Mathematics",
@@ -213,14 +216,14 @@ describe("POST /api/admin/content — pdf (multipart)", () => {
 
   it("uploads a student-scoped PDF to Storage at the §6 path and returns 201", async () => {
     requireAuth.mockResolvedValue({ userId: 1, roleId: 2 });
-    stubSelect(db, [[{ id: 5 }], [COURSE_ROW], [{ mode: "manual", manualOverride: "harmattan" }]]);
+    stubSelect(db, [[{ id: 5 }], [COURSE_ROW]]);
     stubInsert(db, [
       {
         id: 11,
         type: "pdf",
         title: "Week 4 Reading",
         bodyOrFileUrl:
-          "resources/science/mathematics/100/harmattan/mat-101/reading.pdf",
+          "resources/science/mathematics/100/2025-26/harmattan/mat-101/reading.pdf",
       },
     ]);
 
@@ -231,7 +234,7 @@ describe("POST /api/admin/content — pdf (multipart)", () => {
     expect(uploadResourceObject).toHaveBeenCalledTimes(1);
     const [pathArg] = uploadResourceObject.mock.calls[0] as [string, Blob];
     expect(pathArg).toBe(
-      "resources/science/mathematics/100/harmattan/mat-101/reading.pdf",
+      "resources/science/mathematics/100/2025-26/harmattan/mat-101/reading.pdf",
     );
   });
 

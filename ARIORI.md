@@ -441,6 +441,54 @@ paper over the shape of the problem while making the next rollover break again.
 
 ### Still open
 
-- The two P7-5 options need a Board pick. Until then Harmattan-tagged content stays invisible.
 - Nothing here has been exercised in a browser against the dev DB — no attempt data with a
   released score exists yet, so the 409 freeze path is covered by tests only.
+
+---
+
+## 6. "Students can't see Harmattan content" — the calendar was code, and it had expired
+
+**The report.** After 2026-07-03 students found their Harmattan quizzes and PDFs gone. Not a
+permissions bug, not a data problem: the whole session calendar lived in `lib/semester/calendar.ts`
+as a hardcoded 2025/26 constant, and `resolveSemesterForDate` had no state for "the session is
+over" — its last two branches both returned `rain`. So from 2026-07-04 onward the app reported
+**`rain` as the active semester** for a session that had ended three months earlier, and
+`lib/quizzes/access.ts:63` filtered on it. Every Harmattan-tagged course was invisible; every
+Rain-tagged one was open.
+
+**Why the manual override could not save it.** `DESIGN.md` §8 built that toggle for exactly this
+date drift — but the override is a *term* picker, and a finished whole session is a shape
+`harmattan | rain` cannot express. There was no value to select, so no admin action could make
+the app correct. That is the tell: an escape hatch whose value space cannot reach the failure
+state is not an escape hatch.
+
+**Decided.** Board picked putting the session year in the data model. I flagged that on its own
+it does not stop the re-tagging treadmill — an Admin would still re-tag every course each
+session — so the Board then chose **one row per offering**: `CSC 201 · 2025/26 · Harmattan` and
+`CSC 201 · 2026/27 · Harmattan` are two rows, and re-offering is a new row, never an edit.
+Quizzes, content and attempts stay bound to the offering they belong to, so a 2025/26 result
+feeding CGPA can never be relabelled 2026/27.
+
+**The gap is solved without a third state.** `Jul 3 → Oct 20` resolves to the most recently
+*started* session at its *final* semester — today, 2025/26 Rain, which is the material students
+just sat. That is §8's existing "fall back to whichever semester just ended" rule generalised from
+between-semesters to between-sessions, so §8's "not a third semester state" rule survives intact.
+I costed a `closed` enum value and rejected it: it would have made the state legible without
+making the app correct, and it would not have touched the annual re-tag. I also did not
+hardcode 2026/27 dates to make the symptom disappear — that is the same class of bug one deploy
+later, and it would have hidden a data-model gap behind a date.
+
+**What else fell out of it.** The migration was unrunnable as generated — `ADD COLUMN session_id
+integer NOT NULL` cannot execute against a database holding course rows, and the new
+`override_pair` CHECK would have rejected the Admin's existing manual-override row. Both were
+confirmed against the live dev database *before* rewriting it, so the fix is add-nullable → seed
+→ backfill → `SET NOT NULL`, not a hopeful guess. A test also caught Rain's first day resolving
+to Harmattan (`<=` where `<` was meant), and passing through the new session picker exposed a
+`resolveStudentFolder` bug that had been filing Harmattan uploads into Rain folders all along.
+
+### Still open
+
+- 2026/27 dates are unknown, so no 2026/27 session exists. That is now a five-field form entry
+  rather than a code change.
+- Nothing here has been exercised in a browser against the dev DB. The resolver itself has been
+  verified against the live database, not just in tests.

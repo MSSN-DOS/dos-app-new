@@ -65,6 +65,7 @@ export async function PATCH(
         title: data.title,
         levelId: data.levelId,
         semester: data.semester,
+        sessionId: data.sessionId,
         scopeType: data.scopeType,
         ...scopeColumns(data),
       })

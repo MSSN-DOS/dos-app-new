@@ -108,8 +108,8 @@ describe("GET /api/quizzes", () => {
       ],
     ]);
 
-    // getActiveSemester runs a separate settings select between the link rows
-    // and the final quiz select — interleave it as the 5th call.
+    // getActiveSemester runs two selects between the link rows and the final quiz select —
+    // the session calendar, then the settings row. Interleave them as calls 5 and 6.
     const base = db.select.getMockImplementation();
     let call = 0;
     db.select.mockImplementation(((...args: unknown[]) => {
@@ -117,8 +117,25 @@ describe("GET /api/quizzes", () => {
       if (call === 5) {
         return {
           from: () => ({
+            orderBy: () =>
+              Promise.resolve([
+                {
+                  id: 1,
+                  label: "2025/26",
+                  harmattanStart: "2025-10-20",
+                  harmattanEnd: "2026-02-06",
+                  rainStart: "2026-02-23",
+                  rainEnd: "2026-07-03",
+                },
+              ]),
+          }),
+        };
+      }
+      if (call === 6) {
+        return {
+          from: () => ({
             orderBy: () => ({
-              limit: async () => [{ mode: "auto", manualOverride: null }],
+              limit: async () => [{ mode: "auto", manualOverride: null, manualOverrideSessionId: null }],
             }),
           }),
         };

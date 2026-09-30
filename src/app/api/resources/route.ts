@@ -14,7 +14,7 @@ import { studentProfiles } from "@/lib/db/schema/profiles";
 import { z } from "zod";
 import { errorResponse } from "@/lib/api/response";
 import { parseVideoLink } from "@/lib/content/video-link";
-import { getActiveSemester } from "@/lib/semester";
+import { activeCourseFilter, getActiveSemester } from "@/lib/semester";
 import { createResourceSignedUrl } from "@/lib/storage/supabase-storage";
 
 const querySchema = z.object({
@@ -147,7 +147,10 @@ export async function GET(request: Request) {
       // Videos are reference material, not semester-bound coursework — a recorded lecture is
       // still worth watching after the semester rolls over, so video rows skip the
       // active-semester filter that PDFs and articles still obey (Board decision 2026-09-17).
-      or(eq(contentItems.type, "video"), eq(courses.semester, activeSemester)),
+      // `activeCourseFilter` returns undefined when no session is active; `or()` drops it,
+      // leaving video reachable and semester-bound PDFs/articles hidden — which is the correct
+      // degenerate case for a portal with no calendar entered.
+      or(eq(contentItems.type, "video"), activeCourseFilter(activeSemester)),
     ];
     if (courseIdFilter !== undefined) {
       conds.push(eq(contentItems.courseId, courseIdFilter));

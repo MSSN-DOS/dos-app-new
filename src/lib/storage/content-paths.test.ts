@@ -23,16 +23,17 @@ describe("slugifyPathSegment", () => {
 });
 
 describe("studentResourcePath", () => {
-  it("matches the DESIGN.md §6 shape: faculty/department/level/semester/course", () => {
+  it("matches the DESIGN.md §6 shape: faculty/department/level/session/semester/course", () => {
     expect(
       studentResourcePath({
         faculty: "Science",
         department: "Mathematics",
         level: "100",
+        session: "2025/26",
         semester: "harmattan",
         course: "MAT 101",
       }),
-    ).toBe("resources/science/mathematics/100/harmattan/mat-101");
+    ).toBe("resources/science/mathematics/100/2025-26/harmattan/mat-101");
   });
 
   it("slugs each segment", () => {
@@ -41,10 +42,36 @@ describe("studentResourcePath", () => {
         faculty: "Faculty of Science",
         department: "Dept. of Chemistry",
         level: "200 Level",
+        session: "2026/27",
         semester: "Rain Semester",
         course: "CHE 301",
       }),
-    ).toBe("resources/faculty-of-science/dept-of-chemistry/200-level/rain-semester/che-301");
+    ).toBe(
+      "resources/faculty-of-science/dept-of-chemistry/200-level/2026-27/rain-semester/che-301",
+    );
+  });
+
+  it("keeps the session segment, so the same course code in two sessions is two objects", () => {
+    // The reason the session is in the key at all: a course is one row per offering, so
+    // CSC 201 exists once for 2025/26 and again for 2026/27. Without the year segment the
+    // second session's upload would overwrite the first at the same object key.
+    const in2025 = studentResourcePath({
+      faculty: "Science",
+      department: "Computing",
+      level: "200",
+      session: "2025/26",
+      semester: "harmattan",
+      course: "CSC 201",
+    });
+    const in2026 = studentResourcePath({
+      faculty: "Science",
+      department: "Computing",
+      level: "200",
+      session: "2026/27",
+      semester: "harmattan",
+      course: "CSC 201",
+    });
+    expect(in2025).not.toBe(in2026);
   });
 });
 

@@ -44,7 +44,17 @@ export async function GET(request: Request) {
       );
     }
 
-    const activeSemester = await getActiveSemester(db);
+    const active = await getActiveSemester(db);
+    // `no-session` is a real state now that the calendar is data: today can fall outside every
+    // session an Admin has entered. The shell already treats a null active semester as "nothing
+    // to show", so null is the honest value here rather than a fabricated semester.
+    const activeSemester = active.ok
+      ? {
+          semester: active.semester,
+          sessionLabel: active.sessionLabel,
+          source: active.source,
+        }
+      : null;
 
     let profile: unknown = null;
 

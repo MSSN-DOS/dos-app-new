@@ -18,7 +18,15 @@ beforeEach(() => {
   vi.clearAllMocks();
   db = makeDbMock();
   getDb.mockReturnValue(db);
-  getActiveSemester.mockResolvedValue("rain");
+  // The resolver now returns a discriminated union, not a bare semester: `harmattan` alone
+  // cannot say which session it belongs to, and the dashboard pill renders the label.
+  getActiveSemester.mockResolvedValue({
+    ok: true,
+    semester: "rain",
+    sessionId: 1,
+    sessionLabel: "2025/26",
+    source: "auto",
+  });
 });
 
 describe("GET /api/me", () => {
@@ -53,7 +61,7 @@ describe("GET /api/me", () => {
         fullName: "Test Student",
         identifier: "21/30GN001",
         role: "student",
-        activeSemester: "rain",
+        activeSemester: { semester: "rain", sessionLabel: "2025/26", source: "auto" },
         profile: {
           faculty: "Science",
           department: "Mathematics",
@@ -134,7 +142,7 @@ describe("GET /api/me", () => {
         fullName: "Test Aspirant",
         identifier: "12345678JA",
         role: "aspirant",
-        activeSemester: "rain",
+        activeSemester: { semester: "rain", sessionLabel: "2025/26", source: "auto" },
         profile: {
           aspirationDepartment: "Medicine",
           postUtmeRaw: 80,

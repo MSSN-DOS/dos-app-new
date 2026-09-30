@@ -9,6 +9,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { semesterEnum, scopeTypeEnum } from "./enums";
+import { academicSessions } from "./academic-sessions";
 import { levels, faculties, departments } from "./academic";
 import { users } from "./auth";
 import { denyPublicPolicy } from "./rls";
@@ -22,7 +23,16 @@ export const courses = pgTable(
     levelId: integer("level_id")
       .notNull()
       .references(() => levels.id),
+    // Model B: this row is one *offering* of a course, not the course itself. `code` + `title`
+    // describe the subject; `sessionId` + `semester` say when it is offered. Re-offering CSC 201
+    // next session is a new row, so quizzes, content and attempts stay bound to the offering
+    // they belong to — a 2025/26 result must not be relabelled 2026/27 (DESIGN.md §8, amended
+    // 2026-09-30). There is no DB uniqueness on courses; the API enforces
+    // code + level + session + semester and returns 409 on a clash.
     semester: semesterEnum("semester").notNull(),
+    sessionId: integer("session_id")
+      .notNull()
+      .references(() => academicSessions.id),
     scopeType: scopeTypeEnum("scope_type").notNull(),
     departmentId: integer("department_id").references(() => departments.id),
     facultyId: integer("faculty_id").references(() => faculties.id),

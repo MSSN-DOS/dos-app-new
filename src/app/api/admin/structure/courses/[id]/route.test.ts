@@ -41,6 +41,9 @@ const validBody = {
   title: "Mathematics",
   levelId: 10,
   semester: "harmattan",
+  // Re-offering a course is a new row, not an edit — so the session is editable, but it is
+  // still required on the payload.
+  sessionId: 2,
   scopeType: "interfaculty",
   facultyIds: [3, 4],
 };

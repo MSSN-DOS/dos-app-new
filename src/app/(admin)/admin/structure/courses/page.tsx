@@ -7,6 +7,8 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { apiFetch, ApiError } from "@/lib/auth/client-fetch";
+import { SESSIONS_QUERY_KEY } from "@/components/admin/session-manager";
+import { pickSessionForDate, type SessionDates } from "@/lib/semester/calendar";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,6 +50,8 @@ interface CourseRow {
   title: string;
   levelId: number;
   semester: Semester;
+  /** Which academic session this offering belongs to. Same code, one row per session. */
+  sessionId: number;
   scopeType: ScopeType;
   departmentId: number | null;
   facultyId: number | null;
@@ -96,19 +100,31 @@ export default function CoursesPage() {
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
   const [levelFilter, setLevelFilter] = useState<string>("all");
   const [semesterFilter, setSemesterFilter] = useState<string>("all");
+  const [sessionFilter, setSessionFilter] = useState<string>("all");
 
   const query = useQuery({
-    queryKey: ["admin", "structure", "courses", { page, departmentFilter, levelFilter, semesterFilter }],
+    queryKey: ["admin", "structure", "courses", { page, departmentFilter, levelFilter, semesterFilter, sessionFilter }],
     queryFn: async () => {
       const params = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE) });
       if (departmentFilter !== "all") params.set("departmentId", departmentFilter);
       if (levelFilter !== "all") params.set("levelId", levelFilter);
       if (semesterFilter !== "all") params.set("semester", semesterFilter);
+      if (sessionFilter !== "all") params.set("sessionId", sessionFilter);
       const res = await apiFetch<PaginatedCourses>(`/admin/structure/courses?${params}`);
-      return { ...res, data: [...res.data].sort((a, b) =>
-        a.code === b.code ? a.title.localeCompare(b.title) : a.code.localeCompare(b.code),
-      ) };
+      return { ...res, data: [...res.data].sort((a, b) => {
+        if (a.code !== b.code) return a.code.localeCompare(b.code);
+        // Same code across sessions: newest session first, so the offering students are
+        // actually sitting this year reads above the one from last year.
+        if (a.sessionId !== b.sessionId) return b.sessionId - a.sessionId;
+        return a.title.localeCompare(b.title);
+      }) };
     },
+  });
+  const sessionsQuery = useQuery({
+    // Same key as the session manager and the settings page, so the list is fetched once
+    // across the admin shell. All three must return the same shape — one shared cache entry.
+    queryKey: SESSIONS_QUERY_KEY,
+    queryFn: async () => (await apiFetch<{ data: SessionDates[] }>("/admin/sessions")).data,
   });
   const departmentsQuery = useQuery({
     queryKey: ["structure", "departments"],
@@ -138,6 +154,7 @@ export default function CoursesPage() {
   const [formTitle, setFormTitle] = useState("");
   const [formLevelId, setFormLevelId] = useState("");
   const [formSemester, setFormSemester] = useState<Semester>("harmattan");
+  const [formSessionId, setFormSessionId] = useState<string>("");
   const [formScopeType, setFormScopeType] = useState<ScopeType>("department");
   const [formDepartmentId, setFormDepartmentId] = useState("");
   const [formFacultyId, setFormFacultyId] = useState("");
@@ -194,16 +211,24 @@ export default function CoursesPage() {
   const departments = departmentsQuery.data ?? [];
   const faculties = facultiesQuery.data ?? [];
   const levels = levelsQuery.data ?? [];
+  const sessions = sessionsQuery.data ?? [];
+  const activeSessionId = pickSessionForDate(sessions, new Date())?.session.id ?? null;
+  const sessionLabel = (id: number): string =>
+    sessions.find((s) => s.id === id)?.label ?? "?";
 
   const filtered = query.data?.data;
 
   const filtersActive =
-    departmentFilter !== "all" || levelFilter !== "all" || semesterFilter !== "all";
+    departmentFilter !== "all" ||
+    levelFilter !== "all" ||
+    semesterFilter !== "all" ||
+    sessionFilter !== "all";
 
   const clearFilters = () => {
     setDepartmentFilter("all");
     setLevelFilter("all");
     setSemesterFilter("all");
+    setSessionFilter("all");
     setPage(1);
   };
 
@@ -219,6 +244,9 @@ export default function CoursesPage() {
     setFormTitle("");
     setFormLevelId("");
     setFormSemester("harmattan");
+    // Default to whatever is active now — that is the offering an Admin is nearly always
+    // creating, and a blank picker would just be friction on the common path.
+    setFormSessionId(activeSessionId === null ? "" : String(activeSessionId));
     setFormScopeType("department");
     setFormDepartmentId("");
     setFormFacultyId("");
@@ -233,6 +261,7 @@ export default function CoursesPage() {
     setFormTitle(course.title);
     setFormLevelId(String(course.levelId));
     setFormSemester(course.semester);
+    setFormSessionId(String(course.sessionId));
     setFormScopeType(course.scopeType);
     setFormDepartmentId(course.departmentId === null ? "" : String(course.departmentId));
     setFormFacultyId(course.facultyId === null ? "" : String(course.facultyId));
@@ -250,6 +279,7 @@ export default function CoursesPage() {
         title: formTitle.trim(),
         levelId: Number(formLevelId),
         semester: formSemester,
+        sessionId: Number(formSessionId),
         scopeType: formScopeType,
         departmentId: formScopeType === "department" ? Number(formDepartmentId) : null,
         facultyId: formScopeType === "faculty" ? Number(formFacultyId) : null,
@@ -268,6 +298,7 @@ export default function CoursesPage() {
     formCode.trim() &&
       formTitle.trim() &&
       formLevelId &&
+      formSessionId &&
       (formScopeType === "general" ||
         (formScopeType === "department" && formDepartmentId) ||
         (formScopeType === "faculty" && formFacultyId) ||
@@ -279,15 +310,19 @@ export default function CoursesPage() {
       <AdminPageHeader
         kicker="Structure"
         title="Courses"
-        description="Courses belong to a level and semester, scoped by who can see them."
+        description="A course is one offering: the same code offered again next session is a new row, not an edit. Students only see offerings in the active session."
         actions={
-          <Button onClick={openAdd} className="min-h-11 shrink-0 rounded-xl">
+          <Button
+            onClick={openAdd}
+            disabled={sessionsQuery.isSuccess && sessions.length === 0}
+            className="min-h-11 shrink-0 rounded-xl"
+          >
             Add course
           </Button>
         }
       />
 
-      <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+      <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <Label htmlFor="department-filter" className="sr-only">Filter by department</Label>
           <Select value={departmentFilter} onValueChange={(value) => { setDepartmentFilter(value); setPage(1); }}>
@@ -329,13 +364,28 @@ export default function CoursesPage() {
             </SelectContent>
           </Select>
         </div>
+        <div>
+          <Label htmlFor="session-filter" className="sr-only">Filter by session</Label>
+          <Select value={sessionFilter} onValueChange={(value) => { setSessionFilter(value); setPage(1); }}>
+            <SelectTrigger id="session-filter" className="w-full">
+              <SelectValue placeholder="Filter by session" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All sessions</SelectItem>
+              {sessions.map((s) => (
+                <SelectItem key={s.id} value={String(s.id)}>{s.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <div className="mt-4">
         {query.isPending ||
         departmentsQuery.isPending ||
         facultiesQuery.isPending ||
-        levelsQuery.isPending ? (
+        levelsQuery.isPending ||
+        sessionsQuery.isPending ? (
           <div className="space-y-2" aria-busy="true" aria-label="Loading courses">
             {[0, 1, 2].map((i) => (
               <Skeleton key={i} className="h-12 w-full" />
@@ -363,7 +413,9 @@ export default function CoursesPage() {
               {filtersActive
                 ? "No courses match these filters."
                  : query.data.data.length === 0
-                  ? "No courses yet — add your first one."
+                  ? sessions.length === 0
+                    ? "No courses can be created until a session exists. Add one in Settings → Semester & Session."
+                    : "No courses yet — add your first one."
                   : undefined}
             </p>
             {filtersActive && (
@@ -374,13 +426,13 @@ export default function CoursesPage() {
           </div>
         ) : (
           <div className="rounded-md border">
-            <Table aria-label="Courses"><TableHeader><TableRow><TableHead>Course</TableHead><TableHead>Level</TableHead><TableHead>Scope</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>
+            <Table aria-label="Courses"><TableHeader><TableRow><TableHead>Course</TableHead><TableHead>Session</TableHead><TableHead>Level</TableHead><TableHead>Scope</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>
             {filtered.map((course) => (
               <TableRow key={course.id}>
                 <TableCell><span className="block text-base font-medium">{course.title}</span><span className="block text-sm text-muted-foreground">
                     {course.code} · {course.levelId && `${levels.find((l) => l.id === course.levelId)?.value ?? "?"}L`} ·{" "}
                     {SEMESTER_LABEL[course.semester]}
-                  </span></TableCell><TableCell>{levels.find((l) => l.id === course.levelId)?.value ?? "?"}L</TableCell><TableCell>{SCOPE_LABEL[course.scopeType]}
+                  </span></TableCell><TableCell><span className="whitespace-nowrap">{sessionLabel(course.sessionId)}</span>{course.sessionId === activeSessionId && <span className="block text-xs text-muted-foreground">Active</span>}</TableCell><TableCell>{levels.find((l) => l.id === course.levelId)?.value ?? "?"}L</TableCell><TableCell>{SCOPE_LABEL[course.scopeType]}
                     {course.scopeType === "department" &&
                       ` · ${departments.find((d) => d.id === course.departmentId)?.name ?? "?"}`}
                     {course.scopeType === "faculty" &&
@@ -468,6 +520,32 @@ export default function CoursesPage() {
                 ))}
               </div>
             </fieldset>
+            <div className="grid gap-2">
+              <Label htmlFor="course-session">Session</Label>
+              <Select value={formSessionId} onValueChange={setFormSessionId}>
+                <SelectTrigger id="course-session" className="w-full">
+                  <SelectValue placeholder="Select a session" />
+                </SelectTrigger>
+                <SelectContent>
+                  {sessions.map((s) => (
+                    <SelectItem key={s.id} value={String(s.id)}>
+                      {s.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {sessions.length === 0 && (
+                <p className="text-sm text-destructive">
+                  No sessions exist yet. Add one in Settings → Semester &amp; Session first.
+                </p>
+              )}
+              {formMode.kind === "edit" && (
+                <p className="text-sm text-muted-foreground">
+                  Moving a course to a different session re-labels results that already count
+                  toward CGPA. Add a new course instead unless the old one was never sat.
+                </p>
+              )}
+            </div>
             <div className="grid gap-2">
               <Label htmlFor="course-scope-type">Scope type</Label>
               <Select

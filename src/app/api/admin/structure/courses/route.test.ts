@@ -167,6 +167,7 @@ describe("POST /api/admin/structure/courses", () => {
         title: "Mathematics",
         levelId: 10,
         semester: "harmattan",
+        sessionId: 1,
         scopeType: "department",
         departmentId: 3,
       }),
@@ -216,6 +217,7 @@ describe("POST /api/admin/structure/courses", () => {
         title: "Entrepreneurship",
         levelId: 20,
         semester: "rain",
+        sessionId: 1,
         scopeType: "interfaculty",
         facultyIds: [3, 4, 3],
       }),
@@ -228,8 +230,29 @@ describe("POST /api/admin/structure/courses", () => {
     ]);
   });
 
-  it("returns 409 when the course already exists at that level for that semester", async () => {
+  it("returns 409 when the same course is already offered in that level, session and semester", async () => {
+    // Identity is code + level + session + semester. The same code offered again next session
+    // is a *new* course, not a duplicate, so the session has to be part of the check.
     stubSelect(db, [[{ id: 1 }]]);
+    const res = await POST(
+      jsonRequest("http://localhost/x", "POST", {
+        code: "MAT 101",
+        title: "Mathematics",
+        levelId: 10,
+        semester: "harmattan",
+        sessionId: 1,
+        scopeType: "general",
+      }),
+    );
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error.code).toBe("CONFLICT");
+    expect(body.error.message).toMatch(/already exists/i);
+    expect(body.error.message).toMatch(/this session/i);
+  });
+
+  it("returns 422 when the offering has no session", async () => {
+    // A semester alone cannot say which year it is, so sessionId is required, not optional.
     const res = await POST(
       jsonRequest("http://localhost/x", "POST", {
         code: "MAT 101",
@@ -239,25 +262,26 @@ describe("POST /api/admin/structure/courses", () => {
         scopeType: "general",
       }),
     );
-    expect(res.status).toBe(409);
+    expect(res.status).toBe(422);
     const body = await res.json();
-    expect(body.error.code).toBe("CONFLICT");
-    expect(body.error.message).toMatch(/already exists/i);
+    expect(body.error.details).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: "sessionId" })]),
+    );
   });
 
   it.each([
-    ["missing code", { title: "Mathematics", levelId: 10, semester: "harmattan", scopeType: "general" }],
-    ["empty code", { code: "", title: "Mathematics", levelId: 10, semester: "harmattan", scopeType: "general" }],
-    ["missing title", { code: "MAT 101", levelId: 10, semester: "harmattan", scopeType: "general" }],
-    ["zero levelId", { code: "MAT 101", title: "Mathematics", levelId: 0, semester: "harmattan", scopeType: "general" }],
-    ["non-numeric levelId", { code: "MAT 101", title: "Mathematics", levelId: "x", semester: "harmattan", scopeType: "general" }],
-    ["invalid semester", { code: "MAT 101", title: "Mathematics", levelId: 10, semester: "summer", scopeType: "general" }],
-    ["invalid scopeType", { code: "MAT 101", title: "Mathematics", levelId: 10, semester: "harmattan", scopeType: "world" }],
-    ["department scope without departmentId", { code: "MAT 101", title: "Mathematics", levelId: 10, semester: "harmattan", scopeType: "department" }],
-    ["department scope with a faculty too", { code: "MAT 101", title: "Mathematics", levelId: 10, semester: "harmattan", scopeType: "department", departmentId: 3, facultyId: 2 }],
-    ["faculty scope without facultyId", { code: "MAT 101", title: "Mathematics", levelId: 10, semester: "harmattan", scopeType: "faculty" }],
-    ["general scope with a department", { code: "MAT 101", title: "Mathematics", levelId: 10, semester: "harmattan", scopeType: "general", departmentId: 3 }],
-    ["interfaculty with fewer than two faculties", { code: "MAT 101", title: "Mathematics", levelId: 10, semester: "harmattan", scopeType: "interfaculty", facultyIds: [3] }],
+    ["missing code", { title: "Mathematics", levelId: 10, semester: "harmattan", sessionId: 1, scopeType: "general" }],
+    ["empty code", { code: "", title: "Mathematics", levelId: 10, semester: "harmattan", sessionId: 1, scopeType: "general" }],
+    ["missing title", { code: "MAT 101", levelId: 10, semester: "harmattan", sessionId: 1, scopeType: "general" }],
+    ["zero levelId", { code: "MAT 101", title: "Mathematics", levelId: 0, semester: "harmattan", sessionId: 1, scopeType: "general" }],
+    ["non-numeric levelId", { code: "MAT 101", title: "Mathematics", levelId: "x", semester: "harmattan", sessionId: 1, scopeType: "general" }],
+    ["invalid semester", { code: "MAT 101", title: "Mathematics", levelId: 10, semester: "summer", sessionId: 1, scopeType: "general" }],
+    ["invalid scopeType", { code: "MAT 101", title: "Mathematics", levelId: 10, semester: "harmattan", sessionId: 1, scopeType: "world" }],
+    ["department scope without departmentId", { code: "MAT 101", title: "Mathematics", levelId: 10, semester: "harmattan", sessionId: 1, scopeType: "department" }],
+    ["department scope with a faculty too", { code: "MAT 101", title: "Mathematics", levelId: 10, semester: "harmattan", sessionId: 1, scopeType: "department", departmentId: 3, facultyId: 2 }],
+    ["faculty scope without facultyId", { code: "MAT 101", title: "Mathematics", levelId: 10, semester: "harmattan", sessionId: 1, scopeType: "faculty" }],
+    ["general scope with a department", { code: "MAT 101", title: "Mathematics", levelId: 10, semester: "harmattan", sessionId: 1, scopeType: "general", departmentId: 3 }],
+    ["interfaculty with fewer than two faculties", { code: "MAT 101", title: "Mathematics", levelId: 10, semester: "harmattan", sessionId: 1, scopeType: "interfaculty", facultyIds: [3] }],
   ])("returns 422 for %s", async (_label, body) => {
     const res = await POST(jsonRequest("http://localhost/x", "POST", body));
     expect(res.status).toBe(422);
@@ -288,6 +312,7 @@ describe("POST /api/admin/structure/courses", () => {
         title: "Mathematics",
         levelId: 10,
         semester: "harmattan",
+        sessionId: 1,
         scopeType: "general",
       }),
     );

@@ -13,7 +13,7 @@ type MeResponse = {
     fullName: string;
     identifier: string;
     role: string;
-    activeSemester: "harmattan" | "rain" | null;
+    activeSemester: { semester: "harmattan" | "rain"; sessionLabel: string } | null;
     profile:
       | {
           faculty: string | null;
@@ -81,26 +81,40 @@ function formatPostUtme(raw: number | null, converted: number | null): string {
   return "0 / 50";
 }
 
-function SemesterPills({ activeSemester }: { activeSemester: "harmattan" | "rain" | null }) {
+function SemesterPills({
+  activeSemester,
+}: {
+  activeSemester: { semester: "harmattan" | "rain"; sessionLabel: string } | null;
+}) {
   return (
-    <div className="flex gap-1.5 rounded-[14px] border border-line bg-panel p-1">
-      {(["harmattan", "rain"] as const).map((semester) => {
-        const active = semester === activeSemester;
-        return (
-          <button
-            key={semester}
-            type="button"
-            aria-pressed={active}
-            className={
-              active
-                ? "flex-1 rounded-[11px] bg-[linear-gradient(155deg,var(--dos-brand),var(--dos-brand-press))] px-3 py-[10px] text-[12.5px] font-semibold capitalize text-white shadow-[0_4px_14px_-4px_var(--dos-aura)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-0"
-                : "flex-1 rounded-[11px] bg-transparent px-3 py-[10px] text-[12.5px] font-semibold capitalize text-faint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-0"
-            }
-          >
-            {semester}
-          </button>
-        );
-      })}
+    <div className="flex flex-col gap-1.5">
+      <div className="flex gap-1.5 rounded-[14px] border border-line bg-panel p-1">
+        {(["harmattan", "rain"] as const).map((semester) => {
+          const active = semester === activeSemester?.semester;
+          return (
+            <button
+              key={semester}
+              type="button"
+              aria-pressed={active}
+              className={
+                active
+                  ? "flex-1 rounded-[11px] bg-[linear-gradient(155deg,var(--dos-brand),var(--dos-brand-press))] px-3 py-[10px] text-[12.5px] font-semibold capitalize text-white shadow-[0_4px_14px_-4px_var(--dos-aura)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-0"
+                  : "flex-1 rounded-[11px] bg-transparent px-3 py-[10px] text-[12.5px] font-semibold capitalize text-faint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-0"
+              }
+            >
+              {semester}
+            </button>
+          );
+        })}
+      </div>
+      {/* The session label is what makes the pill honest. `harmattan` on its own cannot say
+          whether the student is revising 2025/26 or sitting 2026/27, and those are different
+          sets of courses now that a course row is one offering (DESIGN.md §8, amended). */}
+      {activeSemester ? (
+        <p className="px-1 text-[11.5px] text-faint">
+          {activeSemester.sessionLabel} session
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -57,6 +57,13 @@
       "when": 1789851211504,
       "tag": "0007_worthless_swarm",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790802039082,
+      "tag": "0008_material_thor",
+      "breakpoints": true
     }
   ]
 }

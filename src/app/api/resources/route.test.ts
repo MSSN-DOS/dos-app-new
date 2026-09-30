@@ -21,6 +21,16 @@ import type { DbMock } from "@/lib/testing/route-test";
 
 let db: DbMock;
 
+/** What the real resolver reads out of `academic_sessions` before the settings row. */
+const ACTIVE_SESSION = {
+  id: 1,
+  label: "2025/26",
+  harmattanStart: "2025-10-20",
+  harmattanEnd: "2026-02-06",
+  rainStart: "2026-02-23",
+  rainEnd: "2026-07-03",
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   createResourceSignedUrl.mockResolvedValue("https://signed.example/pdf");
@@ -139,7 +149,8 @@ describe("GET /api/resources — student branch", () => {
       [{ departmentId: 2, levelId: 1 }],
       [{ facultyId: 7 }],
       [],
-      [{ mode: "manual", manualOverride: "harmattan" }],
+      [ACTIVE_SESSION],
+      [{ mode: "manual", manualOverride: "harmattan", manualOverrideSessionId: 1 }],
       [
         {
           id: 10,
@@ -168,7 +179,8 @@ describe("GET /api/resources — student branch", () => {
       [{ departmentId: 2, levelId: 1 }],
       [{ facultyId: 7 }],
       [],
-      [{ mode: "manual", manualOverride: "harmattan" }],
+      [ACTIVE_SESSION],
+      [{ mode: "manual", manualOverride: "harmattan", manualOverrideSessionId: 1 }],
       [
         {
           id: 11,

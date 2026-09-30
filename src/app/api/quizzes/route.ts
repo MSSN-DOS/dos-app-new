@@ -12,7 +12,7 @@ import {
 } from "@/lib/db/schema";
 import { studentProfiles } from "@/lib/db/schema/profiles";
 import { errorResponse } from "@/lib/api/response";
-import { getActiveSemester } from "@/lib/semester";
+import { activeCourseFilter, getActiveSemester } from "@/lib/semester";
 
 export async function GET(request: Request) {
   try {
@@ -122,7 +122,9 @@ export async function GET(request: Request) {
       .where(
         and(
           eq(quizzes.status, "published"),
-          eq(courses.semester, activeSemester),
+          // Undefined when no session is active — `and()` drops it, so the query then matches
+          // nothing rather than leaking another session's quizzes.
+          activeCourseFilter(activeSemester),
           eq(courses.levelId, profile.levelId),
           or(...accessConds)
         )

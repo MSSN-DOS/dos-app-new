@@ -33,7 +33,7 @@ type MeResponse = {
     fullName: string;
     identifier: string;
     role: string;
-    activeSemester: "harmattan" | "rain" | null;
+    activeSemester: { semester: "harmattan" | "rain"; sessionLabel: string } | null;
     profile:
       | {
           faculty: string | null;

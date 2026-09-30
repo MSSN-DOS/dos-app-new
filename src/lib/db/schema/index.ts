@@ -8,6 +8,7 @@ export * from "./questions";
 export * from "./quizzes";
 export * from "./performance";
 export * from "./semester";
+export * from "./academic-sessions";
 export * from "./content";
 export * from "./teachers";
 export * from "./tours";
