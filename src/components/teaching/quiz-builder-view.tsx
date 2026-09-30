@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiFetch, ApiError } from "@/lib/auth/client-fetch";
-import { ArrowLeft, Sparkles, GraduationCap, Layers, Clock3, Calendar, AlertCircle, Check, SearchX, Plus, Trash2, Search } from "lucide-react";
+import { ArrowLeft, Sparkles, GraduationCap, Layers, Clock3, Calendar, AlertCircle, Check, SearchX, Plus, Trash2, Search, Undo2 } from "lucide-react";
 
 type QuizDetail = {
   id: number;
@@ -125,6 +125,7 @@ function Builder({ quiz, quizId, basePath }: { quiz: QuizDetail; quizId: string;
   const [formError, setFormError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [detachTarget, setDetachTarget] = useState<number | null>(null);
+  const [unpublishOpen, setUnpublishOpen] = useState(false);
   const [bankTopic, setBankTopic] = useState("__all__");
   const [bankType, setBankType] = useState("__all__");
   const [bankTab, setBankTab] = useState<"available" | "attached">("available");
@@ -169,6 +170,17 @@ function Builder({ quiz, quizId, basePath }: { quiz: QuizDetail; quizId: string;
   const publishMutation = useMutation({
     mutationFn: () => apiFetch(`/teacher/quizzes/${quiz.id}/publish`, { method: "POST" }),
     onSuccess: () => { setFormError(null); void invalidateDetail(); void invalidateQuizzes(); },
+    onError: (err) => setFormError((err as ApiError).message),
+  });
+  const unpublishMutation = useMutation({
+    mutationFn: () => apiFetch(`/teacher/quizzes/${quiz.id}/unpublish`, { method: "POST" }),
+    onSuccess: () => {
+      setFormError(null);
+      setUnpublishOpen(false);
+      toast.success("Quiz unpublished — back to draft");
+      void invalidateDetail();
+      void invalidateQuizzes();
+    },
     onError: (err) => setFormError((err as ApiError).message),
   });
   const attachMutation = useMutation({
@@ -558,9 +570,32 @@ function Builder({ quiz, quizId, basePath }: { quiz: QuizDetail; quizId: string;
         {quiz.status === "draft" ? (
           <Button className="min-h-11 rounded-xl bg-brand text-white shadow-[0_8px_20px_rgba(91,127,255,0.3)] hover:bg-brand-hover disabled:opacity-40" disabled={publishMutation.isPending || !configValid || blockers.length > 0} onClick={() => publishMutation.mutate()}><Sparkles className="size-4" /> Publish quiz</Button>
         ) : (
-          <span className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-line px-4 text-sm font-semibold text-sub"><Check className="size-4" /> Published — visible to students</span>
+          <>
+            <span className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-line px-4 text-sm font-semibold text-sub"><Check className="size-4" /> Published — visible to students</span>
+            <Button variant="outline" className="min-h-11 rounded-xl border-line bg-panel text-ink hover:bg-line" disabled={unpublishMutation.isPending} onClick={() => setUnpublishOpen(true)}>
+              <Undo2 className="size-4" /> Unpublish
+            </Button>
+          </>
         )}
       </div>
+
+      <AlertDialog open={unpublishOpen} onOpenChange={setUnpublishOpen}>
+        <AlertDialogContent className="border-line bg-panel text-ink">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-ink">Unpublish this quiz?</AlertDialogTitle>
+            <AlertDialogDescription className="text-sub">
+              Students will no longer see or be able to start it. Attempts already in progress keep counting, and
+              this can be published again. Once any score is released this becomes permanent.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-line bg-canvas text-ink hover:bg-line" disabled={unpublishMutation.isPending}>Keep published</AlertDialogCancel>
+            <AlertDialogAction className="bg-ruby text-white hover:bg-ruby-hover" disabled={unpublishMutation.isPending} onClick={(e) => { e.preventDefault(); unpublishMutation.mutate(); }}>
+              {unpublishMutation.isPending ? "Unpublishing…" : "Unpublish"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={detachTarget !== null || detachMany !== null} onOpenChange={(open) => { if (!open) { setDetachTarget(null); setDetachMany(null); } }}>
         <AlertDialogContent className="border-line bg-panel text-ink">

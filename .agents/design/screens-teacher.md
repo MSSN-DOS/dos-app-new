@@ -117,11 +117,14 @@ FRAME: Attach Questions
   NOTE: N of {question_count} questions attached.
 
   ACTION ROW: [Save as draft] [Publish: primary, disabled until question_count is met and all required fields are valid]
+  ACTION ROW (when published): [Published — visible to students] [Unpublish]
 ```
 
-**Data / API:** `GET/PATCH /api/teacher/quizzes/[id]`, `GET /api/teacher/questions?...` (for the attach-search), `POST/DELETE /api/teacher/quizzes/[id]/questions`.
+**Data / API:** `GET/PATCH /api/teacher/quizzes/[id]`, `GET /api/teacher/questions?...` (for the attach-search), `POST/DELETE /api/teacher/quizzes/[id]/questions`, `POST /api/teacher/quizzes/[id]/publish`, `POST /api/teacher/quizzes/[id]/unpublish` (P3-8).
 
-**States:** loading · saving · error · publish-blocked (attached count ≠ required count, or a required field is empty — show which) · attach-search loading/empty.
+**Unpublish (P3-8):** once published, `PATCH` is refused (409) — so fixing a live quiz means unpublishing first. `POST .../unpublish` flips `status` back to `draft`; it is owner-or-admin, and it is **refused (409) once any attempt on the quiz has a released score**, because a released Course Quiz mark has already fed CGPA and the Post-UTME projection and cannot be taken back. The 409 body names the count, and the confirm dialog should say the same thing before the click: in-flight attempts keep counting, new starts are blocked, republishing restores it. Shown in both shells — the builder is one component rendered with a different `basePath`.
+
+**States:** loading · saving · error · publish-blocked (attached count ≠ required count, or a required field is empty — show which) · attach-search loading/empty · unpublish-confirm.
 
 ---
 
@@ -137,6 +140,6 @@ FRAME: Results — "Course Quiz — Week 4" (CHE 301)
   LIST ROW: Yusuf, F. | Best score: 64% | Held pill
 ```
 
-**Data / API:** `GET /api/teacher/results/[quizId]` — scoped to `quizzes.created_by = current teacher`, 403 if the quiz belongs to someone else.
+**Data / API:** `GET /api/teacher/results/[quizId]` — scoped to `quizzes.created_by = current teacher`. Returns **404** (not 403) if the quiz belongs to someone else: a 403 would confirm the quiz exists, leaking the existence of other Teachers' quizzes. Corrected 2026-09-30 to match the implementation; `GET /api/teacher/quizzes/[id]` already worked this way. Admins bypass the ownership scope and get 200.
 
 **States:** loading · empty (no attempts yet) · error. Released/held status is informational only here — Teachers don't have a release action, that's Admin-only (`DESIGN.md` §4).

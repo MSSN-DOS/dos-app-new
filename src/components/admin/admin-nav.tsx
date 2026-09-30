@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import {
+  BarChart3,
   BookOpen,
   Building2,
   ChevronRight,
@@ -76,6 +77,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Quizzes", href: "/admin/quizzes", icon: ClipboardList },
   { label: "Content", href: "/admin/content", icon: FileText },
   { label: "Leaderboard", href: "/admin/leaderboard", icon: Trophy },
+  { label: "Results", href: "/admin/results", icon: BarChart3 },
   { label: "Score Release", href: "/admin/scores/release", icon: ShieldCheck },
   { label: "Settings", href: "/admin/settings/semester", icon: Settings2 },
 ];

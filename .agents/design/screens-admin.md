@@ -245,6 +245,31 @@ FRAME: Score Release
 
 ---
 
+### `/admin/results` and `/admin/results/[quizId]`
+- **Task:** P3-9
+- **Purpose:** The read side of results, to sit next to Score Release. Admin can already *see* held marks per-user on `/admin/students/[id]`; this is the quiz-centric view of the same data across **all staff**, not just quizzes the Admin owns.
+
+**Wireframe**
+```
+FRAME: Results (admin)
+  LIST ROW: Algebra Basics — Course Quiz | MAT 101 | 12 attempts | 4 held | [View results]
+  LIST ROW: Physics — Course Quiz | Physics (JAMB) | 3 attempts | all released | [View results]
+
+FRAME: Results detail (admin)
+  STAT ROW: Attempts 12 | Avg score 74% | Pass rate 66%
+  NOTE: 4 attempts are still held — those marks are hidden and not counted above.
+  LIST ROW: Aisha B. | ADM/2026/0001 | 82% | Released
+  LIST ROW: Chidi O. | ADM/2026/0044 | — | Held
+```
+
+**Data / API:** `GET /api/teacher/results` and `GET /api/teacher/results/[quizId]`. Both are already `requireAuth(["admin","teacher"])` and `ownershipScope()` returns `null` for an Admin, so the list is site-wide — **no API change, and no new route file**. The URL prefix is `/teacher` on purpose: the routes are shared, not duplicated, and an admin twin that called a second endpoint would be two code paths to keep honest.
+
+**Held scores:** Admins *may* see held marks (`/admin/students/[id]` already does), but this screen deliberately does not show them — it reuses the Teacher components, so `avgScore`/`passRate` are released-only and `null` until something is released. Release still happens only on `/admin/scores/release`. If a future iteration wants held marks here, that is a deliberate change to the shared component and both shells, not an Admin-only branch.
+
+**States:** loading · empty (no quiz has been sat yet) · error + Retry · held-note strip. Both pages render the same components as `/teacher/results` with a different `basePath`; the empty state must link to `/admin/quizzes`, not back into the teacher shell.
+
+---
+
 ### `/admin/settings/semester`
 - **Task:** P7-3
 - **Purpose:** Auto/manual toggle for the active semester, and the override picker (`DESIGN.md` §8).

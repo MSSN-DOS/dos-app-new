@@ -106,10 +106,8 @@ Questions, Quizzes and Results" also becomes true again rather than being delete
 
 ### Still open
 
-- **Published quizzes cannot be edited by anyone, admin included** (`/api/teacher/quizzes/[id]`
-  answers 409). Related to the Quiz Management feedback but a separate decision — the Board needs
-  to say whether an admin may edit a quiz while students are mid-attempt.
-- Teacher results have no admin-shell twin yet. The API is already admin-capable.
+*(Both items closed 2026-09-30 — see entry 5. Kept here as the record of what was outstanding
+when this entry was written: the published-quiz edit lock, and the missing admin-shell twin.)*
 
 ---
 
@@ -327,3 +325,122 @@ unrecovered account, and authorship refs must not dangle.
 - A live in-browser pass over the create → copy credentials → teacher-login → authoring-scope
   loop still needs a dev-DB seed (the miles are covered by tests; the first real run is the
   admin creating teachers on the live platform).
+
+---
+
+## 5. Three open questions answered at last — quiz locking, admin results, and the semester
+
+**Reported:** three items were sitting in `STATE.md` and the earlier entries' "Still open"
+sections, each needing a decision rather than code: can a published quiz be fixed after the
+fact, should the Teacher results screen exist for Admins too, and is the 404-vs-403 on someone
+else's quiz intentional. A fourth question turned up mid-session and turned out to be the more
+serious one: the app currently thinks a school session is still running.
+
+### What was decided
+
+1. **A published quiz can be unpublished first.** An Admin (or the quiz's owner) pulls it back
+   to draft, edits, republishes. Deliberately *not* "Admin may edit while students are mid-attempt".
+2. **Unpublishing is blocked for good once any score is released.** A 409 names the count and
+   says why.
+3. **`/admin/results` gets built**, at `/admin/results`, in the sidebar next to Score Release.
+4. **404 is correct for another Teacher's quiz** — the spec was wrong, and was amended to match
+   the code.
+
+### Why #1 is an unpublish and not an edit-anyway
+
+The original open question was "may an Admin edit a quiz while students are mid-attempt". The
+answer is no, because editing is not a text change — `passMark`, `questionCount` and the
+attached question set are *scoring inputs*. Change them under live attempts and everyone's mark
+silently changes underneath them, with no record of what it used to be. Unpublishing avoids the
+question: the quiz is off the menu, so nobody starts it while it is being fixed, and a teacher
+mid-attempt keeps the paper they were given.
+
+The released-score block is the same argument, one step further. `released_at` is not just a
+visibility flag — a released Course Quiz score feeds CGPA and the Post-UTME projection
+(`DESIGN.md` §4/§5), and both are derived, not stored. Once a mark is out, the number is already
+in someone's record. So: **before release, editable via unpublish; after release, permanently
+frozen.** The endpoint answers 409 with the count rather than a generic refusal, so the person
+clicking knows it is the *scores*, not their permissions, that stopped them.
+
+No migration was needed — `contentStatusEnum` is `["draft","published"]`, so unpublishing is a
+status flip back, not a new state.
+
+The button went in the shared `quiz-builder-view.tsx`, which both `/teacher/quizzes/[id]` and
+`/admin/quizzes/[id]` already rendered with a different `basePath`. One edit, both shells — the
+Board was offered "API only, no UI" and declined it, so the confirm dialog ships too.
+
+### Why #3 needed no API work
+
+`GET /api/teacher/results` and `GET /api/teacher/results/[quizId]` were already
+`requireAuth(["admin","teacher"])`, and `ownershipScope()` returns `null` for a non-teacher — so
+an Admin was already getting the site-wide list, not a filtered one, from a route named
+`/teacher`. The components took a `basePath` prop for exactly this. So the twin is two five-line
+page files and one nav entry.
+
+The one thing that *did* need fixing: the empty state hardcoded `href="/teacher/quizzes"`, which
+would have thrown an Admin sitting in the Admin shell into the Teacher shell. It now derives
+from `basePath`, along with the eyebrow and description copy ("Admin — every quiz that has been
+sat, across all staff" vs "Teacher — quizzes of yours").
+
+Held-score handling is unchanged: this is a *view*, and `avgScore`/`passRate` stay released-only.
+Release still happens only on `/admin/scores/release`.
+
+### Why 404 beat 403
+
+A 403 means "this exists, and it isn't yours". On a route keyed by a guessable integer, that is
+an existence oracle for every other Teacher's quizzes. 404 costs nothing — the caller learns the
+quiz is not theirs, which is all they need — and it matches what
+`GET /api/teacher/quizzes/[id]` already did. The spec said 403; the spec was amended, with the
+reasoning inline so nobody "fixes" it back later.
+
+### The fourth question, which turned out to be a live bug
+
+While checking the open items, the semester gap was investigated properly. The admin toggle is
+fine — `GET/PATCH /api/admin/settings/semester`, the settings page and `getActiveSemester()` are
+all correctly wired, and the toggle genuinely drives the five call sites that filter on it.
+
+The bug is one level down. `SESSION_CALENDAR` covers 2025/26 and ends `rainEnd: 2026-07-03`.
+`resolveSemesterForDate` has no third state — the last two lines both return `"rain"` — so since
+3 July the app has been reporting **`rain`** as the active semester for a session that ended
+three months ago. Since `lib/quizzes/access.ts` refuses a quiz whose `course.semester` doesn't
+match, **every Harmattan-tagged course's quizzes and PDFs are currently invisible to students,
+while every Rain-tagged one is open.**
+
+The manual override cannot rescue it. The override is a *term* picker, and a finished whole
+session is a shape its two values cannot express. `DESIGN.md` §8 built the override for date
+drift, and this is the failure mode it does not cover. The real root cause is that the data model
+has no session year: `semesterEnum` is `["harmattan","rain"]` on both `courses.semester` and
+`semester_settings.manual_override`, so nothing anywhere records 2025/26 vs 2026/27.
+
+**Decision taken: plan it, don't build it this session.** Recorded as `P7-5` in `PLAN.md` and
+`STATE.md` with the two options costed — (a) add a `closed` third value to the enum and surface
+the resolved semester in the admin UI, small but courses still need re-tagging every session, or
+(b) put the session year in the data model and make the toggle the source of truth, correct
+long-term but a real migration through the quiz and resource filters. A semantically empty
+workaround was deliberately not taken: leaving it is wrong, and hardcoding 2026/27 dates would
+paper over the shape of the problem while making the next rollover break again.
+
+### Also closed
+
+- **Vercel deploy (P8-5).** Already done on the Board's side — the project exists, connected to
+  the GitHub repo, live in production. No code.
+- **Logo (P8-6).** Board chose to keep the current placeholder. Closed rather than deleted, so
+  the choice is on the record and nobody re-opens it.
+
+### Verification
+
+- `POST /api/teacher/quizzes/[id]/unpublish` — **10 new tests**, all green: happy path, the
+  released-count 409 (asserted on message *and* that `db.update` was never called), already-draft
+  409, an Admin unpublishing a quiz they don't own, 404, 403 not-owned, 400 × 2, 401, 403 role.
+- The `/admin/results` pages add no new API surface, so they ride the existing 14 colocated
+  result-route tests, which already cover Admin access.
+- `pnpm typecheck` clean. `pnpm lint` 0 errors, 1 pre-existing warning
+  (`client-fetch.ts:23`, `no-location-assign-relative-destination`) unrelated to this work.
+  `pnpm vitest run src/app/api/teacher/quizzes src/app/api/teacher/results src/components` —
+  107 tests across 9 files, green.
+
+### Still open
+
+- The two P7-5 options need a Board pick. Until then Harmattan-tagged content stays invisible.
+- Nothing here has been exercised in a browser against the dev DB — no attempt data with a
+  released score exists yet, so the 409 freeze path is covered by tests only.
