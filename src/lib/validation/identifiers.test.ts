@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { identifierTypeFor, jambRegNumberSchema, matricNumberSchema } from "./identifiers";
+import {
+  identifierTypeFor,
+  jambRegNumberSchema,
+  matricNumberSchema,
+  staffIdSchema,
+} from "./identifiers";
 
 describe("matricNumberSchema", () => {
   it("accepts a valid matric number", () => {
@@ -69,5 +74,39 @@ describe("identifierTypeFor", () => {
 
   it("returns null for a value matching neither format", () => {
     expect(identifierTypeFor("not-an-id")).toBeNull();
+  });
+
+  it("returns null for a staff ID — staff identifiers are never user-supplied", () => {
+    // A staff ID is a well-formed identifier, but not one a registration body can carry, so
+    // discriminating it here would invite a caller to accept it at a boundary that never
+    // legitimately sees one.
+    expect(identifierTypeFor("STF-001")).toBeNull();
+  });
+});
+
+describe("staffIdSchema", () => {
+  it("accepts the generated three-digit shape", () => {
+    expect(staffIdSchema.safeParse("STF-001").success).toBe(true);
+    expect(staffIdSchema.safeParse("STF-999").success).toBe(true);
+  });
+
+  it("accepts values past the padding width, so it cannot reject a generated ID", () => {
+    expect(staffIdSchema.safeParse("STF-1000").success).toBe(true);
+  });
+
+  it("trims surrounding whitespace before matching", () => {
+    expect(staffIdSchema.safeParse("  STF-001  ").success).toBe(true);
+  });
+
+  it("rejects a legacy hand-typed identifier", () => {
+    expect(staffIdSchema.safeParse("ADM/2026/001").success).toBe(false);
+    expect(staffIdSchema.safeParse("staff-1").success).toBe(false);
+  });
+
+  it("rejects shapes that are almost right", () => {
+    expect(staffIdSchema.safeParse("STF-").success).toBe(false);
+    expect(staffIdSchema.safeParse("STF-ABC").success).toBe(false);
+    expect(staffIdSchema.safeParse("STF 001").success).toBe(false);
+    expect(staffIdSchema.safeParse("STF-001-A").success).toBe(false);
   });
 });

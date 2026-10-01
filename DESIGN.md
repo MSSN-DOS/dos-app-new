@@ -39,6 +39,11 @@ Regex: `^\d{2}\/\d{2}[A-Z]{2}\d{3}$` — e.g. `21/30GN019`
 - Standard (10 char): 8 digits + 2 uppercase letters → `^\d{8}[A-Z]{2}$`
 - Expanded (14 char): 4-digit year + 8 digits + 2 uppercase letters → `^\d{4}\d{8}[A-Z]{2}$` (equivalently `^\d{12}[A-Z]{2}$`)
 
+**Staff ID:** `STF-###` — e.g. `STF-001`, `STF-042`
+- Locked 2026-10-01. Previously "no format fixed"; `STF-###` was already the de facto shape because Staff IDs are generated rather than typed (Board decision 2026-09-18), so this makes the existing behaviour explicit rather than changing it.
+- Regex: `^STF-\d+$`. **Deliberately uncapped digit count** — the padding is 3, but `STF-1000` is a legitimate value once the sequence outgrows it. The *generator* chooses the width; a schema that capped it would reject IDs the generator had already handed out.
+- **No DB CHECK enforces this, by necessity, not oversight.** A CHECK constraint cannot reference another table, so "Teachers must be `STF-###`, Admins are exempt" cannot be expressed — both share `identifier_type = 'staff_id'`. A blanket `staff_id → ^STF-\d+$` CHECK would also reject the pre-existing bootstrap Admin row and lock the only Admin out of the portal, which is not an acceptable outcome for a formatting fix. Enforcement therefore lives at the write boundary: `staffIdSchema` in `lib/validation/identifiers.ts` (the single source of truth, imported by the generator in `lib/teachers/staff-id.ts` rather than re-declaring the pattern) plus `src/scripts/seed.ts`, which validates a *new* bootstrap Admin identifier and skips validation for one that already exists so `pnpm db:seed` stays idempotent on deployments seeded before the format was locked.
+
 Both live in `lib/validation/identifiers.ts` as named Zod refinements (`matricNumberSchema`, `jambRegNumberSchema`), reused by both the registration form and the `/api/auth/register` handler — never duplicate the regex.
 
 ### Known trade-off: JWT in localStorage

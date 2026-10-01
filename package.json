@@ -18,6 +18,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "tsx src/scripts/seed.ts",
     "db:flush:dev": "tsx src/scripts/flush-dev.ts",
+    "db:verify:video": "tsx src/scripts/verify-video-exemption.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",

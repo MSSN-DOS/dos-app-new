@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { formatStaffId, isStaffId, nextStaffId, nextStaffNumber } from "./staff-id";
+import { staffIdSchema } from "@/lib/validation/identifiers";
 
 describe("formatStaffId", () => {
   it("zero-pads to three digits", () => {
@@ -52,5 +53,31 @@ describe("isStaffId", () => {
   it("rejects hand-typed legacy ids", () => {
     expect(isStaffId("STF-014-A")).toBe(false);
     expect(isStaffId("Ibrahim")).toBe(false);
+  });
+
+  it("agrees with the shared staffIdSchema on every boundary", () => {
+    // The generator and the validator now share one definition (staffId.ts imports
+    // staffIdSchema). This is the drift guard: if someone widens or narrows one without the
+    // other, this fails.
+    for (const value of [
+      "STF-001",
+      "STF-1000",
+      "STF-",
+      "STF-ABC",
+      "STF-001-A",
+      "ADM/2026/001",
+      "",
+    ]) {
+      expect(isStaffId(value)).toBe(staffIdSchema.safeParse(value).success);
+    }
+  });
+
+  it("accepts everything its own generator can produce", () => {
+    // The dangerous direction is a generator handing out an ID the validator then rejects —
+    // that would make a freshly created Teacher unsaveable. Check it across the padding
+    // boundary and well past it.
+    for (const n of [1, 9, 10, 999, 1000, 12345]) {
+      expect(isStaffId(formatStaffId(n))).toBe(true);
+    }
   });
 });
