@@ -7,6 +7,7 @@ import {
   resolveSemesterWithinSession,
   type SessionDates,
 } from "./calendar";
+import { newestSessionEndInPast } from "./calendar";
 import { activeCourseFilter, getActiveSemester } from "./index";
 
 function utcDate(iso: string): Date {
@@ -313,5 +314,39 @@ describe("activeCourseFilter", () => {
     );
 
     expect(render(combined)).toContain("false");
+  });
+});
+
+describe("newestSessionEndInPast", () => {
+  it("reports the newest expired session so the Admin can add real dates", () => {
+    // S2025's Rain semester ended 2026-07-03. A calendar with nothing after it is stale, and the
+    // gap-fallback in pickSessionForDate will keep resolving to it forever without complaint.
+    expect(newestSessionEndInPast([S2025], atUtc("2026-08-01T12:00Z"))).toBe("2026-07-03");
+  });
+
+  it("stays quiet while the newest session still has dates ahead of it", () => {
+    expect(newestSessionEndInPast([S2025, S2026], atUtc("2026-01-15T12:00Z"))).toBeNull();
+  });
+
+  it("judges by the newest session, not merely the presence of a live one", () => {
+    // The comparator has to reduce to max(rainEnd). Checking "any session is current" would pass
+    // this with S2025 present and skip the banner on a calendar that genuinely needs it.
+    expect(newestSessionEndInPast([S2025, S2026], atUtc("2027-09-01T12:00Z"))).toBe(S2026.rainEnd);
+  });
+
+  it("compares in WAT, so a session's final hour is already tomorrow in Lagos", () => {
+    // 2026-07-03T23:30Z is 2026-07-04T00:30 in Lagos. A UTC comparison sees 2026-07-03 and calls
+    // the session current; WAT sees the 4th and calls it over. That single instant is the only
+    // window where the two disagree — before 23:00Z both say "current", after 00:00Z both say
+    // "over" — so it is the only one that can prove which comparison actually ran.
+    expect(newestSessionEndInPast([S2025], atUtc("2026-07-03T23:30Z"))).toBe("2026-07-03");
+    expect(newestSessionEndInPast([S2025], atUtc("2026-07-03T22:59Z"))).toBeNull();
+    expect(newestSessionEndInPast([S2025], atUtc("2026-07-04T00:30Z"))).toBe("2026-07-03");
+  });
+
+  it("says nothing when the calendar is empty", () => {
+    // An empty calendar is already a visible state in the UI. A banner on top of it would be
+    // noise, and "expired" is not the right word for "never entered".
+    expect(newestSessionEndInPast([], atUtc("2026-08-01T12:00Z"))).toBeNull();
   });
 });

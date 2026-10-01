@@ -108,3 +108,34 @@ export function pickSessionForDate(
   const session = containing ?? started[started.length - 1]!;
   return { session, semester: resolveSemesterWithinSession(date, session) };
 }
+
+/**
+ * Does the session calendar have any future dates left?
+ *
+ * WHY THIS EXISTS (R-4)
+ * ---------------------
+ * `pickSessionForDate` has a deliberate gap-fallback: when today falls after a session's Rain
+ * semester ended, it returns the newest started session rather than nothing. That is right — it
+ * keeps a portal working through the weeks between sessions — but it also means a calendar whose
+ * newest row expired long ago keeps resolving "successfully", forever, to a year that is over. With
+ * only one session row there is nothing anywhere in the UI that looks wrong, and students keep being
+ * served last year's material.
+ *
+ * The system cannot invent the next session's dates, and it must not guess at them. What it can do
+ * is refuse to be quietly wrong about them, which is all this does: it reports the condition, and
+ * the Admin adds the real dates.
+ *
+ * Compared in WAT, not UTC, for the same reason every other date comparison here is: a session
+ * ending tonight is not over until WAT midnight, and `2026-07-03T23:00Z` is already the 4th in
+ * WAT.
+ *
+ * @returns the newest session's `rainEnd` when it is in the past, else `null`.
+ */
+export function newestSessionEndInPast(
+  sessions: SessionDates[],
+  date: Date,
+): string | null {
+  if (sessions.length === 0) return null;
+  const newest = sessions.reduce((a, b) => (b.rainEnd > a.rainEnd ? b : a));
+  return newest.rainEnd < watDay(date) ? newest.rainEnd : null;
+}

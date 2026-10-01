@@ -1,12 +1,12 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, Pencil, Plus, Trash2 } from "lucide-react";
+import { CalendarDays, Pencil, Plus, Trash2, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
 import { ApiError, apiFetch } from "@/lib/auth/client-fetch";
-import { type SessionDates } from "@/lib/semester/calendar";
+import { newestSessionEndInPast, type SessionDates } from "@/lib/semester/calendar";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,6 +17,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -158,6 +159,12 @@ export function SessionManager() {
   });
   const activeSessionId = settingsQuery.data?.data.active?.sessionId ?? null;
 
+  // R-4: has the calendar run out of dates? `pickSessionForDate`'s gap-fallback means an expired
+  // calendar keeps resolving to its newest session indefinitely, so nothing else on this page — or
+  // anywhere else — would ever look wrong. A banner is the only honest signal available; the fix
+  // itself is real dates the Board has to supply, which is why this is not an error.
+  const expiredAt = newestSessionEndInPast(sessions, new Date());
+
   const openAdd = () => {
     setFormMode({ kind: "add" });
     setForm(EMPTY_FORM);
@@ -215,6 +222,19 @@ export function SessionManager() {
           Add session
         </Button>
       </div>
+
+      {expiredAt !== null && (
+        <Alert variant="warning">
+          <TriangleAlert aria-hidden="true" />
+          <AlertTitle>This calendar has run out</AlertTitle>
+          <AlertDescription>
+            The last session ended on {formatDate(expiredAt)}, and nothing follows it. Until a new
+            session is added, every student keeps seeing that session&apos;s material — and the
+            portal reports it as the active one rather than admitting it is guessing. Add the next
+            session with its real dates.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {sessionsQuery.isPending && (
         <div className="space-y-2" aria-busy="true" aria-label="Loading sessions">

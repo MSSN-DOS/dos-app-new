@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -28,7 +28,21 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiFetch, ApiError } from "@/lib/auth/client-fetch";
-import { ArrowLeft, Sparkles, GraduationCap, Layers, Clock3, Calendar, AlertCircle, Check, SearchX, Plus, Trash2, Search, Undo2 } from "lucide-react";
+import {
+  attachProgress,
+  buildQuizPatch,
+  publishBlockers,
+  requiredQuestionCount,
+  type BuilderForm,
+} from "@/lib/quizzes/builder-validation";
+import { ArrowLeft, Sparkles, GraduationCap, Layers, Clock3, Calendar, AlertCircle, Check, Undo2 } from "lucide-react";
+
+import {
+  QuizAttachSection,
+  useDebouncedBankSearch,
+  type BankFilters,
+  type BankQuestion,
+} from "./quiz-attach-section";
 
 type QuizDetail = {
   id: number;
@@ -56,22 +70,6 @@ type QuizDetail = {
     status: string;
   }[];
 };
-
-type BankQuestion = {
-  id: number;
-  bodyRichText: string;
-  questionType: "fill_in_gap" | "options";
-  status: string;
-};
-
-const TYPE_LABEL: Record<string, string> = {
-  fill_in_gap: "Fill in the gap",
-  options: "Options",
-};
-
-function stripTags(html: string): string {
-  return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-}
 
 // Shared by /teacher/quizzes/[id] and /admin/quizzes/[id] — the API is
 // role-guarded admin+teacher, so the same UI serves both shells.
@@ -126,18 +124,22 @@ function Builder({ quiz, quizId, basePath }: { quiz: QuizDetail; quizId: string;
   const [actionError, setActionError] = useState<string | null>(null);
   const [detachTarget, setDetachTarget] = useState<number | null>(null);
   const [unpublishOpen, setUnpublishOpen] = useState(false);
-  const [bankTopic, setBankTopic] = useState("__all__");
-  const [bankType, setBankType] = useState("__all__");
-  const [bankTab, setBankTab] = useState<"available" | "attached">("available");
-  const [bankSearch, setBankSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [bankFilters, setBankFilters] = useState<BankFilters>({
+    topic: "__all__",
+    type: "__all__",
+    search: "",
+  });
   const [detachMany, setDetachMany] = useState<number[] | null>(null);
 
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(bankSearch.trim()), 300);
-    return () => clearTimeout(t);
-  }, [bankSearch]);
+  // Ticking selection of bank rows now lives inside QuizAttachSection, so the parent cannot clear
+  // it directly. A successful attach/detach bumps this key and the section clears itself — the
+  // parent's equivalent of the old setSelectedIds([]), without lifting the state back up.
+  const [selectionResetKey, setSelectionResetKey] = useState(0);
+
+  // The debounced search lives here, not in the section, because the bank query below is keyed on
+  // it: if the section owned the debounce, the parent's query would fire on every keystroke while
+  // the section displayed stale results for 300ms.
+  const debouncedSearch = useDebouncedBankSearch(bankFilters.search);
 
   const topicsQuery = useQuery({
     queryKey: ["teacher", "topics", quiz.courseId != null ? String(quiz.courseId) : ""],
@@ -149,13 +151,13 @@ function Builder({ quiz, quizId, basePath }: { quiz: QuizDetail; quizId: string;
   const bankParams = new URLSearchParams();
   if (quiz.courseId != null) bankParams.set("courseId", String(quiz.courseId));
   if (quiz.jambSubjectId != null) bankParams.set("jambSubjectId", String(quiz.jambSubjectId));
-  if (bankTopic !== "__all__") bankParams.set("topicId", bankTopic);
-  if (bankType !== "__all__") bankParams.set("type", bankType);
+  if (bankFilters.topic !== "__all__") bankParams.set("topicId", bankFilters.topic);
+  if (bankFilters.type !== "__all__") bankParams.set("type", bankFilters.type);
   if (debouncedSearch !== "") bankParams.set("search", debouncedSearch);
   bankParams.set("excludeQuizId", String(quiz.id));
 
   const bankQuery = useQuery({
-    queryKey: ["teacher", "questions", "bank", bankTopic, bankType, debouncedSearch, quiz.courseId, quiz.jambSubjectId],
+    queryKey: ["teacher", "questions", "bank", bankFilters.topic, bankFilters.type, debouncedSearch, quiz.courseId, quiz.jambSubjectId],
     queryFn: () => apiFetch<{ data: BankQuestion[] }>(`/teacher/questions?${bankParams.toString()}`).then((r) => r.data ?? []),
   });
 
@@ -173,11 +175,18 @@ function Builder({ quiz, quizId, basePath }: { quiz: QuizDetail; quizId: string;
     onError: (err) => setFormError((err as ApiError).message),
   });
   const unpublishMutation = useMutation({
-    mutationFn: () => apiFetch(`/teacher/quizzes/${quiz.id}/unpublish`, { method: "POST" }),
-    onSuccess: () => {
+    mutationFn: () => apiFetch<{ finalizedAttempts: number }>(`/teacher/quizzes/${quiz.id}/unpublish`, { method: "POST" }),
+    onSuccess: (result) => {
       setFormError(null);
       setUnpublishOpen(false);
-      toast.success("Quiz unpublished — back to draft");
+      // Say it plainly when attempts were closed out. Silently returning a teacher to the draft
+      // screen after their click killed a student's open attempt is the behaviour R-1 was filed
+      // about; the number is now in the response so it can be reported rather than swallowed.
+      toast.success(
+        result.finalizedAttempts > 0
+          ? `Quiz unpublished — ${result.finalizedAttempts} in-progress attempt${result.finalizedAttempts === 1 ? "" : "s"} submitted at 0`
+          : "Quiz unpublished — back to draft",
+      );
       void invalidateDetail();
       void invalidateQuizzes();
     },
@@ -185,7 +194,7 @@ function Builder({ quiz, quizId, basePath }: { quiz: QuizDetail; quizId: string;
   });
   const attachMutation = useMutation({
     mutationFn: (questionId: number) => apiFetch(`/teacher/quizzes/${quiz.id}/questions`, { method: "POST", body: JSON.stringify({ questionId }) }),
-    onSuccess: () => { setActionError(null); setSelectedIds([]); void invalidateDetail(); void queryClient.invalidateQueries({ queryKey: ["teacher", "questions"] }); },
+    onSuccess: () => { setActionError(null); setSelectionResetKey((k) => k + 1); void invalidateDetail(); void queryClient.invalidateQueries({ queryKey: ["teacher", "questions"] }); },
     onError: (err) => setActionError((err as ApiError).message),
   });
   const attachManyMutation = useMutation({
@@ -196,7 +205,7 @@ function Builder({ quiz, quizId, basePath }: { quiz: QuizDetail; quizId: string;
       }),
     onSuccess: (res) => {
       setActionError(null);
-      setSelectedIds([]);
+      setSelectionResetKey((k) => k + 1);
       void invalidateDetail();
       void queryClient.invalidateQueries({ queryKey: ["teacher", "questions"] });
       const n = res?.data?.attached ?? 0;
@@ -206,7 +215,7 @@ function Builder({ quiz, quizId, basePath }: { quiz: QuizDetail; quizId: string;
   });
   const detachMutation = useMutation({
     mutationFn: (questionId: number) => apiFetch(`/teacher/quizzes/${quiz.id}/questions/${questionId}`, { method: "DELETE" }),
-    onSuccess: () => { setActionError(null); setDetachTarget(null); setSelectedIds([]); void invalidateDetail(); void queryClient.invalidateQueries({ queryKey: ["teacher", "questions"] }); },
+    onSuccess: () => { setActionError(null); setDetachTarget(null); setSelectionResetKey((k) => k + 1); void invalidateDetail(); void queryClient.invalidateQueries({ queryKey: ["teacher", "questions"] }); },
     onError: (err) => { setDetachTarget(null); setActionError((err as ApiError).message); },
   });
   const detachManyMutation = useMutation({
@@ -218,7 +227,7 @@ function Builder({ quiz, quizId, basePath }: { quiz: QuizDetail; quizId: string;
       setActionError(null);
       setDetachMany(null);
       setDetachTarget(null);
-      setSelectedIds([]);
+      setSelectionResetKey((k) => k + 1);
       void invalidateDetail();
       void queryClient.invalidateQueries({ queryKey: ["teacher", "questions"] });
       toast.success(`Removed ${count} question${count === 1 ? "" : "s"} from the quiz`);
@@ -226,72 +235,31 @@ function Builder({ quiz, quizId, basePath }: { quiz: QuizDetail; quizId: string;
     onError: (err) => { setDetachMany(null); setDetachTarget(null); setActionError((err as ApiError).message); },
   });
 
-  const attachedIds = new Set(quiz.questions.map((q) => q.questionId));
-  const isCourse = quiz.quizType === "course";
-  const parsedCount = Number(questionCount);
-  const parsedTime = Number(timeLimit);
-  const parsedPass = Number(passMark);
-
-  const blockers: string[] = [];
-  if (title.trim() === "") blockers.push("Give the quiz a title");
-  if (!Number.isInteger(parsedCount) || parsedCount < 1 || parsedCount > 100) blockers.push("Question count must be between 1 and 100");
-  if (!Number.isInteger(parsedTime) || parsedTime < 1 || parsedTime > 600) blockers.push("Time limit must be between 1 and 600 minutes");
-  if (!Number.isInteger(parsedPass) || parsedPass < 1 || parsedPass > 100) blockers.push("Pass mark must be between 1 and 100 percent");
-  if (isCourse && !/^\d{4}-\d{2}-\d{2}$/.test(weekStart)) blockers.push("Pick a Saturday week start date");
-  if (attachedIds.size < (isCourse ? 50 : parsedCount)) blockers.push(`Attach ${Math.max(0, (isCourse ? 50 : parsedCount) - attachedIds.size)} more question(s) (${attachedIds.size} of ${isCourse ? 50 : parsedCount})`);
-
-  const configValid =
-    title.trim() !== "" &&
-    Number.isInteger(parsedCount) && parsedCount >= 1 && parsedCount <= 100 &&
-    Number.isInteger(parsedTime) && parsedTime >= 1 && parsedTime <= 600 &&
-    Number.isInteger(parsedPass) && parsedPass >= 1 && parsedPass <= 100 &&
-    (!isCourse || /^\d{4}-\d{2}-\d{2}$/.test(weekStart));
-
-  function buildBody(): Record<string, unknown> {
-    const body: Record<string, unknown> = {
-      title: title.trim(),
-      instructions: instructions.trim(),
-      questionCount: parsedCount,
-      timeLimitMinutes: parsedTime,
-      passMark: parsedPass,
-      allowMultipleAttempts,
-      loseFocusPolicy,
-    };
-    if (isCourse) body.weekStart = weekStart;
-    return body;
-  }
-
-  const attachedCount = attachedIds.size;
-  const requiredCount = isCourse ? 50 : parsedCount;
-  const progress = Math.min(100, Math.round((attachedCount / Math.max(1, requiredCount)) * 100));
-
   const attachedRows = quiz.questions;
-  const attachedIdSet = new Set(attachedRows.map((q) => q.questionId));
-  const availableRows = bankQuery.data ?? [];
-  const attachableAvailable = availableRows.filter((q) => q.status === "published");
-  const attachableIdSet = new Set(attachableAvailable.map((q) => q.id));
-  const selectedAvailable = selectedIds.filter((id) => attachableIdSet.has(id));
-  const selectedAttached = selectedIds.filter((id) => attachedIdSet.has(id));
-  const allAvailableSelected = attachableAvailable.length > 0 && selectedAvailable.length === attachableAvailable.length;
-  const allAttachedSelected = attachedRows.length > 0 && selectedAttached.length === attachedRows.length;
+  const attachedCount = attachedRows.length;
+  const isCourse = quiz.quizType === "course";
 
-  const toggleRow = (id: number) => {
-    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  const availableRows = bankQuery.data ?? [];
+  // Only published questions attach. The server enforces this too; filtering here keeps the UI
+  // from offering a row whose attach would be rejected.
+  const attachableAvailable = availableRows.filter((q) => q.status === "published");
+
+  // One form object, so the rules in builder-validation see exactly the state the inputs hold.
+  const form: BuilderForm = {
+    title,
+    instructions,
+    questionCount,
+    timeLimit,
+    passMark,
+    allowMultipleAttempts,
+    loseFocusPolicy,
+    weekStart,
+    quizType: quiz.quizType,
   };
-  const toggleAllAvailable = () => {
-    if (allAvailableSelected) {
-      setSelectedIds((prev) => prev.filter((id) => !attachableIdSet.has(id)));
-    } else {
-      setSelectedIds((prev) => Array.from(new Set([...prev, ...attachableAvailable.map((q) => q.id)])));
-    }
-  };
-  const toggleAllAttached = () => {
-    if (allAttachedSelected) {
-      setSelectedIds((prev) => prev.filter((id) => !attachedIdSet.has(id)));
-    } else {
-      setSelectedIds((prev) => Array.from(new Set([...prev, ...attachedRows.map((q) => q.questionId)])));
-    }
-  };
+
+  const blockers = publishBlockers(form, attachedCount);
+  const requiredCount = requiredQuestionCount(form, attachedCount);
+  const progress = attachProgress(form, attachedCount);
 
   return (
     <div className="space-y-6 pb-8">
@@ -399,156 +367,30 @@ function Builder({ quiz, quizId, basePath }: { quiz: QuizDetail; quizId: string;
         </div>
       </section>
 
-      {/* attach */}
-      <section className="rounded-2xl border border-line bg-panel p-4 sm:p-6">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-sm font-bold text-ink" style={{ fontFamily: "var(--font-fraunces), serif" }}>Attach questions</h2>
-          <span className="rounded-full bg-canvas px-3 py-1 text-xs font-semibold text-sub">{attachedCount} of {requiredCount} attached · {progress}%</span>
-        </div>
-        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-canvas">
-          <div className="h-full rounded-full bg-gradient-to-r from-brand to-gold transition-all" style={{ width: `${progress}%` }} />
-        </div>
-
-        {actionError && <p role="alert" className="mt-3 rounded-xl border border-ruby/30 bg-ruby/10 px-3 py-2 text-sm text-ruby">{actionError}</p>}
-
-        <div className="mt-4 grid grid-cols-2 gap-2 rounded-2xl border border-line bg-canvas p-1.5" role="tablist" aria-label="Question source">
-          <button type="button" role="tab" aria-selected={bankTab === "available"} onClick={() => { setBankTab("available"); setSelectedIds([]); }} className={`min-h-11 rounded-xl text-sm font-semibold transition-colors ${bankTab === "available" ? "bg-brand text-white shadow" : "text-sub hover:bg-line hover:text-ink"}`}>
-            Available bank
-          </button>
-          <button type="button" role="tab" aria-selected={bankTab === "attached"} onClick={() => { setBankTab("attached"); setSelectedIds([]); }} className={`min-h-11 rounded-xl text-sm font-semibold transition-colors ${bankTab === "attached" ? "bg-brand text-white shadow" : "text-sub hover:bg-line hover:text-ink"}`}>
-            Attached · {attachedCount}
-          </button>
-        </div>
-
-        {bankTab === "available" ? (
-          <div className="mt-4 space-y-3">
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-              <Select value={bankTopic} onValueChange={(v) => { setBankTopic(v); setSelectedIds([]); }}>
-                <SelectTrigger aria-label="Filter bank by topic" className="min-h-11 w-full rounded-xl border-line bg-canvas text-ink"><SelectValue placeholder="All topics" /></SelectTrigger>
-                <SelectContent className="border-line bg-panel text-ink">
-                  <SelectItem value="__all__">All topics</SelectItem>
-                  {topicsQuery.data?.map((t) => <SelectItem key={t.id} value={String(t.id)}>{t.title}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Select value={bankType} onValueChange={(v) => { setBankType(v); setSelectedIds([]); }}>
-                <SelectTrigger aria-label="Filter bank by type" className="min-h-11 w-full rounded-xl border-line bg-canvas text-ink"><SelectValue placeholder="All types" /></SelectTrigger>
-                <SelectContent className="border-line bg-panel text-ink">
-                  <SelectItem value="__all__">All types</SelectItem>
-                  <SelectItem value="options">Options</SelectItem>
-                  <SelectItem value="fill_in_gap">Fill in the gap</SelectItem>
-                </SelectContent>
-              </Select>
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-faint" />
-                <Input value={bankSearch} onChange={(e) => { setBankSearch(e.target.value); setSelectedIds([]); }} placeholder="Search question text…" aria-label="Search the question bank" className="min-h-11 w-full rounded-xl border-line bg-canvas pl-9 text-ink placeholder:text-faint" />
-              </div>
-            </div>
-
-            {bankQuery.isPending ? (
-              <div className="space-y-2" aria-busy="true" aria-label="Loading the question bank">
-                <Skeleton className="h-16 w-full rounded-xl bg-line" />
-                <Skeleton className="h-16 w-full rounded-xl bg-line" />
-                <Skeleton className="h-16 w-full rounded-xl bg-line" />
-              </div>
-            ) : bankQuery.isError ? (
-              <div className="rounded-xl border border-ruby/30 bg-ruby/10 p-4">
-                <p role="alert" className="text-sm text-ruby">{(bankQuery.error as ApiError).message}</p>
-                <Button variant="outline" size="sm" className="mt-2 min-h-9 rounded-xl border-line bg-panel text-ink" onClick={() => bankQuery.refetch()}>Try again</Button>
-              </div>
-            ) : availableRows.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-line bg-canvas/60 p-8 text-center">
-                <SearchX className="mx-auto size-6 text-faint" />
-                <p className="mt-2 text-sm font-medium text-ink">Nothing left to attach.</p>
-                <p className="mt-1 text-xs text-sub">Every matching question is already attached to this quiz. Try a broader search — or publish fresh ones in the Question Bank.</p>
-              </div>
-            ) : (
-              <>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-line bg-canvas px-3 py-2.5">
-                  <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-sub">
-                    <Checkbox checked={allAvailableSelected} onCheckedChange={toggleAllAvailable} aria-label="Select all published questions in this view" className="border-line data-[state=checked]:border-brand data-[state=checked]:bg-brand" />
-                    Select all ({attachableAvailable.length})
-                  </label>
-                  <p className="text-[11px] text-faint">Only published questions attach to a quiz.</p>
-                  <div className="ml-auto flex items-center gap-2">
-                    {selectedAvailable.length > 0 && <span className="text-[11px] font-semibold text-brand-soft" style={{ fontFamily: "JetBrains Mono, monospace" }}>{selectedAvailable.length} selected</span>}
-                    <Button size="sm" className="min-h-9 rounded-xl bg-brand text-white hover:bg-brand-hover disabled:opacity-40" disabled={selectedAvailable.length === 0 || attachManyMutation.isPending} onClick={() => attachManyMutation.mutate(selectedAvailable)}>
-                      {attachManyMutation.isPending ? <><Plus className="size-3.5 animate-pulse" /> Attaching…</> : <><Plus className="size-3.5" /> Attach {selectedAvailable.length || "selected"}</>}
-                    </Button>
-                  </div>
-                </div>
-
-                <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-canvas">
-                  {availableRows.map((q) => {
-                    const attachable = q.status === "published";
-                    const isSelected = selectedIds.includes(q.id);
-                    return (
-                      <li key={q.id} className="flex items-center gap-3 p-3 sm:p-4">
-                        <Checkbox checked={isSelected} disabled={!attachable} onCheckedChange={() => toggleRow(q.id)} aria-label={attachable ? `Select question ${q.id} to attach` : "Draft questions cannot be attached yet"} className="shrink-0 border-line data-[state=checked]:border-brand data-[state=checked]:bg-brand disabled:opacity-30" />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-ink">{stripTags(q.bodyRichText) || "(empty draft)"}</p>
-                          <p className="mt-1 flex items-center gap-1.5 text-xs text-sub">
-                            <span className="rounded-full border border-line bg-panel px-2 py-0.5 text-[11px] font-medium">{TYPE_LABEL[q.questionType]}</span>
-                            <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${q.status === "published" ? "bg-brand text-white" : "border border-line bg-canvas text-sub"}`}>{q.status === "published" ? "Published" : "Draft"}</span>
-                          </p>
-                        </div>
-                        {attachable ? (
-                          <Button variant="outline" size="sm" className="min-h-9 shrink-0 rounded-xl border-line bg-panel text-ink hover:bg-line" disabled={attachMutation.isPending} onClick={() => attachMutation.mutate(q.id)}><Plus className="size-3.5" /> Add</Button>
-                        ) : (
-                          <span className="shrink-0 text-[11px] font-medium text-faint">Publish to attach</span>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
-              </>
-            )}
-          </div>
-        ) : (
-          <div className="mt-4 space-y-3">
-            {attachedRows.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-line bg-canvas/60 p-8 text-center">
-                <SearchX className="mx-auto size-6 text-faint" />
-                <p className="mt-2 text-sm font-medium text-ink">No questions attached yet.</p>
-                <p className="mt-1 text-xs text-sub">Jump to the Available bank, tick a few rows and attach them in one go.</p>
-              </div>
-            ) : (
-              <>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-line bg-canvas px-3 py-2.5">
-                  <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-sub">
-                    <Checkbox checked={allAttachedSelected} onCheckedChange={toggleAllAttached} aria-label="Select all attached questions" className="border-line data-[state=checked]:border-brand data-[state=checked]:bg-brand" />
-                    Select all ({attachedRows.length})
-                  </label>
-                  <div className="ml-auto flex items-center gap-2">
-                    {selectedAttached.length > 0 && <span className="text-[11px] font-semibold text-ruby" style={{ fontFamily: "JetBrains Mono, monospace" }}>{selectedAttached.length} selected</span>}
-                    <Button variant="outline" size="sm" className="min-h-9 rounded-xl border-ruby/40 bg-canvas text-ruby hover:bg-ruby/10 disabled:opacity-40" disabled={selectedAttached.length === 0} onClick={() => setDetachMany(selectedAttached)}>
-                      <Trash2 className="size-3.5" /> Remove {selectedAttached.length || "selected"}
-                    </Button>
-                  </div>
-                </div>
-
-                <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-canvas">
-                  {attachedRows.map((q) => {
-                    const isSelected = selectedIds.includes(q.questionId);
-                    return (
-                      <li key={q.questionId} className="flex items-center gap-3 p-3 sm:p-4">
-                        <Checkbox checked={isSelected} onCheckedChange={() => toggleRow(q.questionId)} aria-label={`Select question ${q.questionId} to detach`} className="shrink-0 border-line data-[state=checked]:border-brand data-[state=checked]:bg-brand" />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-ink">{stripTags(q.bodyRichText) || "(empty draft)"}</p>
-                          <p className="mt-1 flex items-center gap-1.5 text-xs text-sub">
-                            <span className="rounded-full border border-line bg-panel px-2 py-0.5 text-[11px] font-medium">{TYPE_LABEL[q.questionType]}</span>
-                            {q.topicId != null && <span className="text-[11px] text-faint">topic {q.topicId}</span>}
-                          </p>
-                        </div>
-                        <Button variant="ghost" size="sm" className="min-h-9 shrink-0 rounded-xl text-ruby hover:bg-ruby/10 hover:text-ruby" onClick={() => setDetachTarget(q.questionId)}><Trash2 className="size-3.5" /> Remove</Button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </>
-            )}
-          </div>
-        )}
-      </section>
+      <QuizAttachSection
+        form={form}
+        attachedRows={attachedRows}
+        availableRows={availableRows}
+        topics={topicsQuery.data ?? []}
+        filters={bankFilters}
+        onFiltersChange={(next) => setBankFilters((prev) => ({ ...prev, ...next }))}
+        bankState={{
+          isPending: bankQuery.isPending,
+          isError: bankQuery.isError,
+          error: bankQuery.error,
+          refetch: () => void bankQuery.refetch(),
+        }}
+        attachable={attachableAvailable}
+        actionError={actionError}
+        attachPending={attachMutation.isPending}
+        attachManyPending={attachManyMutation.isPending}
+        resetSelectionKey={selectionResetKey}
+        onAttachOne={(questionId) => attachMutation.mutate(questionId)}
+        onAttachMany={(questionIds) => attachManyMutation.mutate(questionIds)}
+        onDetachOne={(questionId) => setDetachTarget(questionId)}
+        onDetachMany={(questionIds) => setDetachMany(questionIds)}
+        onRetry={() => void bankQuery.refetch()}
+      />
 
       {formError && <p role="alert" className="rounded-xl border border-ruby/30 bg-ruby/10 px-3 py-2 text-sm text-ruby">{formError}</p>}
 
@@ -566,9 +408,9 @@ function Builder({ quiz, quizId, basePath }: { quiz: QuizDetail; quizId: string;
       )}
 
       <div className="flex flex-col gap-2 sm:flex-row">
-        <Button variant="outline" className="min-h-11 rounded-xl border-line bg-panel text-ink hover:bg-line" disabled={saveMutation.isPending} onClick={() => saveMutation.mutate(buildBody())}>Save as draft</Button>
+        <Button variant="outline" className="min-h-11 rounded-xl border-line bg-panel text-ink hover:bg-line" disabled={saveMutation.isPending} onClick={() => saveMutation.mutate(buildQuizPatch(form))}>Save as draft</Button>
         {quiz.status === "draft" ? (
-          <Button className="min-h-11 rounded-xl bg-brand text-white shadow-[0_8px_20px_rgba(91,127,255,0.3)] hover:bg-brand-hover disabled:opacity-40" disabled={publishMutation.isPending || !configValid || blockers.length > 0} onClick={() => publishMutation.mutate()}><Sparkles className="size-4" /> Publish quiz</Button>
+          <Button className="min-h-11 rounded-xl bg-brand text-white shadow-[0_8px_20px_rgba(91,127,255,0.3)] hover:bg-brand-hover disabled:opacity-40" disabled={publishMutation.isPending || blockers.length > 0} onClick={() => publishMutation.mutate()}><Sparkles className="size-4" /> Publish quiz</Button>
         ) : (
           <>
             <span className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-line px-4 text-sm font-semibold text-sub"><Check className="size-4" /> Published — visible to students</span>
@@ -584,8 +426,9 @@ function Builder({ quiz, quizId, basePath }: { quiz: QuizDetail; quizId: string;
           <AlertDialogHeader>
             <AlertDialogTitle className="text-ink">Unpublish this quiz?</AlertDialogTitle>
             <AlertDialogDescription className="text-sub">
-              Students will no longer see or be able to start it. Attempts already in progress keep counting, and
-              this can be published again. Once any score is released this becomes permanent.
+              Students will no longer see or be able to start it. Any attempt already in progress is submitted
+              automatically and scores 0 — it still counts as an attempt, so they cannot retake it.
+              This can be published again. Once any score is released this becomes permanent.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

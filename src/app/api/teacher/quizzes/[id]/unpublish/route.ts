@@ -1,4 +1,4 @@
-import { and, asc, eq, isNotNull, sql } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 import { errorResponse } from "@/lib/api/response";
@@ -6,6 +6,7 @@ import { requireAuth } from "@/lib/auth/guard";
 import { forbiddenUnlessOwned } from "@/lib/auth/ownership";
 import { getDb } from "@/lib/db";
 import { quizAttempts, quizzes } from "@/lib/db/schema";
+import { finalizeUnsubmittedAttempt } from "@/lib/quizzes/finalize-attempt";
 
 function parseId(raw: string): number | null {
   const id = Number(raw);
@@ -87,11 +88,37 @@ export async function POST(
       );
     }
 
-    const [row] = await db
-      .update(quizzes)
-      .set({ status: "draft" })
-      .where(eq(quizzes.id, quizId))
-      .returning({ id: quizzes.id, status: quizzes.status });
+    // R-1: an attempt with `submittedAt IS NULL` is invisible to the "already attempted" guard,
+    // so a student left mid-quiz silently gets a free retake when the draft comes back. The Board
+    // decision recorded at STATE.md:114 says in-flight attempts are unaffected by an unpublish and
+    // keep counting. This route previously did the opposite: it flipped the status and left them
+    // stranded behind the `status === "published"` gate on GET/POST, where the client could neither
+    // fetch, submit, nor reach the time-limit auto-submit.
+    //
+    // There is nothing to recover — answers are browser-only until POST, so any attempt reaching
+    // here has nothing saved. What matters is that it is *finalised*, so it counts as an attempt.
+    const openAttempts = await db
+      .select({ id: quizAttempts.id, userId: quizAttempts.userId })
+      .from(quizAttempts)
+      .where(and(eq(quizAttempts.quizId, quizId), isNull(quizAttempts.submittedAt)))
+      .orderBy(asc(quizAttempts.id));
+
+    // One transaction: a partial failure must not leave some attempts finalised and the quiz still
+    // published. Each finalise is independently idempotent (`isNull(submittedAt)` in its WHERE), so
+    // even a retry that races a student POST converges rather than double-scoring.
+    const row = await db.transaction(async (tx) => {
+      let finalized = 0;
+      for (const attempt of openAttempts) {
+        const ok = await finalizeUnsubmittedAttempt(tx, attempt.id, quizId, attempt.userId);
+        if (ok) finalized += 1;
+      }
+      const [updated] = await tx
+        .update(quizzes)
+        .set({ status: "draft" })
+        .where(eq(quizzes.id, quizId))
+        .returning({ id: quizzes.id, status: quizzes.status });
+      return { ...updated, finalizedAttempts: finalized };
+    });
 
     return NextResponse.json(row);
   } catch (err) {

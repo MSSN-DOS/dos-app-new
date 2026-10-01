@@ -17,6 +17,7 @@ import { errorResponse } from "@/lib/api/response";
 import { submitAttemptSchema } from "@/lib/validation/attempts";
 import { studentCanAccessQuiz } from "@/lib/quizzes/access";
 import { isCourseQuizWindowOpen } from "@/lib/quizzes/window";
+import { finalizeUnsubmittedAttempt } from "@/lib/quizzes/finalize-attempt";
 import {
   gradeAttempt,
   type GradingQuestion,
@@ -36,112 +37,6 @@ function shuffleForAttempt<T extends { id: number }>(rows: T[], attemptId: numbe
     [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
   }
   return shuffled;
-}
-
-async function autoSubmitStaleAttempt(
-  db: ReturnType<typeof getDb>,
-  attemptId: number,
-  quizId: number,
-  userId: number,
-): Promise<boolean> {
-  const attachedRows = await db
-    .select({ id: questions.id, questionType: questions.questionType })
-    .from(quizQuestions)
-    .innerJoin(questions, eq(quizQuestions.questionId, questions.id))
-    .where(eq(quizQuestions.quizId, quizId))
-    .orderBy(asc(questions.id));
-  const attachedIds = attachedRows.map((r) => r.id);
-  const optionRows =
-    attachedIds.length > 0
-      ? await db
-          .select({
-            id: questionOptions.id,
-            questionId: questionOptions.questionId,
-            isCorrect: questionOptions.isCorrect,
-          })
-          .from(questionOptions)
-          .where(inArray(questionOptions.questionId, attachedIds))
-          .orderBy(asc(questionOptions.id))
-      : [];
-  const blankRows =
-    attachedIds.length > 0
-      ? await db
-          .select({
-            questionId: questionBlanks.questionId,
-            blankIndex: questionBlanks.blankIndex,
-            acceptedAnswer: questionBlanks.acceptedAnswer,
-          })
-          .from(questionBlanks)
-          .where(inArray(questionBlanks.questionId, attachedIds))
-          .orderBy(asc(questionBlanks.blankIndex))
-      : [];
-  const gradingQuestions: GradingQuestion[] = attachedRows.map((row) => ({
-    id: row.id,
-    questionType: row.questionType,
-    options: optionRows
-      .filter((o) => o.questionId === row.id)
-      .map((o) => ({ id: o.id, isCorrect: o.isCorrect ?? false }))
-      .sort((a, b) => a.id - b.id),
-    blanks: blankRows
-      .filter((b) => b.questionId === row.id)
-      .map((b) => ({ blankIndex: b.blankIndex, acceptedAnswer: b.acceptedAnswer }))
-      .sort((a, b) => (a.blankIndex ?? 0) - (b.blankIndex ?? 0)),
-  }));
-  const result = gradeAttempt(gradingQuestions, []);
-  const [row] = await db
-    .update(quizAttempts)
-    .set({ score: result.score.toFixed(2), submittedAt: new Date() })
-    .where(and(eq(quizAttempts.id, attemptId), isNull(quizAttempts.submittedAt)))
-    .returning({ id: quizAttempts.id });
-  if (!row) return false;
-  const attemptAnswerValues: (typeof attemptAnswers.$inferInsert)[] = [];
-  gradingQuestions.forEach((question, i) => {
-    const verdict = result.results[i];
-    if (question.questionType === "options") {
-      attemptAnswerValues.push({
-        attemptId: row.id,
-        questionId: question.id,
-        selectedOptionId: null,
-        textAnswer: null,
-        blankIndex: null,
-        isCorrect: verdict.isCorrect,
-      });
-    } else {
-      question.blanks.forEach((blank) => {
-        attemptAnswerValues.push({
-          attemptId: row.id,
-          questionId: question.id,
-          selectedOptionId: null,
-          textAnswer: null,
-          blankIndex: blank.blankIndex,
-          isCorrect: false,
-        });
-      });
-    }
-  });
-  if (attemptAnswerValues.length > 0)
-    await db.insert(attemptAnswers).values(attemptAnswerValues);
-  const [existingBest] = await db
-    .select({ bestScore: bestScores.bestScore })
-    .from(bestScores)
-    .where(and(eq(bestScores.userId, userId), eq(bestScores.quizId, quizId)))
-    .limit(1);
-  if (!existingBest) {
-    await db
-      .insert(bestScores)
-      .values({
-        userId,
-        quizId,
-        bestScore: result.score.toFixed(2),
-        achievedAt: new Date(),
-      });
-  } else if (result.score > Number(existingBest.bestScore)) {
-    await db
-      .update(bestScores)
-      .set({ bestScore: result.score.toFixed(2), achievedAt: new Date() })
-      .where(and(eq(bestScores.userId, userId), eq(bestScores.quizId, quizId)));
-  }
-  return true;
 }
 
 export async function GET(
@@ -239,7 +134,7 @@ export async function GET(
       const timeExpired = Date.now() > expiresAt;
       const windowExpired = !isCourseQuizWindowOpen(quiz.quizType, quiz.weekStart);
       if (timeExpired || windowExpired) {
-        const stale = await autoSubmitStaleAttempt(
+        const stale = await finalizeUnsubmittedAttempt(
           db,
           openAttempt.id,
           quizId,

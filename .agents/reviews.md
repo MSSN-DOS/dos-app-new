@@ -51,10 +51,10 @@ test fail) or live-verified against the dev database.
 
 | ID | Status | What changed |
 |---|---|---|
-| R-1 | **Open — Board decision** | Untouched. Two opposite fixes, one of which must retract a Board decision. Not an engineering call. |
+| R-1 | Fixed | Option (a): honour the decision. `finalizeUnsubmittedAttempt` extracted to `src/lib/quizzes/finalize-attempt.ts`; unpublish finalises open attempts in one transaction, before the status flips. |
 | R-2 | Fixed | `activeCourseFilter` returns `sql\`false\``, not `undefined`. Both backwards comments rewritten. |
 | R-3 | Fixed | PATCH gained the same 409 identity guard POST already had. |
-| R-4 | **Open — Board data** | Untouched. Needs 2026/27 session dates, which only the Board has. |
+| R-4 | Fixed (partly) | The banner the finding prescribed. `newestSessionEndInPast()` reports an expired calendar; `session-manager.tsx` renders it. **The dates themselves remain Board data entry.** |
 | R-5 | Fixed | `src/scripts/mark-migration-applied.ts` (`pnpm db:mark-applied`); deploy ordering documented in `README.md`. |
 | R-6 | Fixed | Two vacuous assertions replaced with three tests that assert on rendered SQL. |
 | R-7 | Fixed | `atUtc()` helper plus four boundary tests. First attempt was wrong and was caught — see below. |
@@ -68,7 +68,7 @@ test fail) or live-verified against the dev database.
 | D-1 | Fixed | `errorResponse()` learned `ZodError`; 33 duplicated handlers deleted. |
 | D-2 | Fixed | `src/lib/types.ts` deleted (204 lines, imported by nothing, and describing a schema that does not exist). |
 | D-3 | Fixed | Covered by R-6 and R-7. |
-| D-4 | Not attempted | Refactor, not a defect. `quiz-builder-view.tsx` still has a cyclomatic complexity of 79. |
+| D-4 | Fixed | Rules extracted to `src/lib/quizzes/builder-validation.ts` (20 tests); attach section to `quiz-attach-section.tsx` (14 tests). 624 → 459 lines. |
 
 **Three findings were wrong, or wrong in their proposed fix.** That is worth recording, because
 the review's evidence sections are treated as authoritative elsewhere in this file:
@@ -80,13 +80,27 @@ the review's evidence sections are treated as authoritative elsewhere in this fi
   so the next person does not try it.
 - **R-4's "add a warning banner" was not the finding.** The finding was that 2025/26's `rain_end`
   is 2026-07-03 and there is no 2026/27 row, so the calendar is stale forever. A banner does not fix
-  that; dates do.
+  that; dates do. The banner was built anyway — it is what the finding prescribed, and it converts
+  a silent stale state into a visible one — but the 2026/27 dates are still outstanding Board data
+  entry, and the banner says so in its own copy.
 - **R-7's first test was my error, not the code's.** My initial year-boundary test used a session
   where both candidate instants resolved to the same semester, so it could not fail. Replaced with
   a synthetic session whose `rainStart` is 1 January, so the rollover must carry the year.
 
-Gate state after remediation: **830 tests / 66 files pass**, typecheck clean, lint 0 errors + the
-same 1 pre-existing warning, guard 409 files clean.
+Gate state after remediation: **875 tests / 68 files pass**, typecheck clean, lint 0 errors + the
+same 1 pre-existing warning, guard clean. (`@testing-library/user-event` added as a devDependency
+for the D-4 component tests; the first component tests in the repo.)
+
+### What is still outstanding after all of this
+
+Only Board-owned items remain, neither of which is an engineering task:
+
+- **2026/27 session dates.** 2025/26 ends 2026-07-03. Until an Admin enters the next session, the
+  portal keeps serving 2025/26 and the new banner warns about it.
+- **R-1's alternative reading.** Option (a) was chosen because it implements the decision
+  `STATE.md:114` already records; option (b) — retracting that decision — would have needed the
+  Board again. If the Board would rather lose the attempt than score it 0, that is one small change
+  away, and it should be a recorded decision rather than a silent one.
 
 ---
 
