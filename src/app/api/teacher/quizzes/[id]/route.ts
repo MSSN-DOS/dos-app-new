@@ -48,6 +48,8 @@ export async function GET(
         topicId: quizzes.topicId,
         jambSubjectId: quizzes.jambSubjectId,
         weekStart: quizzes.weekStart,
+        opensAt: quizzes.opensAt,
+        closesAt: quizzes.closesAt,
         questionCount: quizzes.questionCount,
         timeLimitMinutes: quizzes.timeLimitMinutes,
         passMark: quizzes.passMark,

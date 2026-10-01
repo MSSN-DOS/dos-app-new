@@ -15,6 +15,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { QuizAvailabilityPanel } from "@/components/admin/quiz-availability-panel";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -54,6 +55,8 @@ type QuizDetail = {
   topicId: number | null;
   jambSubjectId: number | null;
   weekStart: string | null;
+  opensAt: string | null;
+  closesAt: string | null;
   questionCount: number;
   timeLimitMinutes: number;
   passMark: number;
@@ -238,6 +241,8 @@ function Builder({ quiz, quizId, basePath }: { quiz: QuizDetail; quizId: string;
   const attachedRows = quiz.questions;
   const attachedCount = attachedRows.length;
   const isCourse = quiz.quizType === "course";
+  const isAdmin = basePath.startsWith("/admin");
+
 
   const availableRows = bankQuery.data ?? [];
   // Only published questions attach. The server enforces this too; filtering here keeps the UI
@@ -366,6 +371,17 @@ function Builder({ quiz, quizId, basePath }: { quiz: QuizDetail; quizId: string;
           )}
         </div>
       </section>
+
+      {/* Admin-only: Course Quiz availability override (DESIGN.md §4 decision 6).
+          Teachers never see this — only /admin/quizzes renders it. */}
+      {isAdmin && isCourse && (
+        <QuizAvailabilityPanel
+          quizId={quiz.id}
+          weekStart={quiz.weekStart}
+          opensAt={quiz.opensAt}
+          closesAt={quiz.closesAt}
+        />
+      )}
 
       <QuizAttachSection
         form={form}

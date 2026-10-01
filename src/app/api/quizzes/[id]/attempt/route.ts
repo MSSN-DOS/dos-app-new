@@ -71,6 +71,8 @@ export async function GET(
         status: quizzes.status,
         quizType: quizzes.quizType,
         weekStart: quizzes.weekStart,
+        opensAt: quizzes.opensAt,
+        closesAt: quizzes.closesAt,
         questionCount: quizzes.questionCount,
         timeLimitMinutes: quizzes.timeLimitMinutes,
         allowMultipleAttempts: quizzes.allowMultipleAttempts,
@@ -132,7 +134,10 @@ export async function GET(
     if (openAttempt) {
       const expiresAt = openAttempt.startedAt.getTime() + quiz.timeLimitMinutes * 60_000;
       const timeExpired = Date.now() > expiresAt;
-      const windowExpired = !isCourseQuizWindowOpen(quiz.quizType, quiz.weekStart);
+      const windowExpired = !isCourseQuizWindowOpen(quiz.quizType, quiz.weekStart, undefined, {
+        opensAt: quiz.opensAt,
+        closesAt: quiz.closesAt,
+      });
       if (timeExpired || windowExpired) {
         const stale = await finalizeUnsubmittedAttempt(
           db,
@@ -159,12 +164,21 @@ export async function GET(
       }
     }
     // Enforce course-quiz window for starting (or restarting) an attempt.
-    if (!openAttempt && !isCourseQuizWindowOpen(quiz.quizType, quiz.weekStart)) {
+    if (
+      !openAttempt &&
+      !isCourseQuizWindowOpen(quiz.quizType, quiz.weekStart, undefined, {
+        opensAt: quiz.opensAt,
+        closesAt: quiz.closesAt,
+      })
+    ) {
       return NextResponse.json(
         {
           error: {
             code: "CONFLICT",
-            message: "This Course Quiz is outside its Saturday-Sunday window",
+            message:
+              quiz.opensAt || quiz.closesAt
+                ? "This Course Quiz is outside the availability window set by an admin"
+                : "This Course Quiz is outside its Saturday-Sunday window",
           },
         },
         { status: 409 },
@@ -322,6 +336,8 @@ export async function POST(
         allowMultipleAttempts: quizzes.allowMultipleAttempts,
         quizType: quizzes.quizType,
         weekStart: quizzes.weekStart,
+        opensAt: quizzes.opensAt,
+        closesAt: quizzes.closesAt,
         timeLimitMinutes: quizzes.timeLimitMinutes,
         courseId: quizzes.courseId,
         jambSubjectId: quizzes.jambSubjectId,
@@ -390,7 +406,12 @@ export async function POST(
     }
     if (!openAttempt) {
       // Enforce window for starting a submission without an open attempt.
-      if (!isCourseQuizWindowOpen(quiz.quizType, quiz.weekStart)) {
+      if (
+      !isCourseQuizWindowOpen(quiz.quizType, quiz.weekStart, undefined, {
+        opensAt: quiz.opensAt,
+        closesAt: quiz.closesAt,
+      })
+    ) {
         return NextResponse.json(
           {
             error: {
