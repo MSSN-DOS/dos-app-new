@@ -58,6 +58,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuthoringSubjects } from "@/components/teaching/use-authoring-subjects";
+import { useAutoGrowTextarea } from "@/lib/utils/use-auto-grow-textarea";
 
 // ── types ────────────────────────────────────────────────────────────────────
 interface QuestionRow {
@@ -142,6 +143,40 @@ const MATH_SYMBOLS: { label: string; insert: string; hint: string }[] = [
 
 function stripTags(html: string) {
   return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * One option's text field.
+ *
+ * Options accept up to 1000 characters but were being edited in a single-line `<Input>`, so a long
+ * option scrolled horizontally off the right edge of the field with no way to see the tail. This
+ * is a textarea that grows to fit what is in it.
+ *
+ * It is a separate component only because a hook cannot be called inside the `options.map()` that
+ * renders these — each row needs its own ref.
+ */
+function OptionField({
+  index,
+  value,
+  onChange,
+}: {
+  index: number;
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  const ref = useAutoGrowTextarea<HTMLTextAreaElement>(value);
+  return (
+    <Textarea
+      ref={ref}
+      rows={1}
+      maxLength={1000}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={`Option ${index + 1}`}
+      aria-label={`Option ${index + 1}`}
+      className="min-h-11 flex-1 resize-none rounded-xl border-line bg-canvas text-[16px] leading-6 text-ink placeholder:text-faint"
+    />
+  );
 }
 
 // ── component ────────────────────────────────────────────────────────────────
@@ -583,7 +618,7 @@ export function QuestionsView() {
                 <div key={q.id} className="group relative overflow-hidden rounded-2xl border border-line bg-panel p-4 transition-colors hover:border-brand/30">
                   <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-brand/20 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
                   <div className="flex items-start justify-between gap-3">
-                    <p className="min-w-0 flex-1 text-[14px] font-medium leading-6 text-ink line-clamp-2">{stripTags(q.bodyRichText) || "(empty draft)"}</p>
+                    <p className="min-w-0 flex-1 break-words text-[14px] font-medium leading-6 text-ink">{stripTags(q.bodyRichText) || "(empty draft)"}</p>
                     <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${q.status === "published" ? "bg-brand text-white" : "border border-line bg-canvas text-sub"}`}>{q.status}</span>
                   </div>
                   <div className="mt-3 flex items-center justify-between">
@@ -610,7 +645,7 @@ export function QuestionsView() {
                 <TableBody>
                   {paginated!.data.map((q) => (
                     <TableRow key={q.id} className="border-line hover:bg-canvas/40">
-                      <TableCell className="max-w-[34rem] truncate text-[14px] font-medium text-ink">{stripTags(q.bodyRichText) || "(empty draft)"}</TableCell>
+                      <TableCell className="max-w-[34rem] break-words text-[14px] font-medium text-ink">{stripTags(q.bodyRichText) || "(empty draft)"}</TableCell>
                       <TableCell><span className="rounded-full border border-line bg-canvas px-2.5 py-1 text-xs font-medium text-sub">{TYPE_LABEL[q.questionType]}</span></TableCell>
                       <TableCell><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${q.status === "published" ? "bg-brand text-white" : "border border-line bg-canvas text-sub"}`}>{q.status === "published" ? "Published" : "Draft"}</span></TableCell>
                       <TableCell className="text-right">
@@ -800,9 +835,9 @@ export function QuestionsView() {
               <fieldset className="grid gap-2 rounded-2xl border border-line bg-canvas p-4">
                 <legend className="px-1 text-xs font-bold uppercase tracking-[0.1em] text-sub" style={{ fontFamily: "JetBrains Mono, monospace" }}>Options — radio marks the single correct one</legend>
                 {options.map((o, i) => (
-                  <div key={i} className={`flex items-center gap-2 rounded-xl border p-2 transition-colors ${o.correct ? "border-brand/40 bg-brand/10" : "border-line bg-panel"}`}>
-                    <input type="radio" name="correct-option" checked={o.correct} onChange={() => setOptions(options.map((v, j) => ({ ...v, correct: j === i })))} aria-label={`Mark option ${i + 1} correct`} className="size-5 shrink-0 accent-brand" />
-                    <Input type="text" maxLength={1000} value={o.text} onChange={(e) => setOptions(options.map((v, j) => (j === i ? { ...v, text: e.target.value } : v)))} placeholder={`Option ${i + 1}`} aria-label={`Option ${i + 1}`} className="min-h-11 flex-1 rounded-xl border-line bg-canvas text-ink placeholder:text-faint" />
+                  <div key={i} className={`flex items-start gap-2 rounded-xl border p-2 transition-colors ${o.correct ? "border-brand/40 bg-brand/10" : "border-line bg-panel"}`}>
+                    <input type="radio" name="correct-option" checked={o.correct} onChange={() => setOptions(options.map((v, j) => ({ ...v, correct: j === i })))} aria-label={`Mark option ${i + 1} correct`} className="mt-3 size-5 shrink-0 accent-brand" />
+                    <OptionField index={i} value={o.text} onChange={(next) => setOptions(options.map((v, j) => (j === i ? { ...v, text: next } : v)))} />
                     {options.length > 2 && <Button type="button" variant="ghost" size="sm" className="shrink-0 rounded-xl text-sub hover:bg-line hover:text-ink" onClick={() => setOptions(options.filter((_, j) => j !== i))} aria-label={`Remove option ${i + 1}`}><X className="size-4" /></Button>}
                   </div>
                 ))}

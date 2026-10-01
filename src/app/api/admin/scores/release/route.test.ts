@@ -53,6 +53,33 @@ describe("POST /api/admin/scores/release", () => {
     expect(requireAuth).toHaveBeenCalledWith(expect.anything(), ["admin"]);
   });
 
+  it("releases a Topic Quiz's held attempts without reporting a phantom week", async () => {
+    // Topic Quizzes are held on submission like anything else but have no week. The response
+    // shape types `recomputed[].weekStart` as a date, so a `null` leaking into that list would
+    // claim a week that does not exist — and would send `week_start = null` into the recompute,
+    // which SQL never matches, so it would look like it ran and quietly do nothing.
+    stubSelect(db, [
+      // Held attempts for a weekless quiz
+      [
+        { id: 1, userId: 7, weekStart: null },
+        { id: 2, userId: 8, weekStart: null },
+      ],
+      [],
+      [],
+    ]);
+    stubUpdate(db, { id: 1 });
+    stubInsert(db, []);
+
+    const res = await POST(jsonRequest("http://localhost/x", "POST", { quizId: 21 }));
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      data: { releasedCount: 2, recomputed: [] },
+    });
+    // A Topic Quiz result never feeds CGPA or Post-UTME (AGENTS.md §3), so there is nothing to
+    // recompute and the release must not pretend otherwise.
+    expect(db.update).toHaveBeenCalled();
+  });
+
   it("releases a whole week and recomputes CGPA + Post-UTME per user", async () => {
     stubSelect(db, [
       // Held attempts across two quizzes in the week

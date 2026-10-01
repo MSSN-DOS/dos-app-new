@@ -45,7 +45,13 @@ async function releaseHeldAttempts(
 
   return {
     releasedCount: attemptIds.length,
-    weeks: [...new Set(heldRows.map((row) => row.weekStart as string))],
+    // Only weeked quizzes can affect a weekly score. A Topic Quiz has `weekStart = NULL`, and
+    // passing that through would put `null` into a value typed as a date, then render it as
+    // `week_start = $1` with a null parameter — a query SQL never matches, so it would burn a
+    // round-trip per null while silently recomputing nothing. Filtering here is also the correct
+    // outcome on the merits: Topic Quiz results never feed CGPA or Post-UTME (AGENTS.md §3), so
+    // there is nothing to recompute for them.
+    weeks: [...new Set(heldRows.map((row) => row.weekStart).filter((week) => week !== null))],
     userIds: [...new Set(heldRows.map((row) => row.userId))],
   };
 }

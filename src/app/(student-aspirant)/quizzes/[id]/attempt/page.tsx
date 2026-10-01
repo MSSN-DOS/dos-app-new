@@ -295,13 +295,16 @@ export default function QuizAttemptPage() {
                   return (
                     <label
                       key={option.id}
-                      className={`group flex min-h-12 cursor-pointer items-center gap-3 rounded-2xl border p-3 pr-4 transition-colors ${selected ? "border-brand bg-brand/12 shadow-[0_0_0_1px_rgba(91,127,255,0.4)]" : "border-line bg-canvas hover:border-brand/30 hover:bg-line/60"}`}
+                      className={`group flex min-h-12 cursor-pointer items-start gap-3 rounded-2xl border p-3 pr-4 transition-colors ${selected ? "border-brand bg-brand/12 shadow-[0_0_0_1px_rgba(91,127,255,0.4)]" : "border-line bg-canvas hover:border-brand/30 hover:bg-line/60"}`}
                     >
                       <input className="peer sr-only" type="radio" name={`question-${question.id}`} checked={selected} onChange={() => updateAnswer(question.id, { selectedOptionId: option.id })} />
-                      <span className={`flex size-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${selected ? "border-brand bg-brand text-white" : "border-line bg-panel group-hover:border-brand/40"}`}>
+                      <span className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${selected ? "border-brand bg-brand text-white" : "border-line bg-panel group-hover:border-brand/40"}`}>
                         {selected && <span className="size-1.5 rounded-full bg-white" />}
                       </span>
-                      <span className={`text-[15px] leading-5 ${selected ? "font-semibold text-ink" : "text-faint"}`}>{option.optionText}</span>
+                      {/* 16px, not 15px: this is body content the student has to read to answer,
+                          and AGENTS.md §1 sets 16px as the mobile floor for it. The stem above is
+                          already 16px; options were the odd one out. */}
+                      <span className={`break-words text-[16px] leading-6 ${selected ? "font-semibold text-ink" : "text-faint"}`}>{option.optionText}</span>
                     </label>
                   );
                 })

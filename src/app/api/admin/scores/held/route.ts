@@ -23,6 +23,7 @@ export async function GET(request: Request): Promise<NextResponse> {
       .select({
         quizId: quizAttempts.quizId,
         title: quizzes.title,
+        quizType: quizzes.quizType,
         weekStart: quizzes.weekStart,
         courseCode: courses.code,
         subjectName: jambSubjects.name,
@@ -31,11 +32,17 @@ export async function GET(request: Request): Promise<NextResponse> {
       .innerJoin(quizzes, eq(quizAttempts.quizId, quizzes.id))
       .leftJoin(courses, eq(quizzes.courseId, courses.id))
       .leftJoin(jambSubjects, eq(quizzes.jambSubjectId, jambSubjects.id))
+      // No `isNotNull(quizzes.weekStart)` here, and that omission is deliberate. Every submission
+      // is held until an Admin releases it — Topic Quiz submissions included — but Topic Quizzes
+      // have a NULL `weekStart` by design (they are not weekly), so the previous filter dropped
+      // every Topic Quiz row. The result was Topic Quiz scores held forever with no way to release
+      // them: the per-quiz release endpoint would have accepted one, but the Admin could never find
+      // the quizId because this list omitted it. Filtering by an explicit `week` below still
+      // excludes them, because `week_start = '…'` never matches NULL.
       .where(
         and(
           isNotNull(quizAttempts.submittedAt),
           isNull(quizAttempts.releasedAt),
-          isNotNull(quizzes.weekStart),
           ...(week ? [eq(quizzes.weekStart, week)] : []),
         ),
       )
@@ -47,6 +54,9 @@ export async function GET(request: Request): Promise<NextResponse> {
       {
         quizId: number;
         label: string;
+        // Sent to the client so the Admin's list can label a Topic Quiz as one instead of
+        // guessing from the absent subject name.
+        quizType: string;
         weekStart: string | null;
         courseCode: string | null;
         subjectName: string | null;
@@ -61,6 +71,7 @@ export async function GET(request: Request): Promise<NextResponse> {
         byQuiz.set(row.quizId, {
           quizId: row.quizId,
           label: row.title,
+          quizType: row.quizType,
           weekStart: row.weekStart,
           courseCode: row.courseCode,
           subjectName: row.subjectName,
