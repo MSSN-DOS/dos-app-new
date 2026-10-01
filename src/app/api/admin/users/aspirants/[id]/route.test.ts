@@ -8,7 +8,12 @@ vi.mock("@/lib/auth/guard", () => ({ requireAuth }));
 vi.mock("@/lib/db", () => ({ getDb }));
 
 import { GET } from "./route";
-import { jsonRequest, makeDbMock, stubSelect, type DbMock } from "@/lib/testing/route-test";
+import {
+  jsonRequest,
+  makeDbMock,
+  stubSelect,
+  type DbMock,
+} from "@/lib/testing/route-test";
 
 let db: DbMock;
 
@@ -22,7 +27,13 @@ beforeEach(() => {
 
 describe("GET /api/admin/users/aspirants/[id]", () => {
   const aspirantRow = [
-    { id: 3, fullName: "Yusuf, F.", identifier: "12345678AB", isActive: true, aspirationDepartment: "Medicine & Surgery" },
+    {
+      id: 3,
+      fullName: "Yusuf, F.",
+      identifier: "12345678AB",
+      isActive: true,
+      aspirationDepartment: "Medicine & Surgery",
+    },
   ];
 
   it("returns profile, Post-UTME history and attempt history for an admin", async () => {
@@ -33,7 +44,18 @@ describe("GET /api/admin/users/aspirants/[id]", () => {
         { weekStart: "2026-08-17", rawScore: "36.00", convertedScore50: "72.00" },
       ],
       [
-        { attemptId: 9, quizId: 21, quizTitle: "Post-UTME Week 1", quizType: "course", courseCode: null, subjectName: "English", attemptNumber: 1, score: "38.00", submittedAt: "2026-08-18T10:00:00Z", releasedAt: null },
+        {
+          attemptId: 9,
+          quizId: 21,
+          quizTitle: "Post-UTME Week 1",
+          quizType: "course",
+          courseCode: null,
+          subjectName: "English",
+          attemptNumber: 1,
+          score: "38.00",
+          submittedAt: "2026-08-18T10:00:00Z",
+          releasedAt: null,
+        },
       ],
     ]);
     const res = await GET(jsonRequest("http://localhost/x", "GET"), ctx("3"));

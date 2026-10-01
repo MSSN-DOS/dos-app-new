@@ -1,6 +1,5 @@
 import { desc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { ZodError } from "zod";
 
 import { errorResponse } from "@/lib/api/response";
 import { requireAuth } from "@/lib/auth/guard";
@@ -27,23 +26,6 @@ import {
   pdfMetaSchema,
   videoCreateSchema,
 } from "@/lib/validation/content";
-
-function validationError(err: ZodError): NextResponse {
-  return NextResponse.json(
-    {
-      error: {
-        code: "VALIDATION_ERROR",
-        message: "Invalid input",
-        details: err.issues.map((i) => ({
-          field: i.path.join(".") || "body",
-          code: i.code,
-          message: i.message,
-        })),
-      },
-    },
-    { status: 422 },
-  );
-}
 
 // Resolve the §6 storage folder for a course-scoped item. General/interfaculty
 // courses have no single faculty/department — their scope_type stands in for
@@ -141,9 +123,9 @@ export async function GET(request: Request): Promise<NextResponse> {
 export async function POST(request: Request): Promise<NextResponse> {
   try {
     const session = await requireAuth(request, ["admin"]);
-    const isMultipart = (
-      request.headers.get("content-type") ?? ""
-    ).includes("multipart/form-data");
+    const isMultipart = (request.headers.get("content-type") ?? "").includes(
+      "multipart/form-data",
+    );
 
     let input: ParsedInput;
 
@@ -171,9 +153,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         url: record.url === undefined ? undefined : String(record.url),
         courseId: record.courseId === undefined ? undefined : Number(record.courseId),
         jambSubjectId:
-          record.jambSubjectId === undefined
-            ? undefined
-            : Number(record.jambSubjectId),
+          record.jambSubjectId === undefined ? undefined : Number(record.jambSubjectId),
       };
     }
 
@@ -185,7 +165,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         courseId: input.courseId,
         jambSubjectId: input.jambSubjectId,
       });
-      if (!result.success) return validationError(result.error);
+      if (!result.success) return errorResponse(result.error);
       input = { ...input, ...result.data };
     } else if (input.type === "article") {
       const result = articleCreateSchema.safeParse({
@@ -195,7 +175,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         courseId: input.courseId,
         jambSubjectId: input.jambSubjectId,
       });
-      if (!result.success) return validationError(result.error);
+      if (!result.success) return errorResponse(result.error);
       input = { ...input, ...result.data };
     } else {
       // PDF track: metadata validated here, the File itself at the route boundary.
@@ -238,7 +218,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         courseId: input.courseId,
         jambSubjectId: input.jambSubjectId,
       });
-      if (!result.success) return validationError(result.error);
+      if (!result.success) return errorResponse(result.error);
       input = { ...input, ...result.data };
     }
 
@@ -303,7 +283,6 @@ export async function POST(request: Request): Promise<NextResponse> {
       .returning();
     return NextResponse.json(row, { status: 201 });
   } catch (err) {
-    if (err instanceof ZodError) return validationError(err);
     return errorResponse(err);
   }
 }

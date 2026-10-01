@@ -86,9 +86,9 @@ describe("GET /api/admin/content", () => {
     const res = await GET(jsonRequest("http://localhost/api/admin/content"));
     expect(res.status).toBe(200);
     const body: unknown = await res.json();
-    expect(
-      (body as { data: Array<{ title: string }> }).data[0].title,
-    ).toBe("Week 4 Reading");
+    expect((body as { data: Array<{ title: string }> }).data[0].title).toBe(
+      "Week 4 Reading",
+    );
   });
 });
 
@@ -158,8 +158,8 @@ describe("POST /api/admin/content — article (JSON)", () => {
     );
     expect(res.status).toBe(422);
     const body: unknown = await res.json();
-    const details = (body as { error: { details: Array<{ message: string }> } })
-      .error.details;
+    const details = (body as { error: { details: Array<{ message: string }> } }).error
+      .details;
     expect(details.some((d) => /exactly one scope/i.test(d.message))).toBe(true);
   });
 
@@ -244,10 +244,7 @@ describe("POST /api/admin/content — pdf (multipart)", () => {
     stubInsert(db, [{ id: 12, type: "pdf" }]);
 
     const res = await POST(
-      pdfRequest(
-        { title: "Formula Sheet", jambSubjectId: "3" },
-        makePdf("sheet.pdf"),
-      ),
+      pdfRequest({ title: "Formula Sheet", jambSubjectId: "3" }, makePdf("sheet.pdf")),
     );
     expect(res.status).toBe(201);
     const [pathArg] = uploadResourceObject.mock.calls[0] as [string, Blob];
@@ -260,9 +257,7 @@ describe("POST /api/admin/content — pdf (multipart)", () => {
     const res = await POST(pdfRequest({ title: "T", courseId: "1" }, txt));
     expect(res.status).toBe(422);
     const body: unknown = await res.json();
-    expect((body as { error: { message: string } }).error.message).toMatch(
-      /only pdf/i,
-    );
+    expect((body as { error: { message: string } }).error.message).toMatch(/only pdf/i);
   });
 
   it("rejects an oversized PDF (422)", async () => {
@@ -273,9 +268,7 @@ describe("POST /api/admin/content — pdf (multipart)", () => {
     const res = await POST(pdfRequest({ title: "T", courseId: "1" }, big));
     expect(res.status).toBe(422);
     const body: unknown = await res.json();
-    expect((body as { error: { message: string } }).error.message).toMatch(
-      /20 MB/,
-    );
+    expect((body as { error: { message: string } }).error.message).toMatch(/20 MB/);
   });
 
   it("rejects a multipart post with no file (422)", async () => {
@@ -287,10 +280,7 @@ describe("POST /api/admin/content — pdf (multipart)", () => {
   it("propagates scope XOR errors in multipart too (422)", async () => {
     requireAuth.mockResolvedValue({ userId: 1, roleId: 2 });
     const res = await POST(
-      pdfRequest(
-        { title: "T", courseId: "1", jambSubjectId: "2" },
-        makePdf(),
-      ),
+      pdfRequest({ title: "T", courseId: "1", jambSubjectId: "2" }, makePdf()),
     );
     expect(res.status).toBe(422);
     expect(uploadResourceObject).not.toHaveBeenCalled();
@@ -330,7 +320,9 @@ describe("DELETE /api/admin/content/[id]", () => {
 
   it("removes the Storage object for a PDF and returns 204", async () => {
     requireAuth.mockResolvedValue({ userId: 1, roleId: 2 });
-    stubSelect(db, [[{ id: 9, type: "pdf", bodyOrFileUrl: "resources/jamb/physics/a.pdf" }]]);
+    stubSelect(db, [
+      [{ id: 9, type: "pdf", bodyOrFileUrl: "resources/jamb/physics/a.pdf" }],
+    ]);
     stubDelete(db, { id: 9 });
     const res = await DELETE(
       jsonRequest("http://localhost/api/admin/content/9", "DELETE"),

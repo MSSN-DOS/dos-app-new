@@ -10,7 +10,12 @@ vi.mock("@/lib/db", () => ({ getDb }));
 vi.mock("@/lib/semester", () => ({ getActiveSemester }));
 
 import { GET } from "./route";
-import { jsonRequest, makeDbMock, stubSelect, type DbMock } from "@/lib/testing/route-test";
+import {
+  jsonRequest,
+  makeDbMock,
+  stubSelect,
+  type DbMock,
+} from "@/lib/testing/route-test";
 
 let db: DbMock;
 
@@ -156,7 +161,9 @@ describe("GET /api/me", () => {
 
   it("returns a null profile for admin/teacher roles", async () => {
     requireAuth.mockResolvedValue({ userId: 1, roleId: 1 });
-    stubSelect(db, [[{ fullName: "Admin", identifier: "ADM/2026/001", roleName: "admin" }]]);
+    stubSelect(db, [
+      [{ fullName: "Admin", identifier: "ADM/2026/001", roleName: "admin" }],
+    ]);
 
     const res = await GET(jsonRequest("http://localhost/api/me", "GET"));
     expect(res.status).toBe(200);

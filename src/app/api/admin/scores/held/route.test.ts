@@ -8,7 +8,12 @@ vi.mock("@/lib/auth/guard", () => ({ requireAuth }));
 vi.mock("@/lib/db", () => ({ getDb }));
 
 import { GET } from "./route";
-import { jsonRequest, makeDbMock, stubSelect, type DbMock } from "@/lib/testing/route-test";
+import {
+  jsonRequest,
+  makeDbMock,
+  stubSelect,
+  type DbMock,
+} from "@/lib/testing/route-test";
 
 let db: DbMock;
 
@@ -22,9 +27,27 @@ describe("GET /api/admin/scores/held", () => {
   it("returns 200 with held attempts grouped per quiz for an admin", async () => {
     stubSelect(db, [
       [
-        { quizId: 10, title: "Week 1 Quiz", weekStart: "2026-08-17", courseCode: "CHM101", subjectName: null },
-        { quizId: 10, title: "Week 1 Quiz", weekStart: "2026-08-17", courseCode: "CHM101", subjectName: null },
-        { quizId: 12, title: "Physics JAMB", weekStart: "2026-08-17", courseCode: null, subjectName: "Physics" },
+        {
+          quizId: 10,
+          title: "Week 1 Quiz",
+          weekStart: "2026-08-17",
+          courseCode: "CHM101",
+          subjectName: null,
+        },
+        {
+          quizId: 10,
+          title: "Week 1 Quiz",
+          weekStart: "2026-08-17",
+          courseCode: "CHM101",
+          subjectName: null,
+        },
+        {
+          quizId: 12,
+          title: "Physics JAMB",
+          weekStart: "2026-08-17",
+          courseCode: null,
+          subjectName: "Physics",
+        },
       ],
     ]);
     const res = await GET(jsonRequest("http://localhost/x", "GET"));

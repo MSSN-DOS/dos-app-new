@@ -85,7 +85,7 @@ export async function GET(
 
     const normalize = (v: string) => {
       const n = Number(v);
-      return n > 5 ? (Math.min(5, n / 20)).toFixed(2) : v;
+      return n > 5 ? Math.min(5, n / 20).toFixed(2) : v;
     };
     return NextResponse.json({
       student,

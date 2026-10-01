@@ -1,6 +1,5 @@
 import { and, asc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { ZodError } from "zod";
 
 import { errorResponse } from "@/lib/api/response";
 import { paginate, parsePagination } from "@/lib/api/pagination";
@@ -11,23 +10,6 @@ import { getTeachingScope, isCourseAllowed } from "@/lib/auth/teaching-scope";
 import { getDb } from "@/lib/db";
 import { courses, topics } from "@/lib/db/schema";
 import { topicCreateSchema } from "@/lib/validation/topics";
-
-function validationError(err: ZodError): NextResponse {
-  return NextResponse.json(
-    {
-      error: {
-        code: "VALIDATION_ERROR",
-        message: "Invalid input",
-        details: err.issues.map((i) => ({
-          field: i.path.join(".") || "body",
-          code: i.code,
-          message: i.message,
-        })),
-      },
-    },
-    { status: 422 },
-  );
-}
 
 export async function GET(request: Request): Promise<NextResponse> {
   try {
@@ -54,9 +36,7 @@ export async function GET(request: Request): Promise<NextResponse> {
         ? eq(topics.courseId, Number(courseIdParam))
         : undefined;
     const whereCond =
-      courseCond && ownerCond
-        ? and(courseCond, ownerCond)
-        : (courseCond ?? ownerCond);
+      courseCond && ownerCond ? and(courseCond, ownerCond) : (courseCond ?? ownerCond);
     const base = db
       .select({
         id: topics.id,
@@ -115,7 +95,6 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     return NextResponse.json(row, { status: 201 });
   } catch (err) {
-    if (err instanceof ZodError) return validationError(err);
     return errorResponse(err);
   }
 }

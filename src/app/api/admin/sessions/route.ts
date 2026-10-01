@@ -1,29 +1,11 @@
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { ZodError } from "zod";
 
 import { errorResponse } from "@/lib/api/response";
 import { requireAuth } from "@/lib/auth/guard";
 import { getDb } from "@/lib/db";
 import { academicSessions } from "@/lib/db/schema/academic-sessions";
 import { academicSessionCreateSchema } from "@/lib/validation/academic-sessions";
-
-export function validationError(err: ZodError): NextResponse {
-  return NextResponse.json(
-    {
-      error: {
-        code: "VALIDATION_ERROR",
-        message: "Invalid input",
-        details: err.issues.map((i) => ({
-          field: i.path.join(".") || "body",
-          code: i.code,
-          message: i.message,
-        })),
-      },
-    },
-    { status: 422 },
-  );
-}
 
 /**
  * GET /api/admin/sessions — every academic session, oldest first. Admin-only: the session
@@ -68,7 +50,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       raw = null;
     }
     const parsed = academicSessionCreateSchema.safeParse(raw);
-    if (!parsed.success) return validationError(parsed.error);
+    if (!parsed.success) return errorResponse(parsed.error);
 
     const db = getDb();
     const data = parsed.data;

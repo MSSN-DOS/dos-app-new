@@ -282,7 +282,10 @@ export default function QuizAttemptPage() {
         <div className="p-4 sm:p-6">
           <div
             className="break-words text-[16px] font-medium leading-7 text-ink [&_b]:font-bold [&_i]:italic [&_u]:underline [&_sub]:text-[11px] [&_sup]:text-[11px]"
-            // sanitize at author time; render innerHTML is safe here (sanitized on save)
+            // Safe because every write path sanitises server-side: POST/PATCH/bulk under
+            // `/api/teacher/questions` all call `sanitizeRichText` before insert/update. The
+            // editor component also sanitises, but that is a convenience for the preview, not the
+            // guarantee — this render must not depend on which client made the request.
             dangerouslySetInnerHTML={{ __html: question.bodyRichText || "<span class='text-faint'>(empty stem)</span>" }}
           />
           <div className="mt-5 space-y-3">

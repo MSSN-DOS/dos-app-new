@@ -1,33 +1,12 @@
 import { asc, desc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { ZodError } from "zod";
 
 import { errorResponse } from "@/lib/api/response";
 import { requireAuth } from "@/lib/auth/guard";
 import { getDb } from "@/lib/db";
 import { users } from "@/lib/db/schema";
-import {
-  cgpaRecords,
-  postUtmeScores,
-} from "@/lib/db/schema/performance";
+import { cgpaRecords, postUtmeScores } from "@/lib/db/schema/performance";
 import { leaderboardQuerySchema } from "@/lib/validation/scores";
-
-function validationError(err: ZodError): NextResponse {
-  return NextResponse.json(
-    {
-      error: {
-        code: "VALIDATION_ERROR",
-        message: "Invalid input",
-        details: err.issues.map((i) => ({
-          field: i.path.join(".") || "query",
-          code: i.code,
-          message: i.message,
-        })),
-      },
-    },
-    { status: 422 },
-  );
-}
 
 /**
  * GET /api/admin/leaderboard?track=student|aspirant&week=YYYY-MM-DD
@@ -43,7 +22,7 @@ export async function GET(request: Request): Promise<NextResponse> {
       track: new URL(request.url).searchParams.get("track") ?? undefined,
       week: new URL(request.url).searchParams.get("week") ?? undefined,
     });
-    if (!query.success) return validationError(query.error);
+    if (!query.success) return errorResponse(query.error, "query");
     const { track, week } = query.data;
 
     if (track === "student") {
@@ -53,8 +32,7 @@ export async function GET(request: Request): Promise<NextResponse> {
         .orderBy(desc(cgpaRecords.weekStart));
       const weeks = [...new Set(weekRows.map((r) => r.weekStart))];
       const targetWeek = week ?? weeks[0];
-      if (!targetWeek)
-        return NextResponse.json({ data: [], weeks, week: null });
+      if (!targetWeek) return NextResponse.json({ data: [], weeks, week: null });
 
       const rows = await db
         .select({
@@ -70,7 +48,7 @@ export async function GET(request: Request): Promise<NextResponse> {
       return NextResponse.json({
         data: rows.map((row, index) => {
           const raw = Number(row.score);
-          const score = raw > 5 ? Math.round((Math.min(5, raw / 20) * 100)) / 100 : raw;
+          const score = raw > 5 ? Math.round(Math.min(5, raw / 20) * 100) / 100 : raw;
           return {
             rank: index + 1,
             userId: row.userId,

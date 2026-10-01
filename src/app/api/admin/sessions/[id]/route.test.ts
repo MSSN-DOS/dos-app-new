@@ -92,13 +92,19 @@ describe("PATCH /api/admin/sessions/[id]", () => {
   it("returns 404 when the update matches no row", async () => {
     stubSelect(db, [[]]); // no label clash
     stubUpdate(db, null);
-    const res = await PATCH(jsonRequest("http://localhost/x", "PATCH", SESSION), params("99"));
+    const res = await PATCH(
+      jsonRequest("http://localhost/x", "PATCH", SESSION),
+      params("99"),
+    );
     expect(res.status).toBe(404);
   });
 
   it("returns 409 when renaming onto another session's label", async () => {
     stubSelect(db, [[{ id: 1 }]]);
-    const res = await PATCH(jsonRequest("http://localhost/x", "PATCH", SESSION), params("2"));
+    const res = await PATCH(
+      jsonRequest("http://localhost/x", "PATCH", SESSION),
+      params("2"),
+    );
     expect(res.status).toBe(409);
     expect((await res.json()).error.message).toContain("2026/27");
   });
@@ -131,19 +137,28 @@ describe("PATCH /api/admin/sessions/[id]", () => {
   });
 
   it("returns 400 for a non-numeric id", async () => {
-    const res = await PATCH(jsonRequest("http://localhost/x", "PATCH", SESSION), params("x"));
+    const res = await PATCH(
+      jsonRequest("http://localhost/x", "PATCH", SESSION),
+      params("x"),
+    );
     expect(res.status).toBe(400);
   });
 
   it("returns 401 when unauthenticated", async () => {
     requireAuth.mockRejectedValueOnce(new UnauthorizedError("Missing token"));
-    const res = await PATCH(jsonRequest("http://localhost/x", "PATCH", SESSION), params("2"));
+    const res = await PATCH(
+      jsonRequest("http://localhost/x", "PATCH", SESSION),
+      params("2"),
+    );
     expect(res.status).toBe(401);
   });
 
   it("returns 403 when the caller is not an admin", async () => {
     requireAuth.mockRejectedValueOnce(new ForbiddenError("Admin role required"));
-    const res = await PATCH(jsonRequest("http://localhost/x", "PATCH", SESSION), params("2"));
+    const res = await PATCH(
+      jsonRequest("http://localhost/x", "PATCH", SESSION),
+      params("2"),
+    );
     expect(res.status).toBe(403);
   });
 });

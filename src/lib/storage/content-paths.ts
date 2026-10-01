@@ -45,6 +45,19 @@ export function aspirantResourcePath(input: { jambSubject: string }): string {
 }
 
 export function resourceFilePath(folderPath: string, fileName: string): string {
-  const safeName = fileName.replace(/[/\\]/g, "-");
+  // Collapsing separators to `-` is what makes this safe, and it is worth being explicit about
+  // why: every traversal form — `../`, `..\`, an absolute path — depends on a separator to
+  // escape the folder, so removing separators removes the traversal with it. `../../etc/passwd`
+  // becomes the literal single segment `..-..-etc-passwd`, which climbs nothing.
+  //
+  // The separator mapping must NOT be "improved" into anything that rewrites dot runs, because
+  // `content_items` stores the resulting path on the row and serves signed URLs from it. Changing
+  // the shape would orphan every object already uploaded.
+  //
+  // One form survives intact: a name made *only* of dots. It cannot traverse (there is no
+  // separator left to continue a climb with), but it would emit a key ending in `/`, so it gets
+  // a fixed name instead.
+  const flattened = fileName.replace(/[/\\]/g, "-");
+  const safeName = /^\.*$/.test(flattened) ? "unnamed-file" : flattened;
   return `${folderPath}/${safeName}`;
 }

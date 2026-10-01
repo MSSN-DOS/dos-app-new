@@ -16,13 +16,22 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError, apiFetch } from "@/lib/auth/client-fetch";
-import { pickSessionForDate, type SessionDates } from "@/lib/semester/calendar";
+import { type SessionDates } from "@/lib/semester/calendar";
+
+type ResolvedActive = {
+  semester: "harmattan" | "rain";
+  sessionId: number;
+  sessionLabel: string;
+  source: "auto" | "manual";
+} | null;
 
 type SemesterSettings = {
   mode: "auto" | "manual";
   manualOverride: "harmattan" | "rain" | null;
   manualOverrideSessionId: number | null;
   updatedAt: string | null;
+  /** Server-resolved via `getActiveSemester()`; null when today falls outside every session. */
+  active: ResolvedActive;
 };
 
 const SEMESTER_LABEL = {
@@ -31,20 +40,20 @@ const SEMESTER_LABEL = {
 } as const;
 
 /**
- * Auto mode's explainer, computed with the same `pickSessionForDate` the server uses, so what
- * the Admin reads here is what students actually get — not a second, drifting implementation of
- * the calendar rules. Runs purely on the session list already in the query cache.
+ * Auto mode's explainer. The resolution itself now arrives from the server (`data.active`),
+ * computed by the same `getActiveSemester()` students hit, so what the Admin reads here is what
+ * students actually get — not a second, drifting implementation of the calendar rules in the
+ * browser. Only the shape of the sentence is local.
  */
-function autoResolutionCopy(autoSessionId: number | null, sessions: SessionDates[]): string {
+function autoResolutionCopy(active: ResolvedActive, sessions: SessionDates[]): string {
   if (sessions.length === 0) {
     return "No sessions exist yet, so no active semester can be resolved — students currently see no courses, quizzes or resources.";
   }
-  if (autoSessionId === null) {
+  if (active === null) {
     const first = sessions[0];
     return `No session has started yet. The first one starts on ${first.harmattanStart}, so nothing is active until then.`;
   }
-  const label = sessions.find((s) => s.id === autoSessionId)?.label ?? "";
-  return `Active semester derives from today's date against the session calendar — currently ${label}. Between sessions, the most recently started session stays active at its final semester.`;
+  return `Active semester derives from today's date against the session calendar — currently ${active.sessionLabel}. Between sessions, the most recently started session stays active at its final semester.`;
 }
 
 export default function SemesterSettingsPage() {
@@ -75,9 +84,10 @@ export default function SemesterSettingsPage() {
   const override =
     editedOverride ?? settingsQuery.data?.data.manualOverride ?? "harmattan";
   // Default the picker to whatever the calendar resolves to, so switching to manual starts from
-  // a real, existing session instead of a blank the Admin has to go and look up.
-  const autoSessionId =
-    pickSessionForDate(sessions, new Date())?.session.id ?? null;
+  // a real, existing session instead of a blank the Admin has to go and look up. The resolution
+  // comes from the server — re-running `pickSessionForDate` here would duplicate the calendar
+  // rules in the browser, which is the drift AGENTS.md §3 exists to prevent.
+  const autoSessionId = settingsQuery.data?.data.active?.sessionId ?? null;
   const overrideSessionId =
     editedOverrideSession ??
     (settingsQuery.data?.data.manualOverrideSessionId === null ||
@@ -173,7 +183,7 @@ export default function SemesterSettingsPage() {
             </Select>
             <p aria-live="polite" className="mt-2 text-sm text-muted-foreground">
               {mode === "auto"
-                ? autoResolutionCopy(autoSessionId, sessions)
+                ? autoResolutionCopy(settingsQuery.data?.data.active ?? null, sessions)
                 : "Active semester is pinned to your override below."}
             </p>
           </div>

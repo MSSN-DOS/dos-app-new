@@ -1,6 +1,5 @@
 import { asc, and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { ZodError } from "zod";
 
 import { errorResponse } from "@/lib/api/response";
 import { paginate, parsePagination } from "@/lib/api/pagination";
@@ -8,23 +7,6 @@ import { requireAuth } from "@/lib/auth/guard";
 import { getDb } from "@/lib/db";
 import { courseFaculties, courses } from "@/lib/db/schema";
 import { courseCreateSchema, type CourseCreateInput } from "@/lib/validation/structure";
-
-function validationError(err: ZodError): NextResponse {
-  return NextResponse.json(
-    {
-      error: {
-        code: "VALIDATION_ERROR",
-        message: "Invalid input",
-        details: err.issues.map((i) => ({
-          field: i.path.join(".") || "body",
-          code: i.code,
-          message: i.message,
-        })),
-      },
-    },
-    { status: 422 },
-  );
-}
 
 // Map the validated body onto the stored columns, mirroring courses_scope_check.
 function scopeColumns(data: CourseCreateInput) {
@@ -164,7 +146,6 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     return NextResponse.json({ ...row, facultyIds }, { status: 201 });
   } catch (err) {
-    if (err instanceof ZodError) return validationError(err);
     return errorResponse(err);
   }
 }

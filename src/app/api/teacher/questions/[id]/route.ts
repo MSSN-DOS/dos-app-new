@@ -1,6 +1,5 @@
 import { and, asc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { ZodError } from "zod";
 
 import { errorResponse } from "@/lib/api/response";
 import { ForbiddenError } from "@/lib/auth/errors";
@@ -15,31 +14,12 @@ import {
   questions,
   quizQuestions,
 } from "@/lib/db/schema";
-import {
-  questionDraftSchema,
-  questionPublishSchema,
-} from "@/lib/validation/questions";
+import { sanitizeRichText } from "@/lib/sanitize";
+import { questionDraftSchema, questionPublishSchema } from "@/lib/validation/questions";
 
-function validationError(err: ZodError): NextResponse {
-  return NextResponse.json(
-    {
-      error: {
-        code: "VALIDATION_ERROR",
-        message: "Invalid input",
-        details: err.issues.map((i) => ({
-          field: i.path.join(".") || "body",
-          code: i.code,
-          message: i.message,
-        })),
-      },
-    },
-    { status: 422 },
-  );
-}
-
-function parseIntents(raw: unknown):
-  | { ok: true; intent: "draft" | "published" }
-  | { ok: false } {
+function parseIntents(
+  raw: unknown,
+): { ok: true; intent: "draft" | "published" } | { ok: false } {
   const status =
     typeof raw === "object" && raw !== null && "status" in raw
       ? (raw as { status?: unknown }).status
@@ -130,7 +110,11 @@ export async function PATCH(
             code: "VALIDATION_ERROR",
             message: "Invalid input",
             details: [
-              { field: "status", code: "invalid_value", message: "Status must be draft or published" },
+              {
+                field: "status",
+                code: "invalid_value",
+                message: "Status must be draft or published",
+              },
             ],
           },
         },
@@ -157,7 +141,9 @@ export async function PATCH(
         jambSubjectId: data.jambSubjectId ?? null,
         topicId: data.topicId ?? null,
         questionType: data.questionType,
-        bodyRichText: data.bodyRichText,
+        // Sanitised server-side on write — see the same note in `questions/route.ts`. Stems
+        // render through `dangerouslySetInnerHTML` in every student's attempt screen.
+        bodyRichText: sanitizeRichText(data.bodyRichText),
         status: intent.intent,
       })
       .where(and(eq(questions.id, id), ownedWhere(auth)))
@@ -170,7 +156,10 @@ export async function PATCH(
     }
 
     // Options/blanks are set-replaced on every save.
-    await db.delete(questionOptions).where(eq(questionOptions.questionId, id)).returning();
+    await db
+      .delete(questionOptions)
+      .where(eq(questionOptions.questionId, id))
+      .returning();
     await db.delete(questionBlanks).where(eq(questionBlanks.questionId, id)).returning();
 
     const optionRows =
@@ -204,7 +193,6 @@ export async function PATCH(
 
     return NextResponse.json({ ...row, options: optionRows, blanks: blankRows });
   } catch (err) {
-    if (err instanceof ZodError) return validationError(err);
     return errorResponse(err);
   }
 }

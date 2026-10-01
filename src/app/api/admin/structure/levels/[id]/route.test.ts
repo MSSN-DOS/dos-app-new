@@ -28,26 +28,38 @@ const ctx = (id: string) => ({ params: Promise.resolve({ id }) });
 describe("PATCH /api/admin/structure/levels/[id]", () => {
   it("updates a level and returns 200", async () => {
     stubUpdate(db, { id: 1, value: 150 });
-    const res = await PATCH(jsonRequest("http://localhost/x", "PATCH", { value: 150 }), ctx("1"));
+    const res = await PATCH(
+      jsonRequest("http://localhost/x", "PATCH", { value: 150 }),
+      ctx("1"),
+    );
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({ id: 1, value: 150 });
   });
 
   it("returns 404 when the level does not exist", async () => {
     stubUpdate(db, null);
-    const res = await PATCH(jsonRequest("http://localhost/x", "PATCH", { value: 150 }), ctx("99"));
+    const res = await PATCH(
+      jsonRequest("http://localhost/x", "PATCH", { value: 150 }),
+      ctx("99"),
+    );
     expect(res.status).toBe(404);
     const body = await res.json();
     expect(body.error.code).toBe("NOT_FOUND");
   });
 
   it.each(["abc", "0", "-3"])("returns 400 for malformed id %s", async (id) => {
-    const res = await PATCH(jsonRequest("http://localhost/x", "PATCH", { value: 100 }), ctx(id));
+    const res = await PATCH(
+      jsonRequest("http://localhost/x", "PATCH", { value: 100 }),
+      ctx(id),
+    );
     expect(res.status).toBe(400);
   });
 
   it("returns 422 for an invalid body", async () => {
-    const res = await PATCH(jsonRequest("http://localhost/x", "PATCH", { value: -5 }), ctx("1"));
+    const res = await PATCH(
+      jsonRequest("http://localhost/x", "PATCH", { value: -5 }),
+      ctx("1"),
+    );
     expect(res.status).toBe(422);
   });
 });

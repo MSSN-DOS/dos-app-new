@@ -114,7 +114,11 @@ export async function POST(
     }
 
     const found = await db
-      .select({ id: questions.id, status: questions.status, createdBy: questions.createdBy })
+      .select({
+        id: questions.id,
+        status: questions.status,
+        createdBy: questions.createdBy,
+      })
       .from(questions)
       .where(inArray(questions.id, ids))
       .orderBy(asc(questions.id));
@@ -170,17 +174,12 @@ export async function POST(
       .select({ questionId: quizQuestions.questionId })
       .from(quizQuestions)
       .where(
-        and(
-          eq(quizQuestions.quizId, quizId),
-          inArray(quizQuestions.questionId, ids),
-        ),
+        and(eq(quizQuestions.quizId, quizId), inArray(quizQuestions.questionId, ids)),
       )
       .orderBy(asc(quizQuestions.questionId));
 
     const attached = new Set(existing.map((r) => r.questionId));
-    const toInsert = found
-      .map((q) => q.id)
-      .filter((id) => !attached.has(id));
+    const toInsert = found.map((q) => q.id).filter((id) => !attached.has(id));
 
     if (toInsert.length === 0) {
       return NextResponse.json(
@@ -190,16 +189,17 @@ export async function POST(
     }
 
     try {
-      await db.insert(quizQuestions).values(
-        toInsert.map((questionId) => ({ quizId, questionId })),
-      );
+      await db
+        .insert(quizQuestions)
+        .values(toInsert.map((questionId) => ({ quizId, questionId })));
     } catch (err) {
       if (isUniqueViolation(err)) {
         return NextResponse.json(
           {
             error: {
               code: "CONFLICT",
-              message: "One or more of the selected questions is already attached to the quiz",
+              message:
+                "One or more of the selected questions is already attached to the quiz",
             },
           },
           { status: 409 },

@@ -1,34 +1,11 @@
 import { and, asc, eq, isNotNull, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { ZodError } from "zod";
 
 import { errorResponse } from "@/lib/api/response";
 import { requireAuth } from "@/lib/auth/guard";
 import { getDb } from "@/lib/db";
-import {
-  courses,
-  jambSubjects,
-  quizAttempts,
-  quizzes,
-} from "@/lib/db/schema";
+import { courses, jambSubjects, quizAttempts, quizzes } from "@/lib/db/schema";
 import { heldQuerySchema } from "@/lib/validation/scores";
-
-function validationError(err: ZodError): NextResponse {
-  return NextResponse.json(
-    {
-      error: {
-        code: "VALIDATION_ERROR",
-        message: "Invalid input",
-        details: err.issues.map((i) => ({
-          field: i.path.join(".") || "query",
-          code: i.code,
-          message: i.message,
-        })),
-      },
-    },
-    { status: 422 },
-  );
-}
 
 /** GET /api/admin/scores/held?week=YYYY-MM-DD — held attempts grouped per quiz. */
 export async function GET(request: Request): Promise<NextResponse> {
@@ -39,7 +16,7 @@ export async function GET(request: Request): Promise<NextResponse> {
     const query = heldQuerySchema.safeParse({
       week: new URL(request.url).searchParams.get("week") ?? undefined,
     });
-    if (!query.success) return validationError(query.error);
+    if (!query.success) return errorResponse(query.error, "query");
     const week = query.data.week;
 
     const rows = await db

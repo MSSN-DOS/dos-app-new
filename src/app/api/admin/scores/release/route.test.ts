@@ -42,9 +42,7 @@ describe("POST /api/admin/scores/release", () => {
     stubUpdate(db, { id: 1 });
     stubInsert(db, []);
 
-    const res = await POST(
-      jsonRequest("http://localhost/x", "POST", { quizId: 10 }),
-    );
+    const res = await POST(jsonRequest("http://localhost/x", "POST", { quizId: 10 }));
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
       data: {
@@ -103,20 +101,20 @@ describe("POST /api/admin/scores/release", () => {
     stubUpdate(db, { id: 1 });
     stubInsert(db, []);
 
-    const res = await POST(
-      jsonRequest("http://localhost/x", "POST", { quizId: 10 }),
-    );
+    const res = await POST(jsonRequest("http://localhost/x", "POST", { quizId: 10 }));
     expect(res.status).toBe(200);
     const body = await res.json();
     // No eligible best score → nothing written for either metric
-    expect(body.data.recomputed[0]).toEqual({ weekStart: "2026-08-17", cgpaUsers: 0, postUtmeUsers: 0 });
+    expect(body.data.recomputed[0]).toEqual({
+      weekStart: "2026-08-17",
+      cgpaUsers: 0,
+      postUtmeUsers: 0,
+    });
   });
 
   it("returns 404 when there are no held attempts to release", async () => {
     stubSelect(db, [[]]);
-    const res = await POST(
-      jsonRequest("http://localhost/x", "POST", { quizId: 10 }),
-    );
+    const res = await POST(jsonRequest("http://localhost/x", "POST", { quizId: 10 }));
     expect(res.status).toBe(404);
     const body = await res.json();
     expect(body.error.code).toBe("NOT_FOUND");

@@ -92,21 +92,19 @@ describe("POST /api/teacher/questions/bulk", () => {
   it("keeps blank answers and options in row order for fill-in-gap items", async () => {
     stubSelect(db, [SCOPE]);
     const blankRows: Record<string, unknown>[] = [];
-    tx.insert.mockImplementation(
-      (table: unknown) => {
-        const name = getTableName(table as never);
-        return {
-          values: (v: Record<string, unknown> | Record<string, unknown>[]) => {
-            const rows = Array.isArray(v) ? v : [v];
-            if (name === "question_blanks") {
-              blankRows.push(...rows);
-              return { returning: async () => rows.map((r, i) => ({ id: 50 + i, ...r })) };
-            }
-            return { returning: async () => rows.map((r, i) => ({ id: 10 + i, ...r })) };
-          },
-        };
-      },
-    );
+    tx.insert.mockImplementation((table: unknown) => {
+      const name = getTableName(table as never);
+      return {
+        values: (v: Record<string, unknown> | Record<string, unknown>[]) => {
+          const rows = Array.isArray(v) ? v : [v];
+          if (name === "question_blanks") {
+            blankRows.push(...rows);
+            return { returning: async () => rows.map((r, i) => ({ id: 50 + i, ...r })) };
+          }
+          return { returning: async () => rows.map((r, i) => ({ id: 10 + i, ...r })) };
+        },
+      };
+    });
     const res = await POST(
       jsonRequest(URL, "POST", {
         questions: [
@@ -147,19 +145,16 @@ describe("POST /api/teacher/questions/bulk", () => {
   it("422s naming the exact row for a both-tracks violation in a later item", async () => {
     const res = await POST(
       jsonRequest(URL, "POST", {
-        questions: [
-          draftItem(),
-          draftItem({ jambSubjectId: 3 }),
-        ],
+        questions: [draftItem(), draftItem({ jambSubjectId: 3 })],
       }),
     );
     expect(res.status).toBe(422);
     const body = (await res.json()) as {
       error: { details: { field: string }[] };
     };
-    expect(
-      body.error.details.some((d) => d.field === "questions.1.jambSubjectId"),
-    ).toBe(true);
+    expect(body.error.details.some((d) => d.field === "questions.1.jambSubjectId")).toBe(
+      true,
+    );
   });
 
   it("422s on an unknown per-item status with a row-prefixed field", async () => {
@@ -203,5 +198,57 @@ describe("POST /api/teacher/questions/bulk", () => {
     const res = await POST(jsonRequest(URL, "POST", { questions: [draftItem()] }));
     expect(res.status).toBe(403);
     expect(db.transaction).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/teacher/questions/bulk — rich text is sanitised server-side", () => {
+  // Bulk import is the path most likely to be driven by a file rather than by the editor
+  // component, so it is the one most likely to bypass a client-side-only sanitiser. Every stem it
+  // stores renders through `dangerouslySetInnerHTML` in a student's attempt screen.
+  const SCOPE = [{ courseId: 2, jambSubjectId: null }];
+
+  async function insertStems(
+    items: Record<string, unknown>[],
+  ): Promise<Record<string, unknown>[]> {
+    stubSelect(db, [SCOPE]);
+    const stems: Record<string, unknown>[] = [];
+    tx.insert.mockImplementation(() => ({
+      values: (v: Record<string, unknown> | Record<string, unknown>[]) => {
+        const rows = Array.isArray(v) ? v : [v];
+        for (const row of rows) {
+          if ("bodyRichText" in row) stems.push(row);
+        }
+        return {
+          returning: async () =>
+            rows.map((r, i) => ({ id: 100 + i, ...r })),
+        };
+      },
+    }));
+
+    const res = await POST(jsonRequest(URL, "POST", { questions: items }));
+    expect(res.status).toBe(201);
+    return stems;
+  }
+
+  it("strips script and event handlers from every imported stem", async () => {
+    const stems = await insertStems([
+      draftItem({ bodyRichText: '<img src=x onerror="alert(1)">One' }),
+      publishedItem({ bodyRichText: "<script>alert(2)</script>Two" }),
+    ]);
+    expect(stems.map((s) => s.bodyRichText)).toEqual(["One", "Two"]);
+  });
+
+  it("strips javascript: URLs", async () => {
+    const stems = await insertStems([
+      draftItem({ bodyRichText: '<a href="javascript:alert(1)">click</a>' }),
+    ]);
+    expect(stems[0].bodyRichText).toBe("click");
+  });
+
+  it("keeps the sub/sup formatting the question editor depends on", async () => {
+    const stems = await insertStems([
+      draftItem({ bodyRichText: "Write H<sub>2</sub>O and CO<sup>2</sup>" }),
+    ]);
+    expect(stems[0].bodyRichText).toBe("Write H<sub>2</sub>O and CO<sup>2</sup>");
   });
 });

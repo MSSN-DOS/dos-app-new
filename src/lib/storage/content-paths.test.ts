@@ -96,6 +96,37 @@ describe("resourceFilePath", () => {
     );
   });
 
+  it("neutralises backslash traversal too, not just forward slashes", () => {
+    // A Windows-style separator is an equally valid escape on any platform that normalises it.
+    expect(resourceFilePath("resources/x/y", "..\\..\\secret.pdf")).toBe(
+      "resources/x/y/..-..-secret.pdf",
+    );
+  });
+
+  it("flattens an absolute path into one harmless segment", () => {
+    expect(resourceFilePath("resources/x/y", "/etc/shadow.pdf")).toBe(
+      "resources/x/y/-etc-shadow.pdf",
+    );
+  });
+
+  it("never emits a key ending in a separator, for a name made only of dots", () => {
+    // The one form that survives separator removal intact. It cannot traverse — there is no
+    // separator left to continue a climb with — but it would end the key in `/`.
+    expect(resourceFilePath("resources/x/y", "..")).toBe("resources/x/y/unnamed-file");
+    expect(resourceFilePath("resources/x/y", ".")).toBe("resources/x/y/unnamed-file");
+    expect(resourceFilePath("resources/x/y", "")).toBe("resources/x/y/unnamed-file");
+  });
+
+  it("keeps ordinary names, including dots inside them, untouched", () => {
+    // The dot handling must not eat legitimate names — an extension is a dot.
+    expect(resourceFilePath("resources/x/y", "notes.v2.final.pdf")).toBe(
+      "resources/x/y/notes.v2.final.pdf",
+    );
+    expect(resourceFilePath("resources/x/y", ".hidden-notes.pdf")).toBe(
+      "resources/x/y/.hidden-notes.pdf",
+    );
+  });
+
   it("exposes the bucket name", () => {
     expect(RESOURCES_BUCKET).toBe("resources");
   });

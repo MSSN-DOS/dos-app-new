@@ -1,7 +1,8 @@
-import fs from "node:fs";
 import process from "node:process";
 
 import postgres from "postgres";
+
+import { assertDevEnvironment } from "./assert-dev-environment";
 
 const KEEP_IDENTIFIERS = [
   "ADM/2026/001",
@@ -14,17 +15,13 @@ const KEEP_IDENTIFIERS = [
 const EXECUTE_FLAG = "--execute";
 const CONFIRM_FLAG = "--confirm=FLUSH_DEV_DATA";
 
-function loadEnvironment(): void {
-  if (fs.existsSync(".env.local")) process.loadEnvFile?.(".env.local");
-  if (fs.existsSync(".env")) process.loadEnvFile?.(".env");
-}
 
 function assertSafeExecution(): void {
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) throw new Error("DATABASE_URL is not set.");
-  if (process.env.NODE_ENV === "production") {
-    throw new Error("Refusing to flush while NODE_ENV=production.");
-  }
+  // Identify the database before doing anything else. The previous `NODE_ENV === "production"`
+  // check was false on every real invocation, because tsx does not set NODE_ENV. The guard also
+  // loads .env.local/.env itself, so this must not pre-check DATABASE_URL — reading it first sees
+  // an unloaded environment and fails on a perfectly good dev database.
+  assertDevEnvironment("flush-dev");
   if (process.argv.includes(EXECUTE_FLAG) && process.argv.includes(CONFIRM_FLAG) === false) {
     throw new Error(`Destructive mode requires ${CONFIRM_FLAG}.`);
   }
@@ -33,7 +30,6 @@ function assertSafeExecution(): void {
 type CountRow = { count: string };
 
 async function main(): Promise<void> {
-  loadEnvironment();
   assertSafeExecution();
 
   const databaseUrl = process.env.DATABASE_URL;

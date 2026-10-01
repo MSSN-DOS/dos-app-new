@@ -35,10 +35,9 @@ describe("PATCH /api/teacher/topics/[id]", () => {
   it("updates the topic and returns it", async () => {
     stubSelect(db, [SCOPE]);
     stubUpdate(db, { id: 5, title: "Trigonometry", courseId: 2, createdBy: 5 });
-    const res = await PATCH(
-      jsonRequest("http://localhost/x/5", "PATCH", validBody),
-      { params: Promise.resolve({ id: "5" }) },
-    );
+    const res = await PATCH(jsonRequest("http://localhost/x/5", "PATCH", validBody), {
+      params: Promise.resolve({ id: "5" }),
+    });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toEqual({ id: 5, title: "Trigonometry", courseId: 2, createdBy: 5 });
@@ -48,10 +47,9 @@ describe("PATCH /api/teacher/topics/[id]", () => {
   it("returns 404 when the topic does not exist", async () => {
     stubSelect(db, [SCOPE]);
     stubUpdate(db, null);
-    const res = await PATCH(
-      jsonRequest("http://localhost/x/99", "PATCH", validBody),
-      { params: Promise.resolve({ id: "99" }) },
-    );
+    const res = await PATCH(jsonRequest("http://localhost/x/99", "PATCH", validBody), {
+      params: Promise.resolve({ id: "99" }),
+    });
     expect(res.status).toBe(404);
     const body = await res.json();
     expect(body.error.code).toBe("NOT_FOUND");
@@ -59,19 +57,17 @@ describe("PATCH /api/teacher/topics/[id]", () => {
 
   it("returns 403 when the caller does not teach the course", async () => {
     stubSelect(db, [[]]);
-    const res = await PATCH(
-      jsonRequest("http://localhost/x/5", "PATCH", validBody),
-      { params: Promise.resolve({ id: "5" }) },
-    );
+    const res = await PATCH(jsonRequest("http://localhost/x/5", "PATCH", validBody), {
+      params: Promise.resolve({ id: "5" }),
+    });
     expect(res.status).toBe(403);
     expect(db.update).not.toHaveBeenCalled();
   });
 
   it.each(["abc", "0", "-3"])("returns 400 for invalid id %s", async (id) => {
-    const res = await PATCH(
-      jsonRequest(`http://localhost/x/${id}`, "PATCH", validBody),
-      { params: Promise.resolve({ id }) },
-    );
+    const res = await PATCH(jsonRequest(`http://localhost/x/${id}`, "PATCH", validBody), {
+      params: Promise.resolve({ id }),
+    });
     expect(res.status).toBe(400);
   });
 
@@ -82,10 +78,9 @@ describe("PATCH /api/teacher/topics/[id]", () => {
     ["missing courseId", { title: "Trigonometry" }],
     ["zero courseId", { title: "Trigonometry", courseId: 0 }],
   ])("returns 422 with details for %s", async (_label, body) => {
-    const res = await PATCH(
-      jsonRequest("http://localhost/x/5", "PATCH", body),
-      { params: Promise.resolve({ id: "5" }) },
-    );
+    const res = await PATCH(jsonRequest("http://localhost/x/5", "PATCH", body), {
+      params: Promise.resolve({ id: "5" }),
+    });
     expect(res.status).toBe(422);
     const parsed = await res.json();
     expect(parsed.error.code).toBe("VALIDATION_ERROR");
@@ -94,19 +89,17 @@ describe("PATCH /api/teacher/topics/[id]", () => {
 
   it("returns 401 when unauthenticated", async () => {
     requireAuth.mockRejectedValueOnce(new UnauthorizedError("Missing token"));
-    const res = await PATCH(
-      jsonRequest("http://localhost/x/5", "PATCH", validBody),
-      { params: Promise.resolve({ id: "5" }) },
-    );
+    const res = await PATCH(jsonRequest("http://localhost/x/5", "PATCH", validBody), {
+      params: Promise.resolve({ id: "5" }),
+    });
     expect(res.status).toBe(401);
   });
 
   it("returns 403 when the caller is not an admin or teacher", async () => {
     requireAuth.mockRejectedValueOnce(new ForbiddenError("Role not allowed"));
-    const res = await PATCH(
-      jsonRequest("http://localhost/x/5", "PATCH", validBody),
-      { params: Promise.resolve({ id: "5" }) },
-    );
+    const res = await PATCH(jsonRequest("http://localhost/x/5", "PATCH", validBody), {
+      params: Promise.resolve({ id: "5" }),
+    });
     expect(res.status).toBe(403);
   });
 });

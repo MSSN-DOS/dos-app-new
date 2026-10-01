@@ -6,10 +6,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { ApiError, apiFetch } from "@/lib/auth/client-fetch";
-import {
-  pickSessionForDate,
-  type SessionDates,
-} from "@/lib/semester/calendar";
+import { type SessionDates } from "@/lib/semester/calendar";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -151,7 +148,15 @@ export function SessionManager() {
   });
 
   const sessions = sessionsQuery.data ?? [];
-  const resolved = pickSessionForDate(sessions, new Date());
+  // Which session is *actually* live, resolved server-side by `getActiveSemester()`. This used to
+  // be `pickSessionForDate(sessions, new Date())` in the browser, which ignores the manual
+  // override — so an Admin pinning last year's session saw this row still badged "Active now".
+  const settingsQuery = useQuery({
+    queryKey: ["admin", "semester-settings"],
+    queryFn: () =>
+      apiFetch<{ data: { active: { sessionId: number } | null } }>("/admin/settings/semester"),
+  });
+  const activeSessionId = settingsQuery.data?.data.active?.sessionId ?? null;
 
   const openAdd = () => {
     setFormMode({ kind: "add" });
@@ -255,7 +260,7 @@ export function SessionManager() {
       {sessionsQuery.isSuccess && sessions.length > 0 && (
         <ul className="space-y-3">
           {sessions.map((session) => {
-            const isResolved = resolved?.session.id === session.id;
+            const isResolved = activeSessionId === session.id;
             return (
               <li key={session.id}>
                 <div

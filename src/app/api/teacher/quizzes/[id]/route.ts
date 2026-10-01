@@ -15,23 +15,6 @@ import {
 } from "@/lib/db/schema";
 import { quizUpdateSchema } from "@/lib/validation/quizzes";
 
-function validationError(err: ZodError): NextResponse {
-  return NextResponse.json(
-    {
-      error: {
-        code: "VALIDATION_ERROR",
-        message: "Invalid input",
-        details: err.issues.map((i) => ({
-          field: i.path.join(".") || "body",
-          code: i.code,
-          message: i.message,
-        })),
-      },
-    },
-    { status: 422 },
-  );
-}
-
 function parseId(raw: string): number | null {
   const id = Number(raw);
   if (!Number.isInteger(id) || id < 1) return null;
@@ -157,7 +140,7 @@ export async function PATCH(
 
     if (existing.quizType === "course") {
       if (input.weekStart == null) {
-        return validationError(
+        return errorResponse(
           new ZodError([
             {
               code: "custom",
@@ -168,7 +151,7 @@ export async function PATCH(
         );
       }
       if (input.questionCount !== 50) {
-        return validationError(
+        return errorResponse(
           new ZodError([
             {
               code: "custom",
@@ -179,7 +162,7 @@ export async function PATCH(
         );
       }
     } else if (input.weekStart != null) {
-      return validationError(
+      return errorResponse(
         new ZodError([
           {
             code: "custom",
@@ -201,16 +184,13 @@ export async function PATCH(
         passMark: input.passMark,
         allowMultipleAttempts: input.allowMultipleAttempts,
         loseFocusPolicy: input.loseFocusPolicy,
-        ...(input.weekStart !== undefined
-          ? { weekStart: input.weekStart }
-          : {}),
+        ...(input.weekStart !== undefined ? { weekStart: input.weekStart } : {}),
       })
       .where(eq(quizzes.id, id))
       .returning();
 
     return NextResponse.json(row);
   } catch (err) {
-    if (err instanceof ZodError) return validationError(err);
     return errorResponse(err);
   }
 }

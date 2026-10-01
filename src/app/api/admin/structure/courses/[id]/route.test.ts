@@ -49,7 +49,13 @@ const validBody = {
 };
 
 describe("PATCH /api/admin/structure/courses/[id]", () => {
+  // Every PATCH test needs the offering-identity clash lookup stubbed: the handler checks for a
+  // colliding course (same code + level + session + semester, excluding this row) before writing,
+  // and an unstubbed `db.select` would throw and turn every happy path into a 500.
+  const stubNoClash = (): void => stubSelect(db, [[]]);
+
   it("updates the course and set-replaces its interfaculty links", async () => {
+    stubNoClash();
     stubUpdate(db, updatedRow);
     stubDelete(db, null);
     const insertedLinks: Array<{ courseId: number; facultyId: number }> = [];
@@ -61,10 +67,9 @@ describe("PATCH /api/admin/structure/courses/[id]", () => {
         },
       }),
     }));
-    const res = await PATCH(
-      jsonRequest("http://localhost/x/5", "PATCH", validBody),
-      { params: Promise.resolve({ id: "5" }) },
-    );
+    const res = await PATCH(jsonRequest("http://localhost/x/5", "PATCH", validBody), {
+      params: Promise.resolve({ id: "5" }),
+    });
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({ ...updatedRow, facultyIds: [3, 4] });
     expect(insertedLinks).toEqual([
@@ -74,6 +79,7 @@ describe("PATCH /api/admin/structure/courses/[id]", () => {
   });
 
   it("clears the interfaculty links when the scope changes away from interfaculty", async () => {
+    stubNoClash();
     stubUpdate(db, { ...updatedRow, scopeType: "general" });
     let deleteCalled = false;
     db.delete.mockImplementation(() => ({
@@ -87,7 +93,11 @@ describe("PATCH /api/admin/structure/courses/[id]", () => {
     const insertSpy = vi.fn();
     db.insert.mockImplementation(() => ({ values: insertSpy }));
     const res = await PATCH(
-      jsonRequest("http://localhost/x/5", "PATCH", { ...validBody, scopeType: "general", facultyIds: undefined }),
+      jsonRequest("http://localhost/x/5", "PATCH", {
+        ...validBody,
+        scopeType: "general",
+        facultyIds: undefined,
+      }),
       { params: Promise.resolve({ id: "5" }) },
     );
     expect(res.status).toBe(200);
@@ -97,21 +107,54 @@ describe("PATCH /api/admin/structure/courses/[id]", () => {
   });
 
   it("returns 404 when the course does not exist", async () => {
+    stubNoClash();
     stubUpdate(db, null);
-    const res = await PATCH(
-      jsonRequest("http://localhost/x/99", "PATCH", validBody),
-      { params: Promise.resolve({ id: "99" }) },
-    );
+    const res = await PATCH(jsonRequest("http://localhost/x/99", "PATCH", validBody), {
+      params: Promise.resolve({ id: "99" }),
+    });
     expect(res.status).toBe(404);
     const body = await res.json();
     expect(body.error.code).toBe("NOT_FOUND");
   });
 
-  it.each(["abc", "0", "-3"])("returns 400 for invalid id %s", async (id) => {
+  it("returns 409 when the change would collide with another offering of the same course", async () => {
+    // The R-3 case: a PATCH moving an offering onto an identity that another row already holds.
+    // POST has always guarded this; without the matching check here, the duplicate is written and
+    // no DB constraint catches it.
+    stubSelect(db, [[{ id: 7 }]]);
+    const updateSpy = vi.fn();
+    db.update.mockImplementation(() => updateSpy);
+    const res = await PATCH(jsonRequest("http://localhost/x/5", "PATCH", validBody), {
+      params: Promise.resolve({ id: "5" }),
+    });
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error.code).toBe("CONFLICT");
+    // The message has to say *what* collided, so an admin can tell which offering to look at.
+    expect(body.error.message).toMatch(/MAT 101/);
+    expect(updateSpy).not.toHaveBeenCalled();
+  });
+
+  it("allows a PATCH that does not change the offering identity", async () => {
+    // `ne(courses.id, id)` is what stops a title-only edit tripping the guard — the row being
+    // edited always matches itself on the identity columns, so without the exclusion every PATCH
+    // would 409 against its own row.
+    stubNoClash();
+    stubUpdate(db, { ...updatedRow, title: "Renamed" });
+    stubDelete(db, null);
+    db.insert.mockImplementation(() => ({ values: () => ({ returning: async () => [] }) }));
     const res = await PATCH(
-      jsonRequest(`http://localhost/x/${id}`, "PATCH", validBody),
-      { params: Promise.resolve({ id }) },
+      jsonRequest("http://localhost/x/5", "PATCH", { ...validBody, title: "Renamed" }),
+      { params: Promise.resolve({ id: "5" }) },
     );
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({ title: "Renamed" });
+  });
+
+  it.each(["abc", "0", "-3"])("returns 400 for invalid id %s", async (id) => {
+    const res = await PATCH(jsonRequest(`http://localhost/x/${id}`, "PATCH", validBody), {
+      params: Promise.resolve({ id }),
+    });
     expect(res.status).toBe(400);
   });
 
@@ -133,19 +176,17 @@ describe("PATCH /api/admin/structure/courses/[id]", () => {
 
   it("returns 401 when unauthenticated", async () => {
     requireAuth.mockRejectedValueOnce(new UnauthorizedError("Missing token"));
-    const res = await PATCH(
-      jsonRequest("http://localhost/x/5", "PATCH", validBody),
-      { params: Promise.resolve({ id: "5" }) },
-    );
+    const res = await PATCH(jsonRequest("http://localhost/x/5", "PATCH", validBody), {
+      params: Promise.resolve({ id: "5" }),
+    });
     expect(res.status).toBe(401);
   });
 
   it("returns 403 when the caller is not an admin", async () => {
     requireAuth.mockRejectedValueOnce(new ForbiddenError("Admin role required"));
-    const res = await PATCH(
-      jsonRequest("http://localhost/x/5", "PATCH", validBody),
-      { params: Promise.resolve({ id: "5" }) },
-    );
+    const res = await PATCH(jsonRequest("http://localhost/x/5", "PATCH", validBody), {
+      params: Promise.resolve({ id: "5" }),
+    });
     expect(res.status).toBe(403);
   });
 });

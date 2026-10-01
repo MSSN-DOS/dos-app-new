@@ -59,7 +59,10 @@ export async function GET(request: Request): Promise<NextResponse> {
       .where(and(...attemptConds))
       .orderBy(asc(quizAttempts.quizId));
 
-    const tallies = new Map<number, { attempts: number; released: number; held: number }>();
+    const tallies = new Map<
+      number,
+      { attempts: number; released: number; held: number }
+    >();
     for (const row of attemptRows) {
       const tally = tallies.get(row.quizId) ?? { attempts: 0, released: 0, held: 0 };
       tally.attempts += 1;

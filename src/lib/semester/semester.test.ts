@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
+import { and, eq, type SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
+import { courses } from "@/lib/db/schema/courses";
 import {
   pickSessionForDate,
   resolveSemesterWithinSession,
@@ -8,6 +11,18 @@ import { activeCourseFilter, getActiveSemester } from "./index";
 
 function utcDate(iso: string): Date {
   return new Date(`${iso}T00:00:00Z`);
+}
+
+/**
+ * A real instant in time, not a calendar date.
+ *
+ * `utcDate()` deliberately pins everything to `T00:00:00Z`, which means the WAT offset
+ * (`watDay`, +1h) can never change the day — so a whole suite built on `utcDate` passes whether
+ * or not the offset exists. `atUtc` is how a test gets a time of day that makes the offset
+ * observable: 23:00 UTC is already the next calendar day in Lagos (UTC+1).
+ */
+function atUtc(iso: string): Date {
+  return new Date(iso);
 }
 
 /** The session the whole system shipped with, as it was hardcoded before 2026-09-30. */
@@ -58,6 +73,38 @@ describe("resolveSemesterWithinSession", () => {
     expect(resolveSemesterWithinSession(utcDate("2026-09-30"), S2025)).toBe("rain");
     expect(resolveSemesterWithinSession(utcDate("2026-10-19"), S2026)).toBe("harmattan");
   });
+
+  it("resolves the WAT calendar day, not the UTC one", () => {
+    // 23:00 UTC on the day before Rain starts is already 00:00 in Lagos — Rain's first day. A
+    // UTC-based comparison would still call this Harmattan and hide Rain for its first hour.
+    // This is the only boundary `resolveSemesterWithinSession` can observe the offset at,
+    // because `rainStart` is the sole comparison it makes.
+    expect(resolveSemesterWithinSession(atUtc("2026-02-22T23:00:00Z"), S2025)).toBe("rain");
+
+    // One minute earlier it is still 23:59 the previous evening in Lagos, so Harmattan holds.
+    expect(resolveSemesterWithinSession(atUtc("2026-02-22T22:59:00Z"), S2025)).toBe("harmattan");
+  });
+
+  it("rolls the WAT day over at 23:00 UTC, including the year", () => {
+    // A session whose Rain starts exactly on New Year's Day, so the rollover has to carry the
+    // year and not just the month.
+    const newYearRain: SessionDates = {
+      id: 9,
+      label: "2099/00",
+      harmattanStart: "2099-01-01",
+      harmattanEnd: "2099-06-30",
+      rainStart: "2100-01-01",
+      rainEnd: "2100-07-31",
+    };
+
+    // 2099-12-31T23:00Z is 2100-01-01 00:00 in Lagos: Rain.
+    expect(resolveSemesterWithinSession(atUtc("2099-12-31T23:00:00Z"), newYearRain)).toBe("rain");
+
+    // 22:59Z has not rolled yet, so Harmattan still holds.
+    expect(resolveSemesterWithinSession(atUtc("2099-12-31T22:59:00Z"), newYearRain)).toBe(
+      "harmattan",
+    );
+  });
 });
 
 describe("pickSessionForDate", () => {
@@ -100,6 +147,22 @@ describe("pickSessionForDate", () => {
     expect(pickSessionForDate([S2025, S2026], utcDate("2026-10-19"))).toEqual({
       session: S2026,
       semester: "harmattan",
+    });
+  });
+
+  it("switches sessions on the WAT day, not the UTC one", () => {
+    // Harmattan 2026/27 opens 2026-10-19. At 23:00 UTC on the 18th it is already the 19th in
+    // Lagos, so the new session is live. A UTC-day comparison would keep serving 2025/26 for
+    // that final hour — and with no other session started, would report "no session at all".
+    expect(pickSessionForDate([S2025, S2026], atUtc("2026-10-18T23:00:00Z"))).toEqual({
+      session: S2026,
+      semester: "harmattan",
+    });
+
+    // One minute earlier the 18th is still the 18th in Lagos, so 2025/26 is still current.
+    expect(pickSessionForDate([S2025, S2026], atUtc("2026-10-18T22:59:00Z"))).toEqual({
+      session: S2025,
+      semester: "rain",
     });
   });
 
@@ -195,24 +258,60 @@ describe("getActiveSemester", () => {
 });
 
 describe("activeCourseFilter", () => {
+  /**
+   * Render a SQL fragment to its Postgres text, so assertions are on behaviour not existence.
+   *
+   * `and()`/`or()` are typed `SQL | undefined`, so this accepts `undefined` and renders it as a
+   * visible marker instead of throwing. That way a test cannot accidentally pass by rendering
+   * nothing — `expect(render(x)).toContain("false")` fails loudly on `"<undefined>"`.
+   */
+  const render = (fragment: SQL | undefined): string =>
+    fragment === undefined ? "<undefined>" : new PgDialect().sqlToQuery(fragment).sql;
+
   it("matches on semester *and* session, not semester alone", () => {
     // Two offerings of the same course differ only by session id. A semester-only filter would
     // show a 2025/26 student the 2026/27 quizzes, or vice versa.
-    const filter = activeCourseFilter({
-      ok: true,
-      semester: "rain",
-      sessionId: 1,
-      sessionLabel: "2025/26",
-      source: "auto",
-    });
-    expect(filter).toBeDefined();
+    const sql = render(
+      activeCourseFilter({
+        ok: true,
+        semester: "rain",
+        sessionId: 1,
+        sessionLabel: "2025/26",
+        source: "auto",
+      }),
+    );
+
+    // Both column predicates must be present. Asserting on the rendered SQL rather than on
+    // `toBeDefined()` is the point: deleting either predicate used to leave CI green.
+    expect(sql).toMatch(/"semester" = \$/);
+    expect(sql).toMatch(/"session_id" = \$/);
+    // The session id is the easy one to drop, so pin the value too.
+    const params = new PgDialect().sqlToQuery(
+      activeCourseFilter({ ok: true, semester: "rain", sessionId: 7, sessionLabel: "2025/26", source: "auto" }),
+    ).params;
+    expect(params).toEqual(["rain", 7]);
   });
 
-  it("matches nothing when there is no active session", () => {
-    // Drizzle's and()/or() drop undefined arguments, so returning undefined here is what makes
-    // every caller fall through to an empty result rather than an unfiltered one.
-    expect(
+  it("fails CLOSED when there is no active session, keeping the predicate in the query", () => {
+    // The load-bearing case. Drizzle's and()/or() *drop* `undefined` arguments
+    // (drizzle-orm/sql/expressions/conditions.js), so returning undefined here would not mean
+    // "match nothing" — it would remove the session filter from the query entirely and return
+    // every course at the caller's other constraints, across all sessions and both semesters.
+    const filter = activeCourseFilter({ ok: false, reason: "no-session", source: "auto" });
+
+    expect(filter).not.toBeUndefined();
+    expect(render(filter)).toBe("false");
+  });
+
+  it("stays closed once combined with a caller's other conditions", () => {
+    // `and()` keeping `false` is what makes the guarantee hold at the call sites, where the
+    // fragment is never used alone.
+    const combined = and(
+      eq(courses.levelId, 3),
       activeCourseFilter({ ok: false, reason: "no-session", source: "auto" }),
-    ).toBeUndefined();
+      eq(courses.id, 9),
+    );
+
+    expect(render(combined)).toContain("false");
   });
 });

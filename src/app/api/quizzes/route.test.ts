@@ -8,15 +8,8 @@ vi.mock("@/lib/auth/guard", () => ({ requireAuth }));
 vi.mock("@/lib/db", () => ({ getDb: () => db }));
 
 import { GET } from "./route";
-import {
-  ForbiddenError,
-  UnauthorizedError,
-} from "@/lib/auth/errors";
-import {
-  jsonRequest,
-  makeDbMock,
-  stubSelect,
-} from "@/lib/testing/route-test";
+import { ForbiddenError, UnauthorizedError } from "@/lib/auth/errors";
+import { jsonRequest, makeDbMock, stubSelect } from "@/lib/testing/route-test";
 import type { DbMock } from "@/lib/testing/route-test";
 
 let db: DbMock;
@@ -135,7 +128,9 @@ describe("GET /api/quizzes", () => {
         return {
           from: () => ({
             orderBy: () => ({
-              limit: async () => [{ mode: "auto", manualOverride: null, manualOverrideSessionId: null }],
+              limit: async () => [
+                { mode: "auto", manualOverride: null, manualOverrideSessionId: null },
+              ],
             }),
           }),
         };

@@ -147,9 +147,10 @@ export async function GET(request: Request) {
       // Videos are reference material, not semester-bound coursework — a recorded lecture is
       // still worth watching after the semester rolls over, so video rows skip the
       // active-semester filter that PDFs and articles still obey (Board decision 2026-09-17).
-      // `activeCourseFilter` returns undefined when no session is active; `or()` drops it,
-      // leaving video reachable and semester-bound PDFs/articles hidden — which is the correct
-      // degenerate case for a portal with no calendar entered.
+      // `activeCourseFilter` is fail-closed: with no calendar entered it is `false`, so this
+      // reduces to `type = 'video'` — video stays reachable and semester-bound PDFs/articles
+      // stay hidden, which is the correct degenerate case. That outcome is now by construction
+      // rather than a side effect of the filter being dropped.
       or(eq(contentItems.type, "video"), activeCourseFilter(activeSemester)),
     ];
     if (courseIdFilter !== undefined) {
@@ -188,7 +189,9 @@ interface ResourceRow {
 // URL instead of a permanent public link. Video rows carry a normalised watch/embed pair.
 // Article bodies pass through as-is. Branches on `type` explicitly, never on the string's
 // shape (DESIGN.md §6).
-async function withSignedUrls<T extends ResourceRow>(rows: T[]): Promise<Record<string, unknown>[]> {
+async function withSignedUrls<T extends ResourceRow>(
+  rows: T[],
+): Promise<Record<string, unknown>[]> {
   return Promise.all(
     rows.map(async ({ bodyOrFileUrl: storedValue, ...row }) => {
       if (row.type === "video") {

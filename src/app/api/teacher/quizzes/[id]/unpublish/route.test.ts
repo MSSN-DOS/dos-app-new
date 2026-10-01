@@ -2,7 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { POST } from "./route";
 import { ForbiddenError, UnauthorizedError } from "@/lib/auth/errors";
-import { jsonRequest, makeDbMock, stubSelect, stubUpdate } from "@/lib/testing/route-test";
+import {
+  jsonRequest,
+  makeDbMock,
+  stubSelect,
+  stubUpdate,
+} from "@/lib/testing/route-test";
 
 const { requireAuthMock, getDbMock } = vi.hoisted(() => ({
   requireAuthMock: vi.fn(),

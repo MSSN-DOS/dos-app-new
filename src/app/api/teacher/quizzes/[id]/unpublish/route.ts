@@ -80,8 +80,7 @@ export async function POST(
         {
           error: {
             code: "CONFLICT",
-            message:
-              `This quiz has ${released.count} released score(s). Released results count toward CGPA and the Post-UTME projection, so this quiz is now permanently frozen.`,
+            message: `This quiz has ${released.count} released score(s). Released results count toward CGPA and the Post-UTME projection, so this quiz is now permanently frozen.`,
           },
         },
         { status: 409 },

@@ -65,10 +65,7 @@ export async function DELETE(
     const deleted = await db
       .delete(quizQuestions)
       .where(
-        and(
-          eq(quizQuestions.quizId, quizId),
-          eq(quizQuestions.questionId, questionId),
-        ),
+        and(eq(quizQuestions.quizId, quizId), eq(quizQuestions.questionId, questionId)),
       )
       .returning();
 

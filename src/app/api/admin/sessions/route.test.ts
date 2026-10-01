@@ -103,7 +103,9 @@ describe("POST /api/admin/sessions", () => {
   });
 
   it("returns 422 with a named field for a malformed label", async () => {
-    const res = await POST(jsonRequest("http://localhost/x", "POST", { ...SESSION, label: "2026" }));
+    const res = await POST(
+      jsonRequest("http://localhost/x", "POST", { ...SESSION, label: "2026" }),
+    );
     expect(res.status).toBe(422);
     const body = await res.json();
     expect(body.error.code).toBe("VALIDATION_ERROR");
@@ -140,7 +142,10 @@ describe("POST /api/admin/sessions", () => {
 
   it("returns 422 for a date that is not YYYY-MM-DD", async () => {
     const res = await POST(
-      jsonRequest("http://localhost/x", "POST", { ...SESSION, harmattanStart: "19/10/2026" }),
+      jsonRequest("http://localhost/x", "POST", {
+        ...SESSION,
+        harmattanStart: "19/10/2026",
+      }),
     );
     expect(res.status).toBe(422);
     expect((await res.json()).error.details).toEqual(

@@ -5,13 +5,7 @@ import { errorResponse } from "@/lib/api/response";
 import { requireAuth } from "@/lib/auth/guard";
 import { forbiddenUnlessOwned } from "@/lib/auth/ownership";
 import { getDb } from "@/lib/db";
-import {
-  courses,
-  jambSubjects,
-  quizAttempts,
-  quizzes,
-  users,
-} from "@/lib/db/schema";
+import { courses, jambSubjects, quizAttempts, quizzes, users } from "@/lib/db/schema";
 
 function parseId(raw: string): number | null {
   const id = Number(raw);
@@ -198,7 +192,9 @@ export async function GET(
         // Both rate stats are over released attempts only — a held score is not known here.
         avgScore:
           releasedScores.length > 0
-            ? round2(releasedScores.reduce((sum, s) => sum + s, 0) / releasedScores.length)
+            ? round2(
+                releasedScores.reduce((sum, s) => sum + s, 0) / releasedScores.length,
+              )
             : null,
         passRate:
           releasedScores.length > 0

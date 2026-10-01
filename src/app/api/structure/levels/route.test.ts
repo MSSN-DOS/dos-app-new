@@ -8,7 +8,12 @@ vi.mock("@/lib/auth/guard", () => ({ requireAuth }));
 vi.mock("@/lib/db", () => ({ getDb }));
 
 import { GET } from "./route";
-import { jsonRequest, makeDbMock, stubSelect, type DbMock } from "@/lib/testing/route-test";
+import {
+  jsonRequest,
+  makeDbMock,
+  stubSelect,
+  type DbMock,
+} from "@/lib/testing/route-test";
 
 let db: DbMock;
 
@@ -20,11 +25,19 @@ beforeEach(() => {
 
 describe("GET /api/structure/levels", () => {
   it("returns 200 with all levels when no departmentId filter is given", async () => {
-    stubSelect(db, [[{ id: 1, value: 100 }, { id: 2, value: 200 }]]);
+    stubSelect(db, [
+      [
+        { id: 1, value: 100 },
+        { id: 2, value: 200 },
+      ],
+    ]);
     const res = await GET(jsonRequest("http://localhost/x", "GET"));
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
-      data: [{ id: 1, value: 100 }, { id: 2, value: 200 }],
+      data: [
+        { id: 1, value: 100 },
+        { id: 2, value: 200 },
+      ],
     });
     expect(requireAuth).toHaveBeenCalledWith(expect.anything());
   });

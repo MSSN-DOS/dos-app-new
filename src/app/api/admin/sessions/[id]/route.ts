@@ -1,6 +1,5 @@
 import { and, eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { ZodError } from "zod";
 
 import { errorResponse } from "@/lib/api/response";
 import { requireAuth } from "@/lib/auth/guard";
@@ -9,23 +8,6 @@ import { academicSessions } from "@/lib/db/schema/academic-sessions";
 import { courses } from "@/lib/db/schema/courses";
 import { semesterSettings } from "@/lib/db/schema/semester";
 import { academicSessionUpdateSchema } from "@/lib/validation/academic-sessions";
-
-function validationError(err: ZodError): NextResponse {
-  return NextResponse.json(
-    {
-      error: {
-        code: "VALIDATION_ERROR",
-        message: "Invalid input",
-        details: err.issues.map((i) => ({
-          field: i.path.join(".") || "body",
-          code: i.code,
-          message: i.message,
-        })),
-      },
-    },
-    { status: 422 },
-  );
-}
 
 function parseId(raw: string): number | null {
   const id = Number(raw);
@@ -94,7 +76,7 @@ export async function PATCH(
       raw = null;
     }
     const parsed = academicSessionUpdateSchema.safeParse(raw);
-    if (!parsed.success) return validationError(parsed.error);
+    if (!parsed.success) return errorResponse(parsed.error);
 
     const db = getDb();
     const data = parsed.data;
@@ -103,7 +85,12 @@ export async function PATCH(
       const [clash] = await db
         .select({ id: academicSessions.id })
         .from(academicSessions)
-        .where(and(eq(academicSessions.label, data.label), sql`${academicSessions.id} <> ${id}`))
+        .where(
+          and(
+            eq(academicSessions.label, data.label),
+            sql`${academicSessions.id} <> ${id}`,
+          ),
+        )
         .limit(1);
       if (clash) {
         return NextResponse.json(
@@ -247,7 +234,8 @@ export async function DELETE(
         {
           error: {
             code: "CONFLICT",
-            message: "That session was given a course while you were deleting it. Reload and try again.",
+            message:
+              "That session was given a course while you were deleting it. Reload and try again.",
           },
         },
         { status: 409 },

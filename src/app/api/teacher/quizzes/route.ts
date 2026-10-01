@@ -1,6 +1,5 @@
 import { and, asc, eq, type SQL } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { ZodError } from "zod";
 
 import { errorResponse } from "@/lib/api/response";
 import { paginate, parsePagination } from "@/lib/api/pagination";
@@ -11,23 +10,6 @@ import { getTeachingScope, isTrackAllowed } from "@/lib/auth/teaching-scope";
 import { getDb } from "@/lib/db";
 import { courses, jambSubjects, quizzes } from "@/lib/db/schema";
 import { quizCreateSchema } from "@/lib/validation/quizzes";
-
-function validationError(err: ZodError): NextResponse {
-  return NextResponse.json(
-    {
-      error: {
-        code: "VALIDATION_ERROR",
-        message: "Invalid input",
-        details: err.issues.map((i) => ({
-          field: i.path.join(".") || "body",
-          code: i.code,
-          message: i.message,
-        })),
-      },
-    },
-    { status: 422 },
-  );
-}
 
 export async function GET(request: Request): Promise<NextResponse> {
   try {
@@ -130,7 +112,6 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     return NextResponse.json(row, { status: 201 });
   } catch (err) {
-    if (err instanceof ZodError) return validationError(err);
     return errorResponse(err);
   }
 }

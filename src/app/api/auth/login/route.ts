@@ -1,6 +1,5 @@
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { ZodError } from "zod";
 
 import { getDb } from "@/lib/db";
 import { roles, users } from "@/lib/db/schema";
@@ -12,23 +11,6 @@ import { checkRateLimit, rateLimitKey } from "@/lib/auth/rate-limit";
 import { loginSchema } from "@/lib/validation/auth";
 import type { RoleName } from "@/lib/auth/client-fetch";
 
-function validationError(err: ZodError): NextResponse {
-  return NextResponse.json(
-    {
-      error: {
-        code: "VALIDATION_ERROR",
-        message: "Invalid input",
-        details: err.issues.map((i) => ({
-          field: i.path.join(".") || "body",
-          code: i.code,
-          message: i.message,
-        })),
-      },
-    },
-    { status: 422 },
-  );
-}
-
 export async function POST(request: Request): Promise<NextResponse> {
   try {
     const json = await request.json();
@@ -38,7 +20,9 @@ export async function POST(request: Request): Promise<NextResponse> {
     if (!rl.allowed) {
       const retryAfter = Math.ceil((rl.retryAfterMs ?? 0) / 1000);
       return NextResponse.json(
-        { error: { code: "RATE_LIMITED", message: "Too many attempts. Try again later." } },
+        {
+          error: { code: "RATE_LIMITED", message: "Too many attempts. Try again later." },
+        },
         { status: 429, headers: { "Retry-After": String(retryAfter) } },
       );
     }
@@ -76,7 +60,6 @@ export async function POST(request: Request): Promise<NextResponse> {
       { status: 200 },
     );
   } catch (err) {
-    if (err instanceof ZodError) return validationError(err);
     return errorResponse(err);
   }
 }

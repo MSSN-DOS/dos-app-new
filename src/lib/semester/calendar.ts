@@ -96,12 +96,15 @@ export function pickSessionForDate(
 
   if (started.length === 0) return null;
 
+  // The session whose full window spans today, if one does. `started` is ascending by start date
+  // and `find` returns the first match, so with the non-overlapping calendar this is the only
+  // candidate; were two sessions ever to overlap, this would take the earlier one.
   const containing = started.find(
     (s) => s.harmattanStart <= today && today <= s.rainEnd,
   );
-  // `containing` is the last session whose window has not closed: sessions are sorted by start
-  // date, so the newest one that has started is either covering today or is the one that just
-  // ended. Either way it is the right fallback.
+  // Fallback when today sits in the gap after a session's Rain semester ended: the newest session
+  // that has started. That is the closest one that could be the intended current session, and
+  // `resolveSemesterWithinSession` below then reports the gap-fallback semester for it.
   const session = containing ?? started[started.length - 1]!;
   return { session, semester: resolveSemesterWithinSession(date, session) };
 }

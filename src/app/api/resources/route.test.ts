@@ -12,11 +12,7 @@ vi.mock("@/lib/storage/supabase-storage", () => ({ createResourceSignedUrl }));
 
 import { GET } from "./route";
 import { ForbiddenError, UnauthorizedError } from "@/lib/auth/errors";
-import {
-  jsonRequest,
-  makeDbMock,
-  stubSelect,
-} from "@/lib/testing/route-test";
+import { jsonRequest, makeDbMock, stubSelect } from "@/lib/testing/route-test";
 import type { DbMock } from "@/lib/testing/route-test";
 
 let db: DbMock;
@@ -137,9 +133,7 @@ describe("GET /api/resources — student branch", () => {
     const res = await GET(jsonRequest(url()));
     expect(res.status).toBe(404);
     const body: unknown = await res.json();
-    expect((body as { error: { message: string } }).error.message).toMatch(
-      /onboarding/i,
-    );
+    expect((body as { error: { message: string } }).error.message).toMatch(/onboarding/i);
   });
 
   it("lists course-scoped content with signed pdf urls", async () => {

@@ -33,7 +33,12 @@ describe("PATCH /api/admin/teachers/[id]", () => {
   it("deactivates a teacher and returns the updated row", async () => {
     stubSelect(db, [[TEACHER_ROW]]);
     const tx = makeDbMock();
-    stubUpdate(tx, { id: 10, fullName: "Ibrahim, S.", identifier: "STF-014", isActive: false });
+    stubUpdate(tx, {
+      id: 10,
+      fullName: "Ibrahim, S.",
+      identifier: "STF-014",
+      isActive: false,
+    });
     stubTransaction(db, tx);
     const res = await PATCH(
       jsonRequest("http://localhost/x", "PATCH", { isActive: false }),
@@ -52,7 +57,12 @@ describe("PATCH /api/admin/teachers/[id]", () => {
   it("reactivates a deactivated teacher", async () => {
     stubSelect(db, [[TEACHER_ROW]]);
     const tx = makeDbMock();
-    stubUpdate(tx, { id: 10, fullName: "Ibrahim, S.", identifier: "STF-014", isActive: true });
+    stubUpdate(tx, {
+      id: 10,
+      fullName: "Ibrahim, S.",
+      identifier: "STF-014",
+      isActive: true,
+    });
     stubTransaction(db, tx);
     const res = await PATCH(
       jsonRequest("http://localhost/x", "PATCH", { isActive: true }),
@@ -168,17 +178,23 @@ describe("PATCH /api/admin/teachers/[id]", () => {
 
   it("returns 401 when unauthenticated", async () => {
     requireAuth.mockRejectedValueOnce(new UnauthorizedError("Missing token"));
-    const res = await PATCH(jsonRequest("http://localhost/x", "PATCH", { isActive: false }), {
-      params: Promise.resolve({ id: "10" }),
-    });
+    const res = await PATCH(
+      jsonRequest("http://localhost/x", "PATCH", { isActive: false }),
+      {
+        params: Promise.resolve({ id: "10" }),
+      },
+    );
     expect(res.status).toBe(401);
   });
 
   it("returns 403 when the caller is not an admin", async () => {
     requireAuth.mockRejectedValueOnce(new ForbiddenError("Admin role required"));
-    const res = await PATCH(jsonRequest("http://localhost/x", "PATCH", { isActive: false }), {
-      params: Promise.resolve({ id: "10" }),
-    });
+    const res = await PATCH(
+      jsonRequest("http://localhost/x", "PATCH", { isActive: false }),
+      {
+        params: Promise.resolve({ id: "10" }),
+      },
+    );
     expect(res.status).toBe(403);
   });
 });
@@ -213,13 +229,7 @@ describe("DELETE /api/admin/teachers/[id]", () => {
   });
 
   it("returns 409 naming every blocker when a teacher has authored several kinds", async () => {
-    stubSelect(db, [
-      [TEACHER_ROW],
-      [],
-      [{ id: 3 }],
-      [],
-      [{ id: 9 }],
-    ]);
+    stubSelect(db, [[TEACHER_ROW], [], [{ id: 3 }], [], [{ id: 9 }]]);
     const res = await DELETE(jsonRequest("http://localhost/x", "DELETE"), {
       params: Promise.resolve({ id: "10" }),
     });

@@ -47,11 +47,13 @@ describe("GET /api/teacher/questions", () => {
   });
 
   it("slices the requested page and returns pagination metadata", async () => {
-    stubSelect(db, [[
-      { id: 1, questionType: "options", status: "published", courseId: 2 },
-      { id: 2, questionType: "fill_in_gap", status: "draft", jambSubjectId: 3 },
-      { id: 3, questionType: "options", status: "draft", courseId: 2 },
-    ]]);
+    stubSelect(db, [
+      [
+        { id: 1, questionType: "options", status: "published", courseId: 2 },
+        { id: 2, questionType: "fill_in_gap", status: "draft", jambSubjectId: 3 },
+        { id: 3, questionType: "options", status: "draft", courseId: 2 },
+      ],
+    ]);
     const res = await GET(jsonRequest("http://localhost/x?page=2&pageSize=1", "GET"));
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
@@ -83,7 +85,9 @@ describe("GET /api/teacher/questions", () => {
   });
 
   it("accepts a search term without erroring", async () => {
-    stubSelect(db, [[{ id: 1, questionType: "options", status: "published", courseId: 2 }]]);
+    stubSelect(db, [
+      [{ id: 1, questionType: "options", status: "published", courseId: 2 }],
+    ]);
     const res = await GET(jsonRequest("http://localhost/x?search=2+%2B+2", "GET"));
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
@@ -94,15 +98,21 @@ describe("GET /api/teacher/questions", () => {
 
   it("hides attached questions when unattachedOnly=1 (teacher scope)", async () => {
     requireAuth.mockResolvedValue({ userId: 5, roleId: 2, roleName: "teacher" });
-    stubSelect(db, [[{ id: 2, questionType: "fill_in_gap", status: "draft", courseId: 2 }]]);
+    stubSelect(db, [
+      [{ id: 2, questionType: "fill_in_gap", status: "draft", courseId: 2 }],
+    ]);
     const res = await GET(jsonRequest("http://localhost/x?unattachedOnly=1", "GET"));
     expect(res.status).toBe(200);
     const body = (await res.json()) as { data: { id: number }[] };
-    expect(body.data).toEqual([{ id: 2, questionType: "fill_in_gap", status: "draft", courseId: 2 }]);
+    expect(body.data).toEqual([
+      { id: 2, questionType: "fill_in_gap", status: "draft", courseId: 2 },
+    ]);
   });
 
   it("accepts unattachedOnly=1 for an admin caller (no ownership scope)", async () => {
-    stubSelect(db, [[{ id: 1, questionType: "options", status: "published", courseId: 2 }]]);
+    stubSelect(db, [
+      [{ id: 1, questionType: "options", status: "published", courseId: 2 }],
+    ]);
     const res = await GET(jsonRequest("http://localhost/x?unattachedOnly=1", "GET"));
     expect(res.status).toBe(200);
   });
@@ -198,9 +208,7 @@ describe("POST /api/teacher/questions — draft (lenient)", () => {
     expect(res.status).toBe(422);
     const body = await res.json();
     expect(body.error.details).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ field: "jambSubjectId" }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ field: "jambSubjectId" })]),
     );
   });
 
@@ -298,7 +306,9 @@ describe("POST /api/teacher/questions — publish (strict)", () => {
         return { returning: async () => [{ id: 12, ...rows[0] }] };
       },
     }));
-    const res = await POST(jsonRequest("http://localhost/x", "POST", publishedOptionsBody));
+    const res = await POST(
+      jsonRequest("http://localhost/x", "POST", publishedOptionsBody),
+    );
     expect(res.status).toBe(201);
     const body = await res.json();
     expect(body.status).toBe("published");
@@ -323,7 +333,10 @@ describe("POST /api/teacher/questions — publish (strict)", () => {
     const body = await res.json();
     expect(body.error.details).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ field: "bodyRichText", message: expect.stringMatching(/required/i) }),
+        expect.objectContaining({
+          field: "bodyRichText",
+          message: expect.stringMatching(/required/i),
+        }),
       ]),
     );
   });
@@ -364,24 +377,30 @@ describe("POST /api/teacher/questions — publish (strict)", () => {
       },
       message: /every option needs text/i,
     },
-  ])("blocks publishing an options question with $name", async ({ overrides, message }) => {
-    const res = await POST(
-      jsonRequest("http://localhost/x", "POST", {
-        ...courseTrack,
-        questionType: "options",
-        bodyRichText: "Body text here",
-        status: "published",
-        ...overrides,
-      }),
-    );
-    expect(res.status).toBe(422);
-    const body = await res.json();
-    expect(body.error.details).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ field: "options", message: expect.stringMatching(message) }),
-      ]),
-    );
-  });
+  ])(
+    "blocks publishing an options question with $name",
+    async ({ overrides, message }) => {
+      const res = await POST(
+        jsonRequest("http://localhost/x", "POST", {
+          ...courseTrack,
+          questionType: "options",
+          bodyRichText: "Body text here",
+          status: "published",
+          ...overrides,
+        }),
+      );
+      expect(res.status).toBe(422);
+      const body = await res.json();
+      expect(body.error.details).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            field: "options",
+            message: expect.stringMatching(message),
+          }),
+        ]),
+      );
+    },
+  );
 
   it.each([
     {
@@ -394,24 +413,30 @@ describe("POST /api/teacher/questions — publish (strict)", () => {
       overrides: { blanks: [{ acceptedAnswer: "x" }, { acceptedAnswer: "   " }] },
       message: /every blank needs an accepted answer/i,
     },
-  ])("blocks publishing a fill-in-gap question with $name", async ({ overrides, message }) => {
-    const res = await POST(
-      jsonRequest("http://localhost/x", "POST", {
-        ...courseTrack,
-        questionType: "fill_in_gap",
-        bodyRichText: "2 + 2 = ____.",
-        status: "published",
-        ...overrides,
-      }),
-    );
-    expect(res.status).toBe(422);
-    const body = await res.json();
-    expect(body.error.details).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ field: "blanks", message: expect.stringMatching(message) }),
-      ]),
-    );
-  });
+  ])(
+    "blocks publishing a fill-in-gap question with $name",
+    async ({ overrides, message }) => {
+      const res = await POST(
+        jsonRequest("http://localhost/x", "POST", {
+          ...courseTrack,
+          questionType: "fill_in_gap",
+          bodyRichText: "2 + 2 = ____.",
+          status: "published",
+          ...overrides,
+        }),
+      );
+      expect(res.status).toBe(422);
+      const body = await res.json();
+      expect(body.error.details).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            field: "blanks",
+            message: expect.stringMatching(message),
+          }),
+        ]),
+      );
+    },
+  );
 
   it("publishes a valid fill-in-gap question", async () => {
     stubSelect(db, [SCOPE]);
@@ -438,13 +463,62 @@ describe("POST /api/teacher/questions — publish (strict)", () => {
 
   it("returns 401 when unauthenticated", async () => {
     requireAuth.mockRejectedValueOnce(new UnauthorizedError("Missing token"));
-    const res = await POST(jsonRequest("http://localhost/x", "POST", publishedOptionsBody));
+    const res = await POST(
+      jsonRequest("http://localhost/x", "POST", publishedOptionsBody),
+    );
     expect(res.status).toBe(401);
   });
 
   it("returns 403 when the caller is not an admin or teacher", async () => {
     requireAuth.mockRejectedValueOnce(new ForbiddenError("Role not allowed"));
-    const res = await POST(jsonRequest("http://localhost/x", "POST", publishedOptionsBody));
+    const res = await POST(
+      jsonRequest("http://localhost/x", "POST", publishedOptionsBody),
+    );
     expect(res.status).toBe(403);
+  });
+});
+
+describe("POST /api/teacher/questions — rich text is sanitised server-side", () => {
+  // Question stems render through `dangerouslySetInnerHTML` in every student's attempt screen.
+  // The editor component sanitises too, but that is a preview convenience — anything that posts
+  // straight to the API (curl, a stale tab, a future importer) would otherwise store script that
+  // executes in a student's browser. These assert the *server* is the trust boundary.
+  const SCOPE = [{ courseId: 2, jambSubjectId: null }];
+
+  async function captureInserted(bodyRichText: string): Promise<Record<string, unknown>> {
+    stubSelect(db, [SCOPE]);
+    const inserted: Record<string, unknown> = {};
+    db.insert.mockImplementation(() => ({
+      values: (v: Record<string, unknown>) => {
+        Object.assign(inserted, v);
+        return { returning: async () => [{ id: 10, ...v }] };
+      },
+    }));
+    const res = await POST(
+      jsonRequest("http://localhost/x", "POST", {
+        ...courseTrack,
+        questionType: "options",
+        bodyRichText,
+      }),
+    );
+    expect(res.status).toBe(201);
+    return inserted;
+  }
+
+  it("strips script and event handlers from the stored stem", async () => {
+    const inserted = await captureInserted(
+      '<img src=x onerror="alert(1)">What is <b>2+2</b>?',
+    );
+    expect(inserted.bodyRichText).toBe("What is <b>2+2</b>?");
+  });
+
+  it("strips javascript: URLs", async () => {
+    const inserted = await captureInserted('<a href="javascript:alert(1)">click</a>');
+    expect(inserted.bodyRichText).toBe("click");
+  });
+
+  it("keeps the sub/sup formatting the question editor depends on", async () => {
+    const inserted = await captureInserted("Write H<sub>2</sub>O and CO<sup>2</sup>");
+    expect(inserted.bodyRichText).toBe("Write H<sub>2</sub>O and CO<sup>2</sup>");
   });
 });

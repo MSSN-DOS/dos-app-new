@@ -108,16 +108,68 @@ describe("GET /api/me/attempts", () => {
     stubSelect(db, [
       [{ name: "student" }],
       [
-        { id: 12, quizId: 8, attemptNumber: 1, score: "88.00", submittedAt: new Date("2026-08-24T12:00:00Z"), releasedAt: new Date("2026-08-25T08:00:00Z"), title: "First", quizType: "course", courseId: 2, courseCode: "MAT 101", topicTitle: null, jambSubjectId: null, subjectName: null, weekStart: "2026-08-22" },
-        { id: 11, quizId: 7, attemptNumber: 1, score: "72.00", submittedAt: new Date("2026-08-23T12:00:00Z"), releasedAt: new Date("2026-08-24T08:00:00Z"), title: "Second", quizType: "course", courseId: 2, courseCode: "MAT 101", topicTitle: null, jambSubjectId: null, subjectName: null, weekStart: "2026-08-22" },
-        { id: 10, quizId: 6, attemptNumber: 1, score: "64.00", submittedAt: new Date("2026-08-22T12:00:00Z"), releasedAt: new Date("2026-08-23T08:00:00Z"), title: "Third", quizType: "course", courseId: 2, courseCode: "MAT 101", topicTitle: null, jambSubjectId: null, subjectName: null, weekStart: "2026-08-22" },
+        {
+          id: 12,
+          quizId: 8,
+          attemptNumber: 1,
+          score: "88.00",
+          submittedAt: new Date("2026-08-24T12:00:00Z"),
+          releasedAt: new Date("2026-08-25T08:00:00Z"),
+          title: "First",
+          quizType: "course",
+          courseId: 2,
+          courseCode: "MAT 101",
+          topicTitle: null,
+          jambSubjectId: null,
+          subjectName: null,
+          weekStart: "2026-08-22",
+        },
+        {
+          id: 11,
+          quizId: 7,
+          attemptNumber: 1,
+          score: "72.00",
+          submittedAt: new Date("2026-08-23T12:00:00Z"),
+          releasedAt: new Date("2026-08-24T08:00:00Z"),
+          title: "Second",
+          quizType: "course",
+          courseId: 2,
+          courseCode: "MAT 101",
+          topicTitle: null,
+          jambSubjectId: null,
+          subjectName: null,
+          weekStart: "2026-08-22",
+        },
+        {
+          id: 10,
+          quizId: 6,
+          attemptNumber: 1,
+          score: "64.00",
+          submittedAt: new Date("2026-08-22T12:00:00Z"),
+          releasedAt: new Date("2026-08-23T08:00:00Z"),
+          title: "Third",
+          quizType: "course",
+          courseId: 2,
+          courseCode: "MAT 101",
+          topicTitle: null,
+          jambSubjectId: null,
+          subjectName: null,
+          weekStart: "2026-08-22",
+        },
       ],
     ]);
-    const res = await GET(jsonRequest("http://localhost/api/me/attempts?page=2&pageSize=1"));
+    const res = await GET(
+      jsonRequest("http://localhost/api/me/attempts?page=2&pageSize=1"),
+    );
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.data).toHaveLength(1);
-    expect(body.data[0]).toMatchObject({ id: 11, title: "Second", score: 72, bestScore: 72 });
+    expect(body.data[0]).toMatchObject({
+      id: 11,
+      title: "Second",
+      score: 72,
+      bestScore: 72,
+    });
     expect(body.meta).toEqual({ page: 2, pageSize: 1, total: 3, totalPages: 3 });
   });
 

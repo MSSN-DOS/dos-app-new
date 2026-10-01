@@ -1,6 +1,5 @@
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { ZodError } from "zod";
 
 import { errorResponse } from "@/lib/api/response";
 import { requireAuth } from "@/lib/auth/guard";
@@ -8,23 +7,6 @@ import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { getDb } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { changePasswordSchema } from "@/lib/validation/auth";
-
-function validationError(err: ZodError): NextResponse {
-  return NextResponse.json(
-    {
-      error: {
-        code: "VALIDATION_ERROR",
-        message: "Invalid input",
-        details: err.issues.map((i) => ({
-          field: i.path.join(".") || "body",
-          code: i.code,
-          message: i.message,
-        })),
-      },
-    },
-    { status: 422 },
-  );
-}
 
 /**
  * POST /api/auth/change-password
@@ -59,7 +41,10 @@ export async function POST(request: Request): Promise<NextResponse> {
       );
     }
 
-    const currentIsCorrect = await verifyPassword(data.currentPassword, user.passwordHash);
+    const currentIsCorrect = await verifyPassword(
+      data.currentPassword,
+      user.passwordHash,
+    );
     if (!currentIsCorrect) {
       // Field-scoped so the form can mark the right input rather than showing a banner.
       return NextResponse.json(
@@ -87,7 +72,6 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    if (err instanceof ZodError) return validationError(err);
     return errorResponse(err);
   }
 }

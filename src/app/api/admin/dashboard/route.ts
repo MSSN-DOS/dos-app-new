@@ -12,7 +12,9 @@ export async function GET(request: Request): Promise<NextResponse> {
     await requireAuth(request, ["admin"]);
     const db = getDb();
 
-    const countByRole = async (role: "student" | "aspirant" | "teacher"): Promise<number> => {
+    const countByRole = async (
+      role: "student" | "aspirant" | "teacher",
+    ): Promise<number> => {
       const rows = await db
         .select({ id: users.id })
         .from(users)

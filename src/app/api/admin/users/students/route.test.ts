@@ -8,7 +8,12 @@ vi.mock("@/lib/auth/guard", () => ({ requireAuth }));
 vi.mock("@/lib/db", () => ({ getDb }));
 
 import { GET } from "./route";
-import { jsonRequest, makeDbMock, stubSelect, type DbMock } from "@/lib/testing/route-test";
+import {
+  jsonRequest,
+  makeDbMock,
+  stubSelect,
+  type DbMock,
+} from "@/lib/testing/route-test";
 
 let db: DbMock;
 
@@ -22,8 +27,22 @@ describe("GET /api/admin/users/students", () => {
   it("returns the student directory with latest CGPA per student", async () => {
     stubSelect(db, [
       [
-        { id: 2, fullName: "Bello, A.", identifier: "MAT/2023/0142", isActive: true, departmentName: "Chemical Eng", levelValue: 300 },
-        { id: 1, fullName: "Yusuf, K.", identifier: "MAT/2023/0007", isActive: true, departmentName: "Medicine", levelValue: 500 },
+        {
+          id: 2,
+          fullName: "Bello, A.",
+          identifier: "MAT/2023/0142",
+          isActive: true,
+          departmentName: "Chemical Eng",
+          levelValue: 300,
+        },
+        {
+          id: 1,
+          fullName: "Yusuf, K.",
+          identifier: "MAT/2023/0007",
+          isActive: true,
+          departmentName: "Medicine",
+          levelValue: 500,
+        },
       ],
       [
         { userId: 1, weekStart: "2026-08-17", cgpaValue: "3.80" },
@@ -35,8 +54,24 @@ describe("GET /api/admin/users/students", () => {
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
       data: [
-        { id: 2, fullName: "Bello, A.", identifier: "MAT/2023/0142", isActive: true, departmentName: "Chemical Eng", levelValue: 300, currentCgpa: "4.21" },
-        { id: 1, fullName: "Yusuf, K.", identifier: "MAT/2023/0007", isActive: true, departmentName: "Medicine", levelValue: 500, currentCgpa: "4.10" },
+        {
+          id: 2,
+          fullName: "Bello, A.",
+          identifier: "MAT/2023/0142",
+          isActive: true,
+          departmentName: "Chemical Eng",
+          levelValue: 300,
+          currentCgpa: "4.21",
+        },
+        {
+          id: 1,
+          fullName: "Yusuf, K.",
+          identifier: "MAT/2023/0007",
+          isActive: true,
+          departmentName: "Medicine",
+          levelValue: 500,
+          currentCgpa: "4.10",
+        },
       ],
       meta: { page: 1, pageSize: 2, total: 2, totalPages: 1 },
     });
@@ -44,7 +79,19 @@ describe("GET /api/admin/users/students", () => {
   });
 
   it("returns null currentCgpa when a student has no records", async () => {
-    stubSelect(db, [[{ id: 5, fullName: "Solo", identifier: "MAT/2023/0001", isActive: true, departmentName: "Law", levelValue: 100 }], []]);
+    stubSelect(db, [
+      [
+        {
+          id: 5,
+          fullName: "Solo",
+          identifier: "MAT/2023/0001",
+          isActive: true,
+          departmentName: "Law",
+          levelValue: 100,
+        },
+      ],
+      [],
+    ]);
     const res = await GET(jsonRequest("http://localhost/x", "GET"));
     const body = await res.json();
     expect(body.data[0].currentCgpa).toBeNull();
@@ -53,15 +100,46 @@ describe("GET /api/admin/users/students", () => {
   it("paginates the directory", async () => {
     stubSelect(db, [
       [
-        { id: 1, fullName: "A. First", identifier: "MAT/001", isActive: true, departmentName: "D", levelValue: 100 },
-        { id: 2, fullName: "B. Second", identifier: "MAT/002", isActive: true, departmentName: "D", levelValue: 100 },
-        { id: 3, fullName: "C. Third", identifier: "MAT/003", isActive: true, departmentName: "D", levelValue: 100 },
+        {
+          id: 1,
+          fullName: "A. First",
+          identifier: "MAT/001",
+          isActive: true,
+          departmentName: "D",
+          levelValue: 100,
+        },
+        {
+          id: 2,
+          fullName: "B. Second",
+          identifier: "MAT/002",
+          isActive: true,
+          departmentName: "D",
+          levelValue: 100,
+        },
+        {
+          id: 3,
+          fullName: "C. Third",
+          identifier: "MAT/003",
+          isActive: true,
+          departmentName: "D",
+          levelValue: 100,
+        },
       ],
       [],
     ]);
     const res = await GET(jsonRequest("http://localhost/x?page=2&pageSize=1", "GET"));
     const body = await res.json();
-    expect(body.data).toEqual([{ id: 2, fullName: "B. Second", identifier: "MAT/002", isActive: true, departmentName: "D", levelValue: 100, currentCgpa: null }]);
+    expect(body.data).toEqual([
+      {
+        id: 2,
+        fullName: "B. Second",
+        identifier: "MAT/002",
+        isActive: true,
+        departmentName: "D",
+        levelValue: 100,
+        currentCgpa: null,
+      },
+    ]);
     expect(body.meta).toEqual({ page: 2, pageSize: 1, total: 3, totalPages: 3 });
   });
 

@@ -111,7 +111,11 @@ export async function POST(
     }
 
     const [question] = await db
-      .select({ id: questions.id, status: questions.status, createdBy: questions.createdBy })
+      .select({
+        id: questions.id,
+        status: questions.status,
+        createdBy: questions.createdBy,
+      })
       .from(questions)
       .where(eq(questions.id, questionId))
       .orderBy(asc(questions.id));
@@ -154,9 +158,7 @@ export async function POST(
     }
 
     try {
-      await db
-        .insert(quizQuestions)
-        .values({ quizId, questionId });
+      await db.insert(quizQuestions).values({ quizId, questionId });
     } catch (err) {
       if (isUniqueViolation(err)) {
         return NextResponse.json(
@@ -172,10 +174,7 @@ export async function POST(
       throw err;
     }
 
-    return NextResponse.json(
-      { quizId, questionId },
-      { status: 201 },
-    );
+    return NextResponse.json({ quizId, questionId }, { status: 201 });
   } catch (err) {
     return errorResponse(err);
   }

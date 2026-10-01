@@ -8,7 +8,12 @@ vi.mock("@/lib/auth/guard", () => ({ requireAuth }));
 vi.mock("@/lib/db", () => ({ getDb }));
 
 import { GET } from "./route";
-import { jsonRequest, makeDbMock, stubSelect, type DbMock } from "@/lib/testing/route-test";
+import {
+  jsonRequest,
+  makeDbMock,
+  stubSelect,
+  type DbMock,
+} from "@/lib/testing/route-test";
 
 let db: DbMock;
 
@@ -22,7 +27,15 @@ beforeEach(() => {
 
 describe("GET /api/admin/users/students/[id]", () => {
   const studentRow = [
-    { id: 7, fullName: "Bello, A.", identifier: "MAT/2023/0142", isActive: true, departmentName: "Chemical Eng", facultyName: "Engineering", levelValue: 300 },
+    {
+      id: 7,
+      fullName: "Bello, A.",
+      identifier: "MAT/2023/0142",
+      isActive: true,
+      departmentName: "Chemical Eng",
+      facultyName: "Engineering",
+      levelValue: 300,
+    },
   ];
 
   it("returns profile, CGPA history and attempt history for an admin", async () => {
@@ -33,8 +46,28 @@ describe("GET /api/admin/users/students/[id]", () => {
         { weekStart: "2026-08-17", cgpaValue: "3.80" },
       ],
       [
-        { attemptId: 1, quizId: 11, quizTitle: "Week 1 Quiz", quizType: "course", courseCode: "CHE 301", attemptNumber: 1, score: "80.00", submittedAt: "2026-08-18T10:00:00Z", releasedAt: "2026-08-20T09:00:00Z" },
-        { attemptId: 2, quizId: 12, quizTitle: "Week 2 Quiz", quizType: "topic", courseCode: null, attemptNumber: 1, score: "90.00", submittedAt: "2026-08-25T12:00:00Z", releasedAt: null },
+        {
+          attemptId: 1,
+          quizId: 11,
+          quizTitle: "Week 1 Quiz",
+          quizType: "course",
+          courseCode: "CHE 301",
+          attemptNumber: 1,
+          score: "80.00",
+          submittedAt: "2026-08-18T10:00:00Z",
+          releasedAt: "2026-08-20T09:00:00Z",
+        },
+        {
+          attemptId: 2,
+          quizId: 12,
+          quizTitle: "Week 2 Quiz",
+          quizType: "topic",
+          courseCode: null,
+          attemptNumber: 1,
+          score: "90.00",
+          submittedAt: "2026-08-25T12:00:00Z",
+          releasedAt: null,
+        },
       ],
     ]);
     const res = await GET(jsonRequest("http://localhost/x", "GET"), ctx("7"));

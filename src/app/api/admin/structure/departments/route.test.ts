@@ -8,7 +8,12 @@ vi.mock("@/lib/auth/guard", () => ({ requireAuth }));
 vi.mock("@/lib/db", () => ({ getDb }));
 
 import { GET, POST } from "./route";
-import { jsonRequest, makeDbMock, stubSelect, type DbMock } from "@/lib/testing/route-test";
+import {
+  jsonRequest,
+  makeDbMock,
+  stubSelect,
+  type DbMock,
+} from "@/lib/testing/route-test";
 
 let db: DbMock;
 
@@ -69,7 +74,9 @@ describe("GET /api/admin/structure/departments", () => {
       ],
       [],
     ]);
-    const res = await GET(jsonRequest("http://localhost/x?facultyId=2&page=2&pageSize=1", "GET"));
+    const res = await GET(
+      jsonRequest("http://localhost/x?facultyId=2&page=2&pageSize=1", "GET"),
+    );
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
       data: [{ id: 3, name: "Mathematics", facultyId: 2, levelIds: [] }],
@@ -144,9 +151,7 @@ describe("POST /api/admin/structure/departments", () => {
           if (typeof v === "object" && v !== null && "name" in v) {
             return [{ id: 5, name: "Physics", facultyId: 1 }];
           }
-          insertedLinks.push(
-            ...(v as Array<{ levelId: number }>).map((l) => l.levelId),
-          );
+          insertedLinks.push(...(v as Array<{ levelId: number }>).map((l) => l.levelId));
           return [];
         },
       }),
