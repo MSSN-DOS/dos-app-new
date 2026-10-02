@@ -11,3 +11,13 @@ overrides:
   fast-uri@>=3.0.0 <3.1.7: ">=3.1.7"
   undici@>=8.0.0 <8.10.2: ">=8.10.2"
   undici@>=7.0.0 <7.29.1: ">=7.29.1"
+  # DoS via uncontrolled recursion in brace-expansion's pattern parser (GHSA-vf4m-9c6m-xr37
+  # and GHSA-6j4f-fj2g-mc7p). Reached only through eslint / eslint-config-next, so these are
+  # build-time lint deps and not shipped — but CI fails on `pnpm audit --audit-level=high`, so
+  # they have to move anyway.
+  #
+  # The target is an EXACT version, not a range. The undici overrides above use ranges and did
+  # not take effect in 3a2cb2d, which is why that commit fixed CI's install failure but left the
+  # audit red; a range target is ambiguous about which version to actually resolve to.
+  brace-expansion@<1.1.21: "1.1.21"
+  brace-expansion@>=4.0.0 <5.0.12: "5.0.12"
