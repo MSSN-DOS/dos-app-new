@@ -1,10 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { POST } from "./route";
-import {
-  ForbiddenError,
-  UnauthorizedError,
-} from "@/lib/auth/errors";
+import { ForbiddenError, UnauthorizedError } from "@/lib/auth/errors";
 import {
   jsonRequest,
   makeDbMock,
@@ -49,22 +46,17 @@ describe("POST /api/teacher/quizzes/[id]/questions/bulk", () => {
     ]);
     const inserted: Record<string, unknown>[] = [];
     stubInsert(db, {});
-    db.insert.mockImplementation(
-      (table: unknown) => {
-        void table;
-        return {
-          values: (v: Record<string, unknown> | Record<string, unknown>[]) => {
-            const rows = Array.isArray(v) ? v : [v];
-            inserted.push(...rows);
-            return { returning: async () => [] };
-          },
-        };
-      },
-    );
-    const res = await POST(
-      jsonRequest(URL, "POST", { questionIds: [7, 8, 9] }),
-      PARAMS,
-    );
+    db.insert.mockImplementation((table: unknown) => {
+      void table;
+      return {
+        values: (v: Record<string, unknown> | Record<string, unknown>[]) => {
+          const rows = Array.isArray(v) ? v : [v];
+          inserted.push(...rows);
+          return { returning: async () => [] };
+        },
+      };
+    });
+    const res = await POST(jsonRequest(URL, "POST", { questionIds: [7, 8, 9] }), PARAMS);
     expect(res.status).toBe(201);
     await expect(res.json()).resolves.toEqual({
       data: { attached: 2, skippedAlreadyAttached: 1 },
@@ -83,10 +75,7 @@ describe("POST /api/teacher/quizzes/[id]/questions/bulk", () => {
       ],
       [{ questionId: 7 }, { questionId: 8 }],
     ]);
-    const res = await POST(
-      jsonRequest(URL, "POST", { questionIds: [7, 8] }),
-      PARAMS,
-    );
+    const res = await POST(jsonRequest(URL, "POST", { questionIds: [7, 8] }), PARAMS);
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
       data: { attached: 0, skippedAlreadyAttached: 2 },
@@ -100,19 +89,14 @@ describe("POST /api/teacher/quizzes/[id]/questions/bulk", () => {
       [],
     ]);
     const inserted: unknown[] = [];
-    db.insert.mockImplementation(
-      () => ({
-        values: (v: Record<string, unknown> | Record<string, unknown>[]) => {
-          const rows = Array.isArray(v) ? v : [v];
-          inserted.push(...rows);
-          return { returning: async () => [] };
-        },
-      }),
-    );
-    const res = await POST(
-      jsonRequest(URL, "POST", { questionIds: [7, 7, 7] }),
-      PARAMS,
-    );
+    db.insert.mockImplementation(() => ({
+      values: (v: Record<string, unknown> | Record<string, unknown>[]) => {
+        const rows = Array.isArray(v) ? v : [v];
+        inserted.push(...rows);
+        return { returning: async () => [] };
+      },
+    }));
+    const res = await POST(jsonRequest(URL, "POST", { questionIds: [7, 7, 7] }), PARAMS);
     expect(res.status).toBe(201);
     await expect(res.json()).resolves.toEqual({
       data: { attached: 1, skippedAlreadyAttached: 0 },
@@ -122,10 +106,7 @@ describe("POST /api/teacher/quizzes/[id]/questions/bulk", () => {
 
   it("404s when the quiz does not exist", async () => {
     stubSelect(db, [[]]);
-    const res = await POST(
-      jsonRequest(URL, "POST", { questionIds: [7] }),
-      PARAMS,
-    );
+    const res = await POST(jsonRequest(URL, "POST", { questionIds: [7] }), PARAMS);
     expect(res.status).toBe(404);
     const body = (await res.json()) as { error: { message: string } };
     expect(body.error.message).toMatch(/quiz not found/i);
@@ -154,10 +135,7 @@ describe("POST /api/teacher/quizzes/[id]/questions/bulk", () => {
         { id: 8, status: "published", createdBy: 99 },
       ],
     ]);
-    const res = await POST(
-      jsonRequest(URL, "POST", { questionIds: [7, 8] }),
-      PARAMS,
-    );
+    const res = await POST(jsonRequest(URL, "POST", { questionIds: [7, 8] }), PARAMS);
     expect(res.status).toBe(403);
     const body = (await res.json()) as { error: { message: string } };
     expect(body.error.message).toMatch(/questions you created/i);
@@ -171,10 +149,7 @@ describe("POST /api/teacher/quizzes/[id]/questions/bulk", () => {
         { id: 8, status: "draft", createdBy: 5 },
       ],
     ]);
-    const res = await POST(
-      jsonRequest(URL, "POST", { questionIds: [7, 8] }),
-      PARAMS,
-    );
+    const res = await POST(jsonRequest(URL, "POST", { questionIds: [7, 8] }), PARAMS);
     expect(res.status).toBe(422);
     const body = (await res.json()) as {
       error: { details: { message: string }[] };
@@ -185,10 +160,7 @@ describe("POST /api/teacher/quizzes/[id]/questions/bulk", () => {
 
   it("409s when the quiz is published", async () => {
     stubSelect(db, [[{ id: 1, status: "published", createdBy: 5 }]]);
-    const res = await POST(
-      jsonRequest(URL, "POST", { questionIds: [7] }),
-      PARAMS,
-    );
+    const res = await POST(jsonRequest(URL, "POST", { questionIds: [7] }), PARAMS);
     expect(res.status).toBe(409);
     const body = (await res.json()) as { error: { message: string } };
     expect(body.error.message).toMatch(/published/i);
@@ -211,27 +183,24 @@ describe("POST /api/teacher/quizzes/[id]/questions/bulk", () => {
   });
 
   it.each(["abc", "0"])("400s on invalid quiz id %s", async (id) => {
-    const res = await POST(jsonRequest("http://localhost/x", "POST", { questionIds: [7] }), {
-      params: Promise.resolve({ id }),
-    });
+    const res = await POST(
+      jsonRequest("http://localhost/x", "POST", { questionIds: [7] }),
+      {
+        params: Promise.resolve({ id }),
+      },
+    );
     expect(res.status).toBe(400);
   });
 
   it("401s without auth", async () => {
     requireAuthMock.mockRejectedValue(new UnauthorizedError());
-    const res = await POST(
-      jsonRequest(URL, "POST", { questionIds: [7] }),
-      PARAMS,
-    );
+    const res = await POST(jsonRequest(URL, "POST", { questionIds: [7] }), PARAMS);
     expect(res.status).toBe(401);
   });
 
   it("403s for non-teacher roles", async () => {
     requireAuthMock.mockRejectedValue(new ForbiddenError());
-    const res = await POST(
-      jsonRequest(URL, "POST", { questionIds: [7] }),
-      PARAMS,
-    );
+    const res = await POST(jsonRequest(URL, "POST", { questionIds: [7] }), PARAMS);
     expect(res.status).toBe(403);
   });
 });

@@ -12,7 +12,7 @@ import {
 } from "@/lib/db/schema";
 import { studentProfiles } from "@/lib/db/schema/profiles";
 import { errorResponse } from "@/lib/api/response";
-import { getActiveSemester } from "@/lib/semester";
+import { activeCourseFilter, getActiveSemester } from "@/lib/semester";
 
 export async function GET(request: Request) {
   try {
@@ -61,7 +61,7 @@ export async function GET(request: Request) {
     if (!profile) {
       return NextResponse.json(
         { error: { code: "NOT_FOUND", message: "Complete onboarding first" } },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -90,19 +90,19 @@ export async function GET(request: Request) {
       eq(courses.scopeType, "general"),
       and(
         eq(courses.scopeType, "department"),
-        eq(courses.departmentId, profile.departmentId)
+        eq(courses.departmentId, profile.departmentId),
       ),
     ];
     if (facultyId !== null) {
       accessConds.push(
-        and(eq(courses.scopeType, "faculty"), eq(courses.facultyId, facultyId))
+        and(eq(courses.scopeType, "faculty"), eq(courses.facultyId, facultyId)),
       );
       if (interfacultyCourseIds.length > 0) {
         accessConds.push(
           and(
             eq(courses.scopeType, "interfaculty"),
-            inArray(courses.id, interfacultyCourseIds)
-          )
+            inArray(courses.id, interfacultyCourseIds),
+          ),
         );
       }
     }
@@ -122,10 +122,12 @@ export async function GET(request: Request) {
       .where(
         and(
           eq(quizzes.status, "published"),
-          eq(courses.semester, activeSemester),
+          // Fail-closed: with no calendar entered this is `false`, so no quiz is returned,
+          // rather than an absent filter that would return every quiz at this level.
+          activeCourseFilter(activeSemester),
           eq(courses.levelId, profile.levelId),
-          or(...accessConds)
-        )
+          or(...accessConds),
+        ),
       )
       .orderBy(asc(quizzes.id));
 

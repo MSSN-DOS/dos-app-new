@@ -57,7 +57,18 @@ export async function recomputeWeeklyScores(
     })
     .from(bestScores)
     .innerJoin(quizzes, eq(bestScores.quizId, quizzes.id))
-    .where(and(inArray(bestScores.userId, userIds), eq(quizzes.weekStart, weekStart)))
+    // `quizType = 'course'` is the actual rule from AGENTS.md §3: only Course Quiz results feed
+    // CGPA and Post-UTME, never Topic Quiz results. The `weekStart` equality also happens to
+    // exclude topic quizzes (they have a NULL `weekStart`), so that clause is not what is
+    // currently keeping them out. This states the invariant rather than relying on the
+    // coincidence — so the rule survives the week query being refactored.
+    .where(
+      and(
+        inArray(bestScores.userId, userIds),
+        eq(quizzes.weekStart, weekStart),
+        eq(quizzes.quizType, "course"),
+      ),
+    )
     .orderBy(asc(bestScores.quizId));
 
   const cgpaRows = bestRows

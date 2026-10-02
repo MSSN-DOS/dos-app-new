@@ -8,7 +8,12 @@ vi.mock("@/lib/auth/guard", () => ({ requireAuth }));
 vi.mock("@/lib/db", () => ({ getDb }));
 
 import { GET } from "./route";
-import { jsonRequest, makeDbMock, stubSelect, type DbMock } from "@/lib/testing/route-test";
+import {
+  jsonRequest,
+  makeDbMock,
+  stubSelect,
+  type DbMock,
+} from "@/lib/testing/route-test";
 
 let db: DbMock;
 
@@ -94,10 +99,7 @@ describe("GET /api/teacher/results", () => {
 
   it("serves an admin the same list without ownership scoping", async () => {
     requireAuth.mockResolvedValueOnce({ userId: 1, roleId: 1, roleName: "admin" });
-    stubSelect(db, [
-      [QUIZ_ALGEBRA],
-      [{ quizId: 1, releasedAt: null }],
-    ]);
+    stubSelect(db, [[QUIZ_ALGEBRA], [{ quizId: 1, releasedAt: null }]]);
 
     const res = await GET(jsonRequest("http://localhost/x", "GET"));
     expect(res.status).toBe(200);

@@ -1,6 +1,5 @@
 import { asc, eq, inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { ZodError } from "zod";
 
 import { errorResponse } from "@/lib/api/response";
 import { requireAuth } from "@/lib/auth/guard";
@@ -18,23 +17,6 @@ import {
   users,
 } from "@/lib/db/schema";
 import { teacherUpdateSchema } from "@/lib/validation/teachers";
-
-function validationError(err: ZodError): NextResponse {
-  return NextResponse.json(
-    {
-      error: {
-        code: "VALIDATION_ERROR",
-        message: "Invalid input",
-        details: err.issues.map((i) => ({
-          field: i.path.join(".") || "body",
-          code: i.code,
-          message: i.message,
-        })),
-      },
-    },
-    { status: 422 },
-  );
-}
 
 /**
  * PATCH /api/admin/teachers/[id]
@@ -87,7 +69,9 @@ export async function PATCH(
           .orderBy(asc(courses.id));
         if (found.length !== courseIds.length) {
           return NextResponse.json(
-            { error: { code: "NOT_FOUND", message: "One or more courses were not found" } },
+            {
+              error: { code: "NOT_FOUND", message: "One or more courses were not found" },
+            },
             { status: 404 },
           );
         }
@@ -100,7 +84,12 @@ export async function PATCH(
           .orderBy(asc(jambSubjects.id));
         if (found.length !== jambSubjectIds.length) {
           return NextResponse.json(
-            { error: { code: "NOT_FOUND", message: "One or more JAMB subjects were not found" } },
+            {
+              error: {
+                code: "NOT_FOUND",
+                message: "One or more JAMB subjects were not found",
+              },
+            },
             { status: 404 },
           );
         }
@@ -122,16 +111,12 @@ export async function PATCH(
 
     await db.transaction(async (tx) => {
       if (Object.keys(set).length > 0) {
-        const [row] = await tx
-          .update(users)
-          .set(set)
-          .where(eq(users.id, id))
-          .returning({
-            id: users.id,
-            fullName: users.fullName,
-            identifier: users.identifier,
-            isActive: users.isActive,
-          });
+        const [row] = await tx.update(users).set(set).where(eq(users.id, id)).returning({
+          id: users.id,
+          fullName: users.fullName,
+          identifier: users.identifier,
+          isActive: users.isActive,
+        });
         holder.row = row;
       }
 
@@ -159,7 +144,6 @@ export async function PATCH(
     }
     return NextResponse.json(holder.row);
   } catch (err) {
-    if (err instanceof ZodError) return validationError(err);
     return errorResponse(err);
   }
 }
@@ -254,7 +238,11 @@ export async function DELETE(
       const [row] = await tx
         .delete(users)
         .where(eq(users.id, id))
-        .returning({ id: users.id, fullName: users.fullName, identifier: users.identifier });
+        .returning({
+          id: users.id,
+          fullName: users.fullName,
+          identifier: users.identifier,
+        });
       holder.row = row;
     });
 

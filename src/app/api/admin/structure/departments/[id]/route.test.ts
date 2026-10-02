@@ -40,10 +40,9 @@ describe("PATCH /api/admin/structure/departments/[id]", () => {
         },
       }),
     }));
-    const res = await PATCH(
-      jsonRequest("http://localhost/x/5", "PATCH", validBody),
-      { params: Promise.resolve({ id: "5" }) },
-    );
+    const res = await PATCH(jsonRequest("http://localhost/x/5", "PATCH", validBody), {
+      params: Promise.resolve({ id: "5" }),
+    });
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
       id: 5,
@@ -59,20 +58,18 @@ describe("PATCH /api/admin/structure/departments/[id]", () => {
 
   it("returns 404 when the department does not exist", async () => {
     stubUpdate(db, null);
-    const res = await PATCH(
-      jsonRequest("http://localhost/x/99", "PATCH", validBody),
-      { params: Promise.resolve({ id: "99" }) },
-    );
+    const res = await PATCH(jsonRequest("http://localhost/x/99", "PATCH", validBody), {
+      params: Promise.resolve({ id: "99" }),
+    });
     expect(res.status).toBe(404);
     const body = await res.json();
     expect(body.error.code).toBe("NOT_FOUND");
   });
 
   it.each(["abc", "0", "-3"])("returns 400 for invalid id %s", async (id) => {
-    const res = await PATCH(
-      jsonRequest(`http://localhost/x/${id}`, "PATCH", validBody),
-      { params: Promise.resolve({ id }) },
-    );
+    const res = await PATCH(jsonRequest(`http://localhost/x/${id}`, "PATCH", validBody), {
+      params: Promise.resolve({ id }),
+    });
     expect(res.status).toBe(400);
   });
 
@@ -89,19 +86,17 @@ describe("PATCH /api/admin/structure/departments/[id]", () => {
 
   it("returns 401 when unauthenticated", async () => {
     requireAuth.mockRejectedValueOnce(new UnauthorizedError("Missing token"));
-    const res = await PATCH(
-      jsonRequest("http://localhost/x/5", "PATCH", validBody),
-      { params: Promise.resolve({ id: "5" }) },
-    );
+    const res = await PATCH(jsonRequest("http://localhost/x/5", "PATCH", validBody), {
+      params: Promise.resolve({ id: "5" }),
+    });
     expect(res.status).toBe(401);
   });
 
   it("returns 403 when the caller is not an admin", async () => {
     requireAuth.mockRejectedValueOnce(new ForbiddenError("Admin role required"));
-    const res = await PATCH(
-      jsonRequest("http://localhost/x/5", "PATCH", validBody),
-      { params: Promise.resolve({ id: "5" }) },
-    );
+    const res = await PATCH(jsonRequest("http://localhost/x/5", "PATCH", validBody), {
+      params: Promise.resolve({ id: "5" }),
+    });
     expect(res.status).toBe(403);
   });
 });

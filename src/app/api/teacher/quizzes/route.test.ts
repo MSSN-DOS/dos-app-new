@@ -83,12 +83,16 @@ describe("GET /api/teacher/quizzes", () => {
   });
 
   it("slices the requested page and returns pagination metadata", async () => {
-    stubSelect(db, [[
-      { id: 1, title: "First", quizType: "topic" },
-      { id: 2, title: "Second", quizType: "course" },
-      { id: 3, title: "Third", quizType: "course" },
-    ]]);
-    const res = await GET(jsonRequest("http://localhost/api/teacher/quizzes?page=2&pageSize=1"));
+    stubSelect(db, [
+      [
+        { id: 1, title: "First", quizType: "topic" },
+        { id: 2, title: "Second", quizType: "course" },
+        { id: 3, title: "Third", quizType: "course" },
+      ],
+    ]);
+    const res = await GET(
+      jsonRequest("http://localhost/api/teacher/quizzes?page=2&pageSize=1"),
+    );
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.data).toEqual([{ id: 2, title: "Second", quizType: "course" }]);
@@ -252,9 +256,7 @@ describe("POST /api/teacher/quizzes", () => {
     expect(res.status).toBe(422);
     const body = await res.json();
     expect(body.error.details).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ field: "jambSubjectId" }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ field: "jambSubjectId" })]),
     );
   });
 
@@ -269,9 +271,7 @@ describe("POST /api/teacher/quizzes", () => {
     expect(res.status).toBe(422);
     const body = await res.json();
     expect(body.error.details).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ field: "courseId" }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ field: "courseId" })]),
     );
   });
 
@@ -286,9 +286,7 @@ describe("POST /api/teacher/quizzes", () => {
     expect(res.status).toBe(422);
     const body = await res.json();
     expect(body.error.details).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ field: "topicId" }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ field: "topicId" })]),
     );
   });
 
@@ -305,9 +303,7 @@ describe("POST /api/teacher/quizzes", () => {
     expect(res.status).toBe(422);
     const body = await res.json();
     expect(body.error.details).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ field: "weekStart" }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ field: "weekStart" })]),
     );
   });
 
@@ -322,9 +318,7 @@ describe("POST /api/teacher/quizzes", () => {
     expect(res.status).toBe(422);
     const body = await res.json();
     expect(body.error.details).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ field: "weekStart" }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ field: "weekStart" })]),
     );
   });
 
@@ -372,9 +366,7 @@ describe("POST /api/teacher/quizzes", () => {
     expect(res.status).toBe(422);
     const body = await res.json();
     expect(body.error.details).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ field: "title" }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ field: "title" })]),
     );
   });
 
@@ -389,9 +381,7 @@ describe("POST /api/teacher/quizzes", () => {
     expect(res.status).toBe(422);
     const body = await res.json();
     expect(body.error.details).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ field: "quizType" }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ field: "quizType" })]),
     );
   });
 });

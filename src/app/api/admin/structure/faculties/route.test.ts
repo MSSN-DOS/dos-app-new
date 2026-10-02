@@ -8,7 +8,13 @@ vi.mock("@/lib/auth/guard", () => ({ requireAuth }));
 vi.mock("@/lib/db", () => ({ getDb }));
 
 import { GET, POST } from "./route";
-import { jsonRequest, makeDbMock, stubInsert, stubSelect, type DbMock } from "@/lib/testing/route-test";
+import {
+  jsonRequest,
+  makeDbMock,
+  stubInsert,
+  stubSelect,
+  type DbMock,
+} from "@/lib/testing/route-test";
 
 let db: DbMock;
 
@@ -20,18 +26,32 @@ beforeEach(() => {
 
 describe("GET /api/admin/structure/faculties", () => {
   it("returns 200 with the faculty list for an admin", async () => {
-    stubSelect(db, [[{ id: 1, name: "Engineering" }, { id: 2, name: "Science" }]]);
+    stubSelect(db, [
+      [
+        { id: 1, name: "Engineering" },
+        { id: 2, name: "Science" },
+      ],
+    ]);
     const res = await GET(jsonRequest("http://localhost/x", "GET"));
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
-      data: [{ id: 1, name: "Engineering" }, { id: 2, name: "Science" }],
+      data: [
+        { id: 1, name: "Engineering" },
+        { id: 2, name: "Science" },
+      ],
       meta: { page: 1, pageSize: 2, total: 2, totalPages: 1 },
     });
     expect(requireAuth).toHaveBeenCalledWith(expect.anything(), ["admin"]);
   });
 
   it("slices the requested page and returns pagination metadata", async () => {
-    stubSelect(db, [[{ id: 1, name: "Engineering" }, { id: 2, name: "Science" }, { id: 3, name: "Arts" }]]);
+    stubSelect(db, [
+      [
+        { id: 1, name: "Engineering" },
+        { id: 2, name: "Science" },
+        { id: 3, name: "Arts" },
+      ],
+    ]);
     const res = await GET(jsonRequest("http://localhost/x?page=2&pageSize=1", "GET"));
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
@@ -73,14 +93,18 @@ describe("POST /api/admin/structure/faculties", () => {
         return { returning: async () => [{ id: 5, name: v.name }] };
       },
     }));
-    const res = await POST(jsonRequest("http://localhost/x", "POST", { name: "  Science  " }));
+    const res = await POST(
+      jsonRequest("http://localhost/x", "POST", { name: "  Science  " }),
+    );
     expect(res.status).toBe(201);
     expect(inserted.name).toBe("Science");
   });
 
   it("returns 409 when the faculty already exists", async () => {
     stubSelect(db, [[{ id: 1, name: "Science" }]]);
-    const res = await POST(jsonRequest("http://localhost/x", "POST", { name: "Science" }));
+    const res = await POST(
+      jsonRequest("http://localhost/x", "POST", { name: "Science" }),
+    );
     expect(res.status).toBe(409);
     const body = await res.json();
     expect(body.error.code).toBe("CONFLICT");

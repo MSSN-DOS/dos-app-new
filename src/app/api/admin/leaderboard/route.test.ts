@@ -8,7 +8,12 @@ vi.mock("@/lib/auth/guard", () => ({ requireAuth }));
 vi.mock("@/lib/db", () => ({ getDb }));
 
 import { GET } from "./route";
-import { jsonRequest, makeDbMock, stubSelect, type DbMock } from "@/lib/testing/route-test";
+import {
+  jsonRequest,
+  makeDbMock,
+  stubSelect,
+  type DbMock,
+} from "@/lib/testing/route-test";
 
 let db: DbMock;
 
@@ -51,7 +56,11 @@ describe("GET /api/admin/leaderboard", () => {
 
   it("defaults to the most recent released week for students and ranks by CGPA desc", async () => {
     stubSelect(db, [
-      [{ weekStart: "2026-08-22" }, { weekStart: "2026-08-15" }, { weekStart: "2026-08-15" }],
+      [
+        { weekStart: "2026-08-22" },
+        { weekStart: "2026-08-15" },
+        { weekStart: "2026-08-15" },
+      ],
       [
         { userId: 8, fullName: "Bello, A.", score: "87.50" },
         { userId: 9, fullName: "Suleiman, K.", score: "80.00" },

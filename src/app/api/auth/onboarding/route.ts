@@ -73,7 +73,12 @@ export async function POST(request: Request): Promise<NextResponse> {
         .safeParse(body);
       if (!parsed.success) {
         return NextResponse.json(
-          { error: { code: "VALIDATION_ERROR", message: "departmentId and levelId are required" } },
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "departmentId and levelId are required",
+            },
+          },
           { status: 422 },
         );
       }
@@ -101,7 +106,12 @@ export async function POST(request: Request): Promise<NextResponse> {
         .limit(1);
       if (!link) {
         return NextResponse.json(
-          { error: { code: "VALIDATION_ERROR", message: "That level is not offered in this department" } },
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "That level is not offered in this department",
+            },
+          },
           { status: 422 },
         );
       }
@@ -118,13 +128,11 @@ export async function POST(request: Request): Promise<NextResponse> {
         );
       }
 
-      await db
-        .insert(studentProfiles)
-        .values({
-          userId,
-          departmentId: parsed.data.departmentId,
-          levelId: parsed.data.levelId,
-        });
+      await db.insert(studentProfiles).values({
+        userId,
+        departmentId: parsed.data.departmentId,
+        levelId: parsed.data.levelId,
+      });
       return NextResponse.json({ ok: true }, { status: 201 });
     }
 
@@ -176,7 +184,9 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
 
     return NextResponse.json(
-      { error: { code: "FORBIDDEN", message: "Only students and aspirants onboard here" } },
+      {
+        error: { code: "FORBIDDEN", message: "Only students and aspirants onboard here" },
+      },
       { status: 403 },
     );
   } catch (err) {

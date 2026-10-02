@@ -45,11 +45,13 @@ describe("GET /api/teacher/topics", () => {
   });
 
   it("slices the requested page and returns pagination metadata", async () => {
-    stubSelect(db, [[
-      { id: 1, title: "Algebra", courseId: 2, courseCode: "MAT 101" },
-      { id: 2, title: "Geometry", courseId: 2, courseCode: "MAT 101" },
-      { id: 3, title: "Trigonometry", courseId: 2, courseCode: "MAT 101" },
-    ]]);
+    stubSelect(db, [
+      [
+        { id: 1, title: "Algebra", courseId: 2, courseCode: "MAT 101" },
+        { id: 2, title: "Geometry", courseId: 2, courseCode: "MAT 101" },
+        { id: 3, title: "Trigonometry", courseId: 2, courseCode: "MAT 101" },
+      ],
+    ]);
     const res = await GET(jsonRequest("http://localhost/x?page=2&pageSize=1", "GET"));
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
@@ -115,7 +117,10 @@ describe("POST /api/teacher/topics", () => {
       },
     }));
     const res = await POST(
-      jsonRequest("http://localhost/x", "POST", { title: "  Trigonometry  ", courseId: 2 }),
+      jsonRequest("http://localhost/x", "POST", {
+        title: "  Trigonometry  ",
+        courseId: 2,
+      }),
     );
     expect(res.status).toBe(201);
     expect(inserted.title).toBe("Trigonometry");

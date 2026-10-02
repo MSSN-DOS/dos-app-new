@@ -1,29 +1,11 @@
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { ZodError } from "zod";
 
 import { errorResponse } from "@/lib/api/response";
 import { requireAuth } from "@/lib/auth/guard";
 import { getDb } from "@/lib/db";
 import { courseFaculties, courses, departments, faculties } from "@/lib/db/schema";
 import { facultyUpdateSchema } from "@/lib/validation/structure";
-
-function validationError(err: ZodError): NextResponse {
-  return NextResponse.json(
-    {
-      error: {
-        code: "VALIDATION_ERROR",
-        message: "Invalid input",
-        details: err.issues.map((i) => ({
-          field: i.path.join(".") || "body",
-          code: i.code,
-          message: i.message,
-        })),
-      },
-    },
-    { status: 422 },
-  );
-}
 
 export async function PATCH(
   request: Request,
@@ -60,11 +42,12 @@ export async function PATCH(
     // Unique-violation from a concurrent insert of the same name.
     if (err instanceof Error && "code" in err && err.code === "23505") {
       return NextResponse.json(
-        { error: { code: "CONFLICT", message: "A faculty with that name already exists" } },
+        {
+          error: { code: "CONFLICT", message: "A faculty with that name already exists" },
+        },
         { status: 409 },
       );
     }
-    if (err instanceof ZodError) return validationError(err);
     return errorResponse(err);
   }
 }
@@ -128,7 +111,8 @@ export async function DELETE(
         {
           error: {
             code: "CONFLICT",
-            message: "Faculty is linked to one or more interfaculty courses and cannot be deleted",
+            message:
+              "Faculty is linked to one or more interfaculty courses and cannot be deleted",
           },
         },
         { status: 409 },

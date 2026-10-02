@@ -17,7 +17,7 @@ This is the single source of truth for how the product behaves and how the code 
 | 3 | Identifier validation | Format-validated only (regex below), no cross-check against an external membership/JAMB list. |
 | 4 | Content upload permissions | Admin-only. Teachers cannot upload PDFs/articles. **Amended 2026-09-17:** Teachers *may* submit video **links** (an external URL — not an upload; see §6). |
 | 5 | Topic Quiz question count | Free-form — Teacher sets it per topic when building the quiz. |
-| 6 | Weekly Course Quiz release window | Fixed: opens Saturday 00:00, closes Sunday 23:59 (server timezone, see §8). |
+| 6 | Weekly Course Quiz release window | Default: opens Saturday 00:00, closes Monday 00:00 (Africa/Lagos, see §8). **Amended 2026-09-28:** an Admin may override either boundary per quiz (`quizzes.opens_at` / `quizzes.closes_at`, both nullable); NULL on both restores the default. Set on either side replaces that boundary only. |
 | 7 | Notifications | In-app only for MVP. No email/SMS. |
 | 8 | Department/Faculty list source | Board enters manually via Admin UI. No external import. |
 | 9 | Course catalogue ownership | Board/Admin owns it, entered manually via Admin UI. |
@@ -38,6 +38,11 @@ Regex: `^\d{2}\/\d{2}[A-Z]{2}\d{3}$` — e.g. `21/30GN019`
 **JAMB Registration Number:** two accepted shapes
 - Standard (10 char): 8 digits + 2 uppercase letters → `^\d{8}[A-Z]{2}$`
 - Expanded (14 char): 4-digit year + 8 digits + 2 uppercase letters → `^\d{4}\d{8}[A-Z]{2}$` (equivalently `^\d{12}[A-Z]{2}$`)
+
+**Staff ID:** `STF-###` — e.g. `STF-001`, `STF-042`
+- Locked 2026-10-01. Previously "no format fixed"; `STF-###` was already the de facto shape because Staff IDs are generated rather than typed (Board decision 2026-09-18), so this makes the existing behaviour explicit rather than changing it.
+- Regex: `^STF-\d+$`. **Deliberately uncapped digit count** — the padding is 3, but `STF-1000` is a legitimate value once the sequence outgrows it. The *generator* chooses the width; a schema that capped it would reject IDs the generator had already handed out.
+- **No DB CHECK enforces this, by necessity, not oversight.** A CHECK constraint cannot reference another table, so "Teachers must be `STF-###`, Admins are exempt" cannot be expressed — both share `identifier_type = 'staff_id'`. A blanket `staff_id → ^STF-\d+$` CHECK would also reject the pre-existing bootstrap Admin row and lock the only Admin out of the portal, which is not an acceptable outcome for a formatting fix. Enforcement therefore lives at the write boundary: `staffIdSchema` in `lib/validation/identifiers.ts` (the single source of truth, imported by the generator in `lib/teachers/staff-id.ts` rather than re-declaring the pattern) plus `src/scripts/seed.ts`, which validates a *new* bootstrap Admin identifier and skips validation for one that already exists so `pnpm db:seed` stays idempotent on deployments seeded before the format was locked.
 
 Both live in `lib/validation/identifiers.ts` as named Zod refinements (`matricNumberSchema`, `jambRegNumberSchema`), reused by both the registration form and the `/api/auth/register` handler — never duplicate the regex.
 
@@ -81,7 +86,7 @@ Two types, same `quizzes` table, discriminated by `quiz_type`:
 |---|---|---|
 | Tied to | One `topic_id` | A `course_id` (or `jamb_subject_id` for Aspirants) + `week_start` |
 | Question count | Free-form, Teacher decides | Fixed 50 |
-| Cadence | Ad hoc, whenever a Teacher publishes one | Weekly, opens Saturday 00:00 / closes Sunday 23:59 |
+| Cadence | Ad hoc, whenever a Teacher publishes one | Weekly, opens Saturday 00:00 / closes Monday 00:00 WAT (Admin-overridable per quiz, decision 6) |
 | Counts toward CGPA / Post-UTME / leaderboard | No | Yes — only source that counts |
 
 Rules that apply to both:
@@ -144,17 +149,14 @@ Rules that apply to both:
 
 ## 8. Active semester
 
-- `semester_settings` table (new — add to schema, not in the original `.sql`): single row, `id = 1`, columns `active_semester TEXT CHECK (IN ('harmattan','rain'))`, `mode TEXT CHECK (IN ('auto','manual'))` default `'auto'`, `manual_override TEXT NULL`.
-- **Auto mode** resolves the active semester from today's date against the fixed 2025/26-session calendar below. Store the calendar as a small static config (`lib/semester/calendar.ts`), not hardcoded inline in the resolver — next session's dates will need updating by whoever maintains this, and that file is the one place to do it.
-
-| | Lectures | Examinations |
-|---|---|---|
-| Harmattan (1st) | Oct 20, 2025 – Jan 9, 2026 | Jan 19 – Feb 6, 2026 |
-| Rain (2nd) | Feb 23 – Jun 5, 2026 | Jun 15 – Jul 3, 2026 |
-
-- Treat "Harmattan" as active for the full Oct 20 → Feb 6 span (lectures + exams together), and "Rain" as active for Feb 23 → Jul 3. Gaps between semesters (e.g. Feb 7–22) fall back to whichever semester just ended, so students aren't shown an empty state — resolver logic, not a third semester state.
-- **Manual mode**: if `semester_settings.mode = 'manual'`, the resolver returns `manual_override` regardless of date. Admin flips this from `/admin/settings/semester`. This is the safety net for when real dates drift from the hardcoded calendar.
-- All quiz/course/resource queries scoped "to the active semester" call the single `getActiveSemester()` resolver — never re-derive it inline from `new Date()` in more than one place.
+- `academic_sessions` table (new): one row per academic session, columns `label TEXT` (unique, `YYYY/YY`), `harmattan_start`, `harmattan_end`, `rain_start`, `rain_end` DATE, plus `created_at`/`updated_at`. Lecture-and-exam spans collapse into a single start/end per semester because every consumer only ever asks "is today inside this semester" — nothing reads the exam boundary on its own. A CHECK keeps the four dates ordered and the two semesters non-overlapping. Column refs inside the table config go through the callback's `t` parameter, not the exported const: referencing the const there makes the table reference itself during initialisation.
+- **The calendar is data, not code.** Amended 2026-09-30 from the original static-config decision. A code-hardcoded calendar means every new session is a deploy, and it silently keeps resolving a session that has already ended — which is precisely the bug this replaces: `resolveSemesterForDate` had no third state, so after 2026-07-03 it returned `rain` indefinitely, and students lost sight of every Harmattan course's quizzes and resources. Admins manage sessions from `/admin/settings/semester`; there is deliberately no separate nav item, because the calendar and the override are the same decision and an Admin who has to know they are related will get one of them wrong.
+- `semester_settings` table: single row, `id = 1`, columns `mode TEXT CHECK (IN ('auto','manual'))` default `'auto'`, `manual_override TEXT NULL`, `manual_override_session_id INT NULL REFERENCES academic_sessions(id)`. A CHECK (`semester_settings_override_pair`) requires both halves of the override to be set or both null — a bare `harmattan` cannot say whether it is 2025/26 or 2026/27, and now that courses are one row per offering it would filter out a whole year instead of one half of it.
+- **Auto mode** resolves from today's date against the `academic_sessions` rows. Inside a session, Harmattan is active from `harmattan_start` up to `rain_start` (exclusive) and Rain from `rain_start` onward. The comparison on `rain_start` is strict: Rain's first day is Rain. Between semesters *and between sessions* — Jul 3 to Oct 20 above all — the most recently **started** session stays active at its **final** semester, so students keep seeing the material they just sat instead of an empty state. Still resolver logic, still no third semester state. If no session has started at all, nothing is active and course filters match nothing.
+- **Manual mode**: `mode = 'manual'` pins the resolver to the (`manual_override`, `manual_override_session_id`) pair regardless of date. The session must exist — a semester pointed at a missing session would filter out every course, a silent total blackout, so the API 404s at save time. Saving auto mode clears both halves, so the stored row never implies a stale override is in force.
+- **Courses are one row per offering.** `courses.session_id` is NOT NULL; identity is `code + level + session + semester`. Re-offering `CSC 201` in 2026/27 creates a new row rather than editing the 2025/26 one, so quizzes, content and attempts stay bound to the offering they belong to and a 2025/26 result feeding CGPA is never relabelled 2026/27. Nobody re-tags courses each session any more.
+- Storage paths carry the session segment (`{faculty}/{dept}/{level}/{session}/{semester}/{course}`). This is load-bearing, not cosmetic: the same course code exists once per session, so without the year segment a 2026/27 upload would overwrite the 2025/26 object at the same key. Safe to change because `content_items` stores the full object path at upload time, so objects uploaded under the old shape keep resolving.
+- Scoping "to the active semester" now means *both* semester and session, via `activeCourseFilter(resolved)`, which returns `undefined` when nothing resolves (drizzle's `and()`/`or()` drop undefined arguments, so callers match nothing rather than everything). All quiz/course/resource queries call the single `getActiveSemester()` resolver — never re-derive it inline from `new Date()` in more than one place.
 
 ## 9. Route map
 
@@ -201,6 +203,7 @@ Rules that apply to both:
 - `/api/admin/content`
 - `/api/admin/leaderboard`
 - `/api/admin/scores/release`
+- `/api/admin/quizzes/[id]/window` — PATCH the Course Quiz availability override (decision 6)
 - `/api/admin/settings/semester`
 - `/api/teacher/topics`, `/api/teacher/questions`, `/api/teacher/quizzes`, `/api/teacher/quizzes/[id]`, `/api/teacher/results/[quizId]`
 - `/api/quizzes` (list, scoped server-side to the caller's role/structure — Student/Aspirant), `/api/quizzes/[id]/attempt` (POST to submit)
@@ -307,3 +310,4 @@ Icons: **lucide-react only** — the one sanctioned icon library (shadcn uses it
 
 - Added `quiz_attempts.released_at` and `semester_settings` — not in `DOS-Site-Database-Schema.sql`, both needed to implement resolved decisions #10 and #11 above.
 - Post-UTME conversion formula (`raw / 2`) is a placeholder pending explicit Board confirmation — everything else in this document is resolved and final for MVP scope.
+- Added `quizzes.opens_at` / `quizzes.closes_at` (nullable, plus a `quizzes_window_check` CHECK constraint) — not in `DOS-Site-Database-Schema.sql`. Needed to implement the 2026-09-28 Board amendment to resolved decision #6, which made the weekly Course Quiz window Admin-overridable instead of fixed. Resolution lives in `lib/quizzes/window.ts` (`resolveCourseQuizWindow`); the API is `PATCH /api/admin/quizzes/[id]/window`, Admin-only, Course Quizzes only (Topic Quizzes have no window → 409).

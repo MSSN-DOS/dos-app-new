@@ -8,7 +8,12 @@ vi.mock("@/lib/auth/guard", () => ({ requireAuth }));
 vi.mock("@/lib/db", () => ({ getDb }));
 
 import { GET } from "./route";
-import { jsonRequest, makeDbMock, stubSelect, type DbMock } from "@/lib/testing/route-test";
+import {
+  jsonRequest,
+  makeDbMock,
+  stubSelect,
+  type DbMock,
+} from "@/lib/testing/route-test";
 
 let db: DbMock;
 
@@ -104,8 +109,18 @@ describe("GET /api/teacher/results/[quizId]", () => {
       [quizRow()],
       [
         { userId: 8, fullName: "Bello, A.", identifier: "MAT/2023/001", score: "82.00" },
-        { userId: 9, fullName: "Suleiman, K.", identifier: "MAT/2023/002", score: "40.00" },
-        { userId: 9, fullName: "Suleiman, K.", identifier: "MAT/2023/002", score: "60.00" },
+        {
+          userId: 9,
+          fullName: "Suleiman, K.",
+          identifier: "MAT/2023/002",
+          score: "40.00",
+        },
+        {
+          userId: 9,
+          fullName: "Suleiman, K.",
+          identifier: "MAT/2023/002",
+          score: "60.00",
+        },
       ],
       // Deliberately carries a score the held projection must never read — a real query
       // can't return one here, and if that ever changes the mark must still not surface.
@@ -135,9 +150,30 @@ describe("GET /api/teacher/results/[quizId]", () => {
       passRate: 66.67,
     });
     expect(body.data).toEqual([
-      { userId: 8, name: "Bello, A.", identifier: "MAT/2023/001", attempts: 1, held: 0, bestScore: 82 },
-      { userId: 9, name: "Suleiman, K.", identifier: "MAT/2023/002", attempts: 2, held: 0, bestScore: 60 },
-      { userId: 10, name: "Yusuf, F.", identifier: "MAT/2023/003", attempts: 1, held: 1, bestScore: null },
+      {
+        userId: 8,
+        name: "Bello, A.",
+        identifier: "MAT/2023/001",
+        attempts: 1,
+        held: 0,
+        bestScore: 82,
+      },
+      {
+        userId: 9,
+        name: "Suleiman, K.",
+        identifier: "MAT/2023/002",
+        attempts: 2,
+        held: 0,
+        bestScore: 60,
+      },
+      {
+        userId: 10,
+        name: "Yusuf, F.",
+        identifier: "MAT/2023/003",
+        attempts: 1,
+        held: 1,
+        bestScore: null,
+      },
     ]);
 
     // The held mark must not reach the response (DESIGN.md §4) — and it must not skew the

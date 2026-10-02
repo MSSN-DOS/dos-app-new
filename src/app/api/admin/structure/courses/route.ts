@@ -1,6 +1,5 @@
 import { asc, and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { ZodError } from "zod";
 
 import { errorResponse } from "@/lib/api/response";
 import { paginate, parsePagination } from "@/lib/api/pagination";
@@ -8,23 +7,6 @@ import { requireAuth } from "@/lib/auth/guard";
 import { getDb } from "@/lib/db";
 import { courseFaculties, courses } from "@/lib/db/schema";
 import { courseCreateSchema, type CourseCreateInput } from "@/lib/validation/structure";
-
-function validationError(err: ZodError): NextResponse {
-  return NextResponse.json(
-    {
-      error: {
-        code: "VALIDATION_ERROR",
-        message: "Invalid input",
-        details: err.issues.map((i) => ({
-          field: i.path.join(".") || "body",
-          code: i.code,
-          message: i.message,
-        })),
-      },
-    },
-    { status: 422 },
-  );
-}
 
 // Map the validated body onto the stored columns, mirroring courses_scope_check.
 function scopeColumns(data: CourseCreateInput) {
@@ -54,6 +36,8 @@ export async function GET(request: Request): Promise<NextResponse> {
     const departmentIdParam = params.get("departmentId");
     const levelIdParam = params.get("levelId");
     const semester = params.get("semester");
+    const sessionIdParam = params.get("sessionId");
+    const sessionId = sessionIdParam === null ? null : Number(sessionIdParam);
     const departmentId = departmentIdParam === null ? null : Number(departmentIdParam);
     const levelId = levelIdParam === null ? null : Number(levelIdParam);
     const db = getDb();
@@ -64,6 +48,7 @@ export async function GET(request: Request): Promise<NextResponse> {
         title: courses.title,
         levelId: courses.levelId,
         semester: courses.semester,
+        sessionId: courses.sessionId,
         scopeType: courses.scopeType,
         departmentId: courses.departmentId,
         facultyId: courses.facultyId,
@@ -90,7 +75,8 @@ export async function GET(request: Request): Promise<NextResponse> {
         (row) =>
           (departmentId === null || row.departmentId === departmentId) &&
           (levelId === null || row.levelId === levelId) &&
-          (semester === null || row.semester === semester),
+          (semester === null || row.semester === semester) &&
+          (sessionId === null || row.sessionId === sessionId),
       )
       .map((row) => ({
         ...row,
@@ -110,8 +96,10 @@ export async function POST(request: Request): Promise<NextResponse> {
       data.scopeType === "interfaculty" ? [...new Set(data.facultyIds ?? [])] : [];
 
     const db = getDb();
-    // No DB uniqueness on courses — keep the same code + level + semester combination
-    // out with a readable conflict instead (same approach as departments).
+    // No DB uniqueness on courses — keep the same code + level + session + semester combination
+    // out with a readable conflict instead (same approach as departments). The session is part
+    // of the key because a course is one *offering*: the same code offered again in 2026/27 is
+    // a new row, not a duplicate.
     const [existing] = await db
       .select({ id: courses.id })
       .from(courses)
@@ -119,6 +107,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         and(
           eq(courses.code, data.code),
           eq(courses.levelId, data.levelId),
+          eq(courses.sessionId, data.sessionId),
           eq(courses.semester, data.semester),
         ),
       )
@@ -128,7 +117,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         {
           error: {
             code: "CONFLICT",
-            message: `Course "${data.code}" already exists at this level for this semester`,
+            message: `Course "${data.code}" already exists at this level for this semester in this session`,
           },
         },
         { status: 409 },
@@ -142,6 +131,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         title: data.title,
         levelId: data.levelId,
         semester: data.semester,
+        sessionId: data.sessionId,
         scopeType: data.scopeType,
         ...scopeColumns(data),
       })
@@ -156,7 +146,6 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     return NextResponse.json({ ...row, facultyIds }, { status: 201 });
   } catch (err) {
-    if (err instanceof ZodError) return validationError(err);
     return errorResponse(err);
   }
 }

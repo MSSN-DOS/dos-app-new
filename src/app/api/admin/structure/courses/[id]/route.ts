@@ -1,6 +1,5 @@
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { ZodError } from "zod";
 
 import { errorResponse } from "@/lib/api/response";
 import { requireAuth } from "@/lib/auth/guard";
@@ -13,23 +12,6 @@ import {
   quizzes,
 } from "@/lib/db/schema";
 import { courseUpdateSchema, type CourseCreateInput } from "@/lib/validation/structure";
-
-function validationError(err: ZodError): NextResponse {
-  return NextResponse.json(
-    {
-      error: {
-        code: "VALIDATION_ERROR",
-        message: "Invalid input",
-        details: err.issues.map((i) => ({
-          field: i.path.join(".") || "body",
-          code: i.code,
-          message: i.message,
-        })),
-      },
-    },
-    { status: 422 },
-  );
-}
 
 // Map the validated body onto the stored columns, mirroring courses_scope_check.
 function scopeColumns(data: CourseCreateInput) {
@@ -58,6 +40,36 @@ export async function PATCH(
       data.scopeType === "interfaculty" ? [...new Set(data.facultyIds ?? [])] : [];
 
     const db = getDb();
+    // A course row is one *offering*, identified by code + level + session + semester (see
+    // `courses` schema and POST's guard). The update schema still carries all four, so a PATCH
+    // that changes any one of them can collide with a different offering — and unlike POST there
+    // is no DB uniqueness constraint to catch it. Check before writing, excluding this row so an
+    // unrelated field edit (title, scope) never trips the guard.
+    const [clash] = await db
+      .select({ id: courses.id })
+      .from(courses)
+      .where(
+        and(
+          eq(courses.code, data.code),
+          eq(courses.levelId, data.levelId),
+          eq(courses.sessionId, data.sessionId),
+          eq(courses.semester, data.semester),
+          ne(courses.id, id),
+        ),
+      )
+      .limit(1);
+    if (clash) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "CONFLICT",
+            message: `Course "${data.code}" already exists at this level for this semester in this session`,
+          },
+        },
+        { status: 409 },
+      );
+    }
+
     const [row] = await db
       .update(courses)
       .set({
@@ -65,6 +77,7 @@ export async function PATCH(
         title: data.title,
         levelId: data.levelId,
         semester: data.semester,
+        sessionId: data.sessionId,
         scopeType: data.scopeType,
         ...scopeColumns(data),
       })
@@ -78,10 +91,7 @@ export async function PATCH(
     }
 
     // Set-replace the interfaculty faculty links — not incremental add/remove calls.
-    await db
-      .delete(courseFaculties)
-      .where(eq(courseFaculties.courseId, id))
-      .returning();
+    await db.delete(courseFaculties).where(eq(courseFaculties.courseId, id)).returning();
     if (facultyIds.length > 0) {
       await db
         .insert(courseFaculties)
@@ -91,7 +101,6 @@ export async function PATCH(
 
     return NextResponse.json({ ...row, facultyIds });
   } catch (err) {
-    if (err instanceof ZodError) return validationError(err);
     return errorResponse(err);
   }
 }
@@ -155,7 +164,8 @@ export async function DELETE(
         {
           error: {
             code: "CONFLICT",
-            message: "Course has one or more content items attached and cannot be deleted",
+            message:
+              "Course has one or more content items attached and cannot be deleted",
           },
         },
         { status: 409 },

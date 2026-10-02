@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { z } from "zod";
+import { ZodError, z } from "zod";
 
 import { errorResponse } from "@/lib/api/response";
 import { requireAuth } from "@/lib/auth/guard";
@@ -12,19 +12,6 @@ const tourKeyShape = z
   .min(1)
   .max(80)
   .regex(/^[a-z0-9.-]+$/, "Invalid tour key");
-
-function validationError(details: { field: string; code: string; message: string }[]) {
-  return NextResponse.json(
-    {
-      error: {
-        code: "VALIDATION_ERROR",
-        message: "Invalid input",
-        details,
-      },
-    },
-    { status: 422 },
-  );
-}
 
 function readTourKey(raw: unknown): { ok: true; value: string } | { ok: false } {
   const parsed = z.object({ tourKey: tourKeyShape }).safeParse(raw);
@@ -39,16 +26,28 @@ export async function GET(request: Request) {
     const raw = url.searchParams.get("tourKey");
     const result = readTourKey(raw === null ? { tourKey: "" } : { tourKey: raw });
     if (!result.ok) {
-      return validationError([
-        { field: "tourKey", code: "custom", message: "tourKey query parameter is required" },
-      ]);
+      return errorResponse(
+        new ZodError([
+          {
+            code: "custom",
+            path: ["tourKey"],
+            message: "tourKey query parameter is required",
+          },
+        ]),
+        "query",
+      );
     }
 
     const db = getDb();
     const [row] = await db
       .select({ tourKey: tourCompletions.tourKey })
       .from(tourCompletions)
-      .where(and(eq(tourCompletions.userId, auth.userId), eq(tourCompletions.tourKey, result.value)))
+      .where(
+        and(
+          eq(tourCompletions.userId, auth.userId),
+          eq(tourCompletions.tourKey, result.value),
+        ),
+      )
       .limit(1);
 
     return NextResponse.json({ data: { seen: Boolean(row) } });
@@ -72,9 +71,11 @@ export async function POST(request: Request) {
     }
     const result = readTourKey(body);
     if (!result.ok) {
-      return validationError([
-        { field: "tourKey", code: "custom", message: "A valid tourKey is required" },
-      ]);
+      return errorResponse(
+        new ZodError([
+          { code: "custom", path: ["tourKey"], message: "A valid tourKey is required" },
+        ]),
+      );
     }
 
     const db = getDb();

@@ -275,10 +275,23 @@ export default function ResourcesPage() {
                       referrerPolicy="strict-origin-when-cross-origin"
                       className="aspect-video w-full"
                     />
-                    <p className="border-t border-line px-3 py-2 text-[11.5px] leading-relaxed text-faint">
-                      Player not loading? The host may not have shared the video publicly —
-                      use <strong className="font-semibold text-sub">Watch</strong> instead.
-                    </p>
+                    {/* Collapsed by default, deliberately. This is real help for the one case it
+                        covers — a Drive file that is not shared publicly, which renders an error
+                        page *inside* the frame and so fires `load` normally. Nothing on this side
+                        of the frame can detect that, because the frame is cross-origin. So the
+                        honest fix is not to try to detect it but to stop asserting that something
+                        is wrong: shown expanded, this read as an error under a player that had
+                        loaded perfectly. Behind a disclosure it is simply available. Same pattern
+                        as the "Read article" summary above. */}
+                    <details className="group border-t border-line">
+                      <summary className="flex min-h-11 cursor-pointer list-none items-center px-3 text-[11.5px] leading-relaxed text-faint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand">
+                        Player not working?
+                      </summary>
+                      <p className="px-3 pb-2 text-[11.5px] leading-relaxed text-faint">
+                        The host may not have shared the video publicly — use{" "}
+                        <strong className="font-semibold text-sub">Watch</strong> instead.
+                      </p>
+                    </details>
                   </div>
                 ) : null}
               </li>

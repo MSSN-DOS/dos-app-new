@@ -152,16 +152,18 @@ describe("PATCH /api/teacher/questions/[id]", () => {
     const body = await res.json();
     expect(body.error.details).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ field: "blanks", message: expect.stringMatching(/at least one blank/i) }),
+        expect.objectContaining({
+          field: "blanks",
+          message: expect.stringMatching(/at least one blank/i),
+        }),
       ]),
     );
   });
 
   it("rejects an unknown status value with 422", async () => {
-    const res = await PATCH(
-      jsonRequest(url, "PATCH", { ...draftBody, status: "nope" }),
-      { params: Promise.resolve({ id: "1" }) },
-    );
+    const res = await PATCH(jsonRequest(url, "PATCH", { ...draftBody, status: "nope" }), {
+      params: Promise.resolve({ id: "1" }),
+    });
     expect(res.status).toBe(422);
     const body = await res.json();
     expect(body.error.details[0].field).toBe("status");
@@ -244,5 +246,71 @@ describe("DELETE /api/teacher/questions/[id]", () => {
       params: Promise.resolve({ id: "1" }),
     });
     expect(res.status).toBe(403);
+  });
+});
+
+describe("PATCH /api/teacher/questions/[id] — rich text is sanitised server-side", () => {
+  // Same trust boundary as POST: the stem renders through `dangerouslySetInnerHTML` in every
+  // student's attempt screen, so the update path must sanitise too — not just the create path.
+  const SCOPE = [{ courseId: 2, jambSubjectId: null }];
+
+  it("strips script and event handlers from the stored stem", async () => {
+    stubSelect(db, [SCOPE]);
+    const set: Record<string, unknown> = {};
+    db.update.mockImplementation(() => ({
+      set: (v: Record<string, unknown>) => {
+        Object.assign(set, v);
+        return { where: () => ({ returning: async () => [{ id: 1, ...v }] }) };
+      },
+    }));
+    db.insert.mockImplementation(() => ({
+      values: () => ({ returning: async () => [] }),
+    }));
+    // The handler set-replaces options/blanks, which it does with awaited `delete().returning()`.
+    stubDelete(db, null);
+
+    const res = await PATCH(
+      jsonRequest(url, "PATCH", {
+        courseId: 2,
+        questionType: "fill_in_gap",
+        bodyRichText: '<img src=x onerror="alert(1)">Updated body',
+        status: "draft",
+        blanks: [{ acceptedAnswer: "4" }],
+      }),
+      { params: Promise.resolve({ id: "1" }) },
+    );
+
+    expect(res.status).toBe(200);
+    expect(set.bodyRichText).toBe("Updated body");
+  });
+
+  it("keeps the sub/sup formatting the question editor depends on", async () => {
+    stubSelect(db, [SCOPE]);
+    const set: Record<string, unknown> = {};
+    db.update.mockImplementation(() => ({
+      set: (v: Record<string, unknown>) => {
+        Object.assign(set, v);
+        return { where: () => ({ returning: async () => [{ id: 1, ...v }] }) };
+      },
+    }));
+    db.insert.mockImplementation(() => ({
+      values: () => ({ returning: async () => [] }),
+    }));
+    // The handler set-replaces options/blanks, which it does with awaited `delete().returning()`.
+    stubDelete(db, null);
+
+    const res = await PATCH(
+      jsonRequest(url, "PATCH", {
+        courseId: 2,
+        questionType: "fill_in_gap",
+        bodyRichText: "Write H<sub>2</sub>O",
+        status: "draft",
+        blanks: [{ acceptedAnswer: "4" }],
+      }),
+      { params: Promise.resolve({ id: "1" }) },
+    );
+
+    expect(res.status).toBe(200);
+    expect(set.bodyRichText).toBe("Write H<sub>2</sub>O");
   });
 });

@@ -1,6 +1,5 @@
 import { and, asc, eq, ilike, inArray, or } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { ZodError } from "zod";
 
 import { errorResponse } from "@/lib/api/response";
 import { paginate, parsePagination } from "@/lib/api/pagination";
@@ -14,23 +13,6 @@ import {
   users,
 } from "@/lib/db/schema";
 import { aspirantListQuerySchema } from "@/lib/validation/users";
-
-function validationError(err: ZodError): NextResponse {
-  return NextResponse.json(
-    {
-      error: {
-        code: "VALIDATION_ERROR",
-        message: "Invalid input",
-        details: err.issues.map((i) => ({
-          field: i.path.join(".") || "query",
-          code: i.code,
-          message: i.message,
-        })),
-      },
-    },
-    { status: 422 },
-  );
-}
 
 /** GET /api/admin/users/aspirants?search= */
 export async function GET(request: Request): Promise<NextResponse> {
@@ -53,13 +35,16 @@ export async function GET(request: Request): Promise<NextResponse> {
     const query = aspirantListQuerySchema.safeParse({
       search: url.searchParams.get("search") ?? undefined,
     });
-    if (!query.success) return validationError(query.error);
+    if (!query.success) return errorResponse(query.error, "query");
 
     const conditions = [eq(roles.name, "aspirant")];
     const search = query.data.search;
     if (search !== undefined && search.length > 0) {
       const pattern = `%${search}%`;
-      const searchCondition = or(ilike(users.fullName, pattern), ilike(users.identifier, pattern));
+      const searchCondition = or(
+        ilike(users.fullName, pattern),
+        ilike(users.identifier, pattern),
+      );
       if (searchCondition) conditions.push(searchCondition);
     }
 
@@ -90,7 +75,12 @@ export async function GET(request: Request): Promise<NextResponse> {
           convertedScore50: postUtmeScores.convertedScore50,
         })
         .from(postUtmeScores)
-        .where(inArray(postUtmeScores.userId, rows.map((r) => r.id)))
+        .where(
+          inArray(
+            postUtmeScores.userId,
+            rows.map((r) => r.id),
+          ),
+        )
         .orderBy(asc(postUtmeScores.userId), asc(postUtmeScores.weekStart));
       for (const s of scores) latestScore.set(s.userId, s.convertedScore50);
     }

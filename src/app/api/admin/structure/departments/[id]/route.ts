@@ -1,29 +1,11 @@
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { ZodError } from "zod";
 
 import { errorResponse } from "@/lib/api/response";
 import { requireAuth } from "@/lib/auth/guard";
 import { getDb } from "@/lib/db";
 import { courses, departmentLevels, departments, studentProfiles } from "@/lib/db/schema";
 import { departmentUpdateSchema } from "@/lib/validation/structure";
-
-function validationError(err: ZodError): NextResponse {
-  return NextResponse.json(
-    {
-      error: {
-        code: "VALIDATION_ERROR",
-        message: "Invalid input",
-        details: err.issues.map((i) => ({
-          field: i.path.join(".") || "body",
-          code: i.code,
-          message: i.message,
-        })),
-      },
-    },
-    { status: 422 },
-  );
-}
 
 export async function PATCH(
   request: Request,
@@ -67,7 +49,6 @@ export async function PATCH(
 
     return NextResponse.json({ ...row, levelIds });
   } catch (err) {
-    if (err instanceof ZodError) return validationError(err);
     return errorResponse(err);
   }
 }

@@ -52,7 +52,11 @@ function assignmentTx(teacher: Record<string, unknown>) {
       }
       const rows = Array.isArray(v) ? v : [v];
       assignmentValues.push(
-        ...(rows as { userId: number; courseId: number | null; jambSubjectId: number | null }[]),
+        ...(rows as {
+          userId: number;
+          courseId: number | null;
+          jambSubjectId: number | null;
+        }[]),
       );
       return { returning: async () => rows.map((r, i) => ({ id: 100 + i, ...r })) };
     },
@@ -227,7 +231,12 @@ describe("POST /api/admin/teachers", () => {
       [TEACHER_ROLE],
       [{ identifier: "STF-001" }, { identifier: "STF-003" }],
     ]);
-    const { tx } = assignmentTx({ id: 10, fullName: "X", identifier: "STF-004", isActive: true });
+    const { tx } = assignmentTx({
+      id: 10,
+      fullName: "X",
+      identifier: "STF-004",
+      isActive: true,
+    });
     stubTransaction(db, tx);
 
     const res = await POST(jsonRequest("http://localhost/x", "POST", validBody));
@@ -287,7 +296,10 @@ describe("POST /api/admin/teachers", () => {
   it("returns 404 when a course does not exist", async () => {
     stubSelect(db, [[]]);
     const res = await POST(
-      jsonRequest("http://localhost/x", "POST", { fullName: "Ibrahim, S.", courseIds: [999] }),
+      jsonRequest("http://localhost/x", "POST", {
+        fullName: "Ibrahim, S.",
+        courseIds: [999],
+      }),
     );
     expect(res.status).toBe(404);
     const body = await res.json();

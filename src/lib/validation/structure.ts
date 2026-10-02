@@ -43,6 +43,10 @@ export const courseCreateSchema = z
     title: z.string().trim().min(1).max(200),
     levelId: z.coerce.number().int().min(1),
     semester: z.enum(["harmattan", "rain"]),
+    // Which academic session this offering belongs to. A course code may legitimately appear
+    // once per session (that is the whole point of one-row-per-offering), so the session is
+    // part of the identity, not an attribute to be edited in place.
+    sessionId: z.coerce.number().int().min(1),
     scopeType: z.enum(["department", "faculty", "general", "interfaculty"]),
     departmentId: nullableInt.optional(),
     facultyId: nullableInt.optional(),

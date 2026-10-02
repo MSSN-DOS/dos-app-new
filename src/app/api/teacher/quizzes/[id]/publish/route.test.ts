@@ -1,10 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { POST } from "./route";
-import {
-  ForbiddenError,
-  UnauthorizedError,
-} from "@/lib/auth/errors";
+import { ForbiddenError, UnauthorizedError } from "@/lib/auth/errors";
 import { jsonRequest, makeDbMock, stubSelect } from "@/lib/testing/route-test";
 
 const { requireAuthMock, getDbMock } = vi.hoisted(() => ({
@@ -41,15 +38,13 @@ describe("POST /api/teacher/quizzes/[id]/publish", () => {
       [{ id: 1, questionCount: 50, title: "Algebra Basics", createdBy: 5 }],
       attached,
     ]);
-    db.update.mockReturnValue(
-      {
-        set: () => ({
-          where: () => ({
-            returning: async () => [{ id: 1, status: "published" }],
-          }),
+    db.update.mockReturnValue({
+      set: () => ({
+        where: () => ({
+          returning: async () => [{ id: 1, status: "published" }],
         }),
-      } as never,
-    );
+      }),
+    } as never);
     const res = await POST(jsonRequest(URL_1, "POST"), PARAMS);
     expect(res.status).toBe(200);
     const body = (await res.json()) as { status: string };
@@ -59,7 +54,10 @@ describe("POST /api/teacher/quizzes/[id]/publish", () => {
   it("422s with the remaining count when under the target", async () => {
     stubSelect(db, [
       [{ id: 1, questionCount: 50, title: "Algebra Basics", createdBy: 5 }],
-      Array.from({ length: 48 }, (_, i) => ({ questionId: i + 1, questionStatus: "published" as const })),
+      Array.from({ length: 48 }, (_, i) => ({
+        questionId: i + 1,
+        questionStatus: "published" as const,
+      })),
     ]);
     const res = await POST(jsonRequest(URL_1, "POST"), PARAMS);
     expect(res.status).toBe(422);

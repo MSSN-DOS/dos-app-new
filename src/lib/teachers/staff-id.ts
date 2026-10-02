@@ -4,7 +4,8 @@
 // already exist. Generation therefore has to *ignore* anything that isn't STF-<digits> rather
 // than choke on it — see nextStaffNumber.
 
-const STAFF_ID_PATTERN = /^STF-(\d+)$/;
+import { staffIdSchema } from "@/lib/validation/identifiers";
+
 const PAD_WIDTH = 3;
 
 /** STF-001, STF-042, and STF-1000 once the sequence outgrows the padding. */
@@ -13,7 +14,7 @@ export function formatStaffId(value: number): string {
 }
 
 export function isStaffId(value: string): boolean {
-  return STAFF_ID_PATTERN.test(value.trim());
+  return staffIdSchema.safeParse(value).success;
 }
 
 /**
@@ -25,9 +26,11 @@ export function isStaffId(value: string): boolean {
 export function nextStaffNumber(existing: readonly string[]): number {
   let highest = 0;
   for (const identifier of existing) {
-    const match = STAFF_ID_PATTERN.exec(identifier.trim());
-    if (!match?.[1]) continue;
-    const value = Number(match[1]);
+    // Parse from the schema-validated string rather than a second local regex: one definition
+    // of the format, so the generator can never drift from what the validator accepts.
+    if (!isStaffId(identifier)) continue;
+    const digits = identifier.trim().slice("STF-".length);
+    const value = Number(digits);
     if (Number.isSafeInteger(value) && value > highest) highest = value;
   }
   return highest + 1;

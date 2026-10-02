@@ -20,6 +20,9 @@ import {
 interface HeldQuizRow {
   quizId: number;
   label: string;
+  /** "course" | "topic". Sent so the list can name a Topic Quiz as one. */
+  quizType: string;
+  /** NULL for a Topic Quiz — they are not weekly, so there is no week to file them under. */
   weekStart: string | null;
   courseCode: string | null;
   subjectName: string | null;
@@ -35,8 +38,23 @@ interface ReleaseResponse {
   };
 }
 
+/**
+ * The name an Admin recognises the quiz by.
+ *
+ * A Course Quiz is identified by its subject (or course code); a Topic Quiz has neither, and
+ * labelling it "Course Quiz" — which is what falling back on the absent subject name did — would
+ * tell the Admin they are looking at the wrong kind of thing. `quizType` is sent by the held-scores
+ * route precisely so this distinction can be made instead of guessed.
+ */
+/**
+ * Which kind of thing a row is, so the Admin is not left guessing.
+ *
+ * The quiz's own name is the heading; this is the qualifier underneath it. Two Course Quizzes in
+ * the same course would otherwise render identically — "CHM101 — Course Quiz", twice — which is
+ * not enough information to decide which one to release.
+ */
 function rowTitle(row: HeldQuizRow): string {
-  const qualifier = row.subjectName ?? "Course Quiz";
+  const qualifier = row.subjectName ?? (row.quizType === "topic" ? "Topic Quiz" : "Course Quiz");
   return `${row.courseCode ? `${row.courseCode} — ` : ""}${qualifier}`;
 }
 
@@ -62,9 +80,24 @@ export default function ScoreReleasePage() {
   const [selectedWeek, setSelectedWeek] = useState<string | null>(null);
   const activeWeek = selectedWeek ?? weeks[weeks.length - 1] ?? null;
 
+  /**
+   * Topic Quiz scores are held until released exactly like Course Quiz ones — every submission is
+   * held, with no carve-out — but a Topic Quiz has no `weekStart`, so it cannot appear in the week
+   * picker. It is therefore shown in its own always-visible group below, releasable one quiz at a
+   * time. There is deliberately no "release all" for it: bulk release is defined by week, and
+   * inventing a second bulk action for a quiz type the Board never specified would be a decision
+   * rather than a fix.
+   *
+   * Before this, these attempts were held *forever* with no path to release them at all — the
+   * endpoint would have accepted one, but the Admin could never see it to release it.
+   */
+  const topicRows = useMemo(
+    () => allRows.filter((row) => row.weekStart === null),
+    [allRows],
+  );
   const visibleRows = activeWeek
     ? allRows.filter((row) => row.weekStart === activeWeek)
-    : allRows;
+    : allRows.filter((row) => row.weekStart !== null);
 
   const recordRelease = (
     response: ReleaseResponse,
@@ -164,7 +197,7 @@ export default function ScoreReleasePage() {
               Retry
             </Button>
           </div>
-        ) : visibleRows.length === 0 ? (
+        ) : visibleRows.length === 0 && topicRows.length === 0 ? (
           <div className="rounded-md border border-dashed p-8 text-center">
             <p className="text-sm text-muted-foreground">
               No submitted attempts are waiting for release{activeWeek ? ` in week ${activeWeek}` : ""}.
@@ -172,37 +205,84 @@ export default function ScoreReleasePage() {
           </div>
         ) : (
           <>
-            <ul role="list" aria-label="Quizzes with held scores" className="space-y-3">
-              {visibleRows.map((row) => (
-                <li
-                  key={row.quizId}
-                  className="flex flex-col gap-3 rounded-md border p-4 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="min-w-0">
-                    <p className="text-base font-medium">{rowTitle(row)}</p>
-                    <p className="mt-0.5 text-sm text-muted-foreground">
-                      Week of {row.weekStart} ·{" "}
-                      <span aria-label={`${row.heldCount} attempts held`}>
-                        {row.heldCount} attempt{row.heldCount === 1 ? "" : "s"} held
-                      </span>
-                    </p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="min-h-11 shrink-0 self-start sm:self-auto"
-                    disabled={releasing}
-                    onClick={() => {
-                      releaseOne.mutate(row.quizId);
-                    }}
+            {visibleRows.length > 0 && (
+              <ul role="list" aria-label="Quizzes with held scores" className="space-y-3">
+                {visibleRows.map((row) => (
+                  <li
+                    key={row.quizId}
+                    className="flex flex-col gap-3 rounded-md border p-4 sm:flex-row sm:items-center sm:justify-between"
                   >
-                    {releaseOne.isPending && releaseOne.variables === row.quizId
-                      ? "Releasing…"
-                      : "Release this quiz"}
-                  </Button>
-                </li>
-              ))}
-            </ul>
+                    <div className="min-w-0">
+                      <p className="text-base font-medium">{row.label}</p>
+                      <p className="mt-0.5 text-sm text-muted-foreground">
+                        {rowTitle(row)} · Week of {row.weekStart} ·{" "}
+                        <span aria-label={`${row.heldCount} attempts held`}>
+                          {row.heldCount} attempt{row.heldCount === 1 ? "" : "s"} held
+                        </span>
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="min-h-11 shrink-0 self-start sm:self-auto"
+                      disabled={releasing}
+                      onClick={() => {
+                        releaseOne.mutate(row.quizId);
+                      }}
+                    >
+                      {releaseOne.isPending && releaseOne.variables === row.quizId
+                        ? "Releasing…"
+                        : "Release this quiz"}
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {topicRows.length > 0 && (
+              <section aria-labelledby="topic-held-heading" className="space-y-3">
+                <div>
+                  <h2 id="topic-held-heading" className="text-base font-medium">
+                    Topic Quiz scores
+                  </h2>
+                  <p className="mt-0.5 text-sm text-muted-foreground">
+                    Held like any other score, but not filed under a week, so there is no bulk
+                    release for them. Release them one quiz at a time.
+                  </p>
+                </div>
+                <ul role="list" aria-label="Topic Quizzes with held scores" className="space-y-3">
+                  {topicRows.map((row) => (
+                    <li
+                      key={row.quizId}
+                      className="flex flex-col gap-3 rounded-md border p-4 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-base font-medium">{row.label}</p>
+                        <p className="mt-0.5 text-sm text-muted-foreground">
+                          {rowTitle(row)} ·{" "}
+                          <span aria-label={`${row.heldCount} attempts held`}>
+                            {row.heldCount} attempt{row.heldCount === 1 ? "" : "s"} held
+                          </span>
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="min-h-11 shrink-0 self-start sm:self-auto"
+                        disabled={releasing}
+                        onClick={() => {
+                          releaseOne.mutate(row.quizId);
+                        }}
+                      >
+                        {releaseOne.isPending && releaseOne.variables === row.quizId
+                          ? "Releasing…"
+                          : "Release this quiz"}
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
 
             {activeWeek && (
               <Button

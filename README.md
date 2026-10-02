@@ -104,7 +104,65 @@ Create `.mcp.json` at the repo root:
 | `pnpm test:watch` | Vitest, watch mode |
 | `pnpm db:generate` | Generate a Drizzle migration from schema changes |
 | `pnpm db:migrate` | Apply pending migrations |
+| `pnpm db:mark-applied` | Record a migration you applied by hand (see below) |
 | `pnpm db:seed` | Run seed script (roles + bootstrap Admin) |
+| `pnpm db:flush:dev` | Delete all data rows, leaving schema intact. **Dev only** |
+| `pnpm db:verify:video` | Assert the video semester-exemption still holds. **Dev only** |
+| `pnpm guard` | Supply-chain scan over the tree |
+
+### Writing scripts is gated on the project ref, not the hostname
+
+`db:flush:dev` and `db:verify:video` both write real rows. They refuse unless the target database
+is a **local** host or a Supabase **project ref** listed in `DOS_DEV_PROJECT_REFS`
+(`.env.local`).
+
+The guard keys on the project ref rather than the hostname because the hostname cannot
+discriminate: Supabase routes every project through shared pooler hosts
+(`aws-1-<region>.pooler.supabase.com`) and shared `<ref>.supabase.co` API hosts, so a dev project
+and its production counterpart have the *same* host. Only the 20-character project ref — which
+appears in the connection username as `postgres.<ref>` — tells them apart.
+
+Do not add a hostname check to work around this; it will either reject the real dev database or
+pass both. Add your dev ref to `DOS_DEV_PROJECT_REFS` instead.
+
+## Deploying a migration
+
+**Migrate first, deploy second.** The app's code queries columns that only exist once the
+migration has run, so deploying ahead of migrating serves 500s on the first request that touches
+them. `drizzle/__drizzle_migrations` is the journal both steps read, so the safe order is:
+
+```bash
+pnpm db:migrate    # 1. apply pending migrations to the target database
+pnpm build          # 2. build, then deploy
+```
+
+Do not add `db:migrate` to the deploy command itself. It runs migrations as a side effect of
+shipping code, which means a failed migration leaves you with new code against an old schema — the
+same 500s, now harder to roll back.
+
+### If you applied a migration by hand
+
+Some migrations here mix DDL with data backfills and cannot be run by
+`drizzle-kit migrate` at all — `0008_material_thor.sql` rewrites `courses.session_id` from a join,
+which the migrator cannot express. When you apply one directly in the Supabase SQL editor, the
+journal does not know, and the next `pnpm db:migrate` tries to run it again and dies on
+`relation "academic_sessions" already exists` — wedging *every* migration queued behind it,
+because drizzle applies the pending batch in a single transaction.
+
+Record it so the journal matches reality:
+
+```bash
+pnpm db:mark-applied 0008_material_thor
+```
+
+The command shows the migration's SQL and its sha256 and asks for confirmation. It refuses on a
+tag that does not exist, on a file whose contents changed since it ran, and on a migration older
+than one already recorded. It does **not** check that you actually applied the migration — that is
+not verifiable in general, since a migration that only backfills data leaves no end state to
+inspect. Read the SQL it prints before you confirm.
+
+If the journal is already wedged by an earlier partial attempt, clear the stale rows out of
+`drizzle.__drizzle_migrations` before re-running.
 
 ## Folder structure
 

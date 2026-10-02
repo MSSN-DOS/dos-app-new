@@ -10,7 +10,12 @@ vi.mock("@/lib/db", () => ({ getDb }));
 vi.mock("@/lib/semester", () => ({ getActiveSemester }));
 
 import { GET } from "./route";
-import { jsonRequest, makeDbMock, stubSelect, type DbMock } from "@/lib/testing/route-test";
+import {
+  jsonRequest,
+  makeDbMock,
+  stubSelect,
+  type DbMock,
+} from "@/lib/testing/route-test";
 
 let db: DbMock;
 
@@ -18,7 +23,15 @@ beforeEach(() => {
   vi.clearAllMocks();
   db = makeDbMock();
   getDb.mockReturnValue(db);
-  getActiveSemester.mockResolvedValue("rain");
+  // The resolver now returns a discriminated union, not a bare semester: `harmattan` alone
+  // cannot say which session it belongs to, and the dashboard pill renders the label.
+  getActiveSemester.mockResolvedValue({
+    ok: true,
+    semester: "rain",
+    sessionId: 1,
+    sessionLabel: "2025/26",
+    source: "auto",
+  });
 });
 
 describe("GET /api/me", () => {
@@ -53,7 +66,7 @@ describe("GET /api/me", () => {
         fullName: "Test Student",
         identifier: "21/30GN001",
         role: "student",
-        activeSemester: "rain",
+        activeSemester: { semester: "rain", sessionLabel: "2025/26", source: "auto" },
         profile: {
           faculty: "Science",
           department: "Mathematics",
@@ -134,7 +147,7 @@ describe("GET /api/me", () => {
         fullName: "Test Aspirant",
         identifier: "12345678JA",
         role: "aspirant",
-        activeSemester: "rain",
+        activeSemester: { semester: "rain", sessionLabel: "2025/26", source: "auto" },
         profile: {
           aspirationDepartment: "Medicine",
           postUtmeRaw: 80,
@@ -148,7 +161,9 @@ describe("GET /api/me", () => {
 
   it("returns a null profile for admin/teacher roles", async () => {
     requireAuth.mockResolvedValue({ userId: 1, roleId: 1 });
-    stubSelect(db, [[{ fullName: "Admin", identifier: "ADM/2026/001", roleName: "admin" }]]);
+    stubSelect(db, [
+      [{ fullName: "Admin", identifier: "ADM/2026/001", roleName: "admin" }],
+    ]);
 
     const res = await GET(jsonRequest("http://localhost/api/me", "GET"));
     expect(res.status).toBe(200);

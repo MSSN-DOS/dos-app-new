@@ -6,15 +6,9 @@ import { ForbiddenError } from "@/lib/auth/errors";
 import { requireAuth } from "@/lib/auth/guard";
 import { getTeachingScope, isTrackAllowed } from "@/lib/auth/teaching-scope";
 import { getDb } from "@/lib/db";
-import {
-  questionBlanks,
-  questionOptions,
-  questions,
-} from "@/lib/db/schema";
-import {
-  questionDraftSchema,
-  questionPublishSchema,
-} from "@/lib/validation/questions";
+import { questionBlanks, questionOptions, questions } from "@/lib/db/schema";
+import { sanitizeRichText } from "@/lib/sanitize";
+import { questionDraftSchema, questionPublishSchema } from "@/lib/validation/questions";
 
 const BULK_LIMIT = 50;
 
@@ -118,9 +112,9 @@ export async function POST(request: Request): Promise<NextResponse> {
       .filter((i) => i >= 0);
     if (disallowed.length > 0) {
       throw new ForbiddenError(
-        `You do not teach the course or JAMB subject on row ${
-          disallowed.map((i) => i + 1).join(", ")
-        }`,
+        `You do not teach the course or JAMB subject on row ${disallowed
+          .map((i) => i + 1)
+          .join(", ")}`,
       );
     }
 
@@ -139,16 +133,17 @@ export async function POST(request: Request): Promise<NextResponse> {
             jambSubjectId: data.jambSubjectId ?? null,
             topicId: data.topicId ?? null,
             questionType: data.questionType,
-            bodyRichText: data.bodyRichText,
+            // Sanitised server-side on write — see the same note in `questions/route.ts`. This
+            // path matters most: bulk import is the one most likely to be driven by a file
+            // rather than by the editor that happens to sanitise client-side today.
+            bodyRichText: sanitizeRichText(data.bodyRichText),
             status: intent,
             createdBy: auth.userId,
           })
           .returning();
 
         const optionRows =
-          data.questionType === "options" &&
-          data.options &&
-          data.options.length > 0
+          data.questionType === "options" && data.options && data.options.length > 0
             ? await tx
                 .insert(questionOptions)
                 .values(
@@ -163,9 +158,7 @@ export async function POST(request: Request): Promise<NextResponse> {
             : [];
 
         const blankRows =
-          data.questionType === "fill_in_gap" &&
-          data.blanks &&
-          data.blanks.length > 0
+          data.questionType === "fill_in_gap" && data.blanks && data.blanks.length > 0
             ? await tx
                 .insert(questionBlanks)
                 .values(

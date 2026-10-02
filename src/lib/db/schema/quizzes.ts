@@ -35,6 +35,12 @@ export const quizzes = pgTable(
     topicId: integer("topic_id").references(() => topics.id),
     jambSubjectId: integer("jamb_subject_id").references(() => jambSubjects.id),
     weekStart: date("week_start"),
+    // Admin-controlled availability override for Course Quizzes. Both NULL = the
+    // default Saturday 00:00 -> Monday 00:00 WAT window derived from week_start.
+    // Setting either one replaces that boundary; see isCourseQuizWindowOpen() and
+    // DESIGN.md 4 decision 6 (was "Fixed" before Board override 2026-09-28).
+    opensAt: timestamp("opens_at", { mode: "date" }),
+    closesAt: timestamp("closes_at", { mode: "date" }),
     questionCount: integer("question_count").notNull().default(50),
     timeLimitMinutes: integer("time_limit_minutes").notNull(),
     passMark: integer("pass_mark").notNull(),
@@ -58,6 +64,10 @@ export const quizzes = pgTable(
     check(
       "quizzes_type_check",
       sql`(quiz_type = 'topic' AND topic_id IS NOT NULL AND week_start IS NULL) OR (quiz_type = 'course' AND topic_id IS NULL AND week_start IS NOT NULL)`
+    ),
+    check(
+      "quizzes_window_check",
+      sql`opens_at IS NULL OR closes_at IS NULL OR closes_at > opens_at`
     ),
     denyPublicPolicy("quizzes"),
   ]

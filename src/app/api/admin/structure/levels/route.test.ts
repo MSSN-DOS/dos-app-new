@@ -8,7 +8,13 @@ vi.mock("@/lib/auth/guard", () => ({ requireAuth }));
 vi.mock("@/lib/db", () => ({ getDb }));
 
 import { GET, POST } from "./route";
-import { jsonRequest, makeDbMock, stubInsert, stubSelect, type DbMock } from "@/lib/testing/route-test";
+import {
+  jsonRequest,
+  makeDbMock,
+  stubInsert,
+  stubSelect,
+  type DbMock,
+} from "@/lib/testing/route-test";
 
 let db: DbMock;
 
@@ -20,18 +26,32 @@ beforeEach(() => {
 
 describe("GET /api/admin/structure/levels", () => {
   it("returns 200 with the level list for an admin", async () => {
-    stubSelect(db, [[{ id: 1, value: 100 }, { id: 2, value: 200 }]]);
+    stubSelect(db, [
+      [
+        { id: 1, value: 100 },
+        { id: 2, value: 200 },
+      ],
+    ]);
     const res = await GET(jsonRequest("http://localhost/x", "GET"));
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
-      data: [{ id: 1, value: 100 }, { id: 2, value: 200 }],
+      data: [
+        { id: 1, value: 100 },
+        { id: 2, value: 200 },
+      ],
       meta: { page: 1, pageSize: 2, total: 2, totalPages: 1 },
     });
     expect(requireAuth).toHaveBeenCalledWith(expect.anything(), ["admin"]);
   });
 
   it("slices the requested page and returns pagination metadata", async () => {
-    stubSelect(db, [[{ id: 1, value: 100 }, { id: 2, value: 200 }, { id: 3, value: 300 }]]);
+    stubSelect(db, [
+      [
+        { id: 1, value: 100 },
+        { id: 2, value: 200 },
+        { id: 3, value: 300 },
+      ],
+    ]);
     const res = await GET(jsonRequest("http://localhost/x?page=2&pageSize=1", "GET"));
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({

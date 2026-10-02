@@ -1,6 +1,5 @@
 import { and, asc, eq, isNotNull, isNull, inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { ZodError } from "zod";
 
 import { errorResponse } from "@/lib/api/response";
 import { requireAuth } from "@/lib/auth/guard";
@@ -8,23 +7,6 @@ import { getDb } from "@/lib/db";
 import { quizAttempts, quizzes } from "@/lib/db/schema";
 import { recomputeWeeklyScores } from "@/lib/scoring/apply-release";
 import { releaseSchema, type ReleaseInput } from "@/lib/validation/scores";
-
-function validationError(err: ZodError): NextResponse {
-  return NextResponse.json(
-    {
-      error: {
-        code: "VALIDATION_ERROR",
-        message: "Invalid input",
-        details: err.issues.map((i) => ({
-          field: i.path.join(".") || "body",
-          code: i.code,
-          message: i.message,
-        })),
-      },
-    },
-    { status: 422 },
-  );
-}
 
 class NotFoundError extends Error {}
 
@@ -44,7 +26,9 @@ async function releaseHeldAttempts(
       and(
         isNotNull(quizAttempts.submittedAt),
         isNull(quizAttempts.releasedAt),
-        "quizId" in input ? eq(quizAttempts.quizId, input.quizId) : eq(quizzes.weekStart, input.weekStart),
+        "quizId" in input
+          ? eq(quizAttempts.quizId, input.quizId)
+          : eq(quizzes.weekStart, input.weekStart),
       ),
     )
     .orderBy(asc(quizAttempts.id));
@@ -61,7 +45,13 @@ async function releaseHeldAttempts(
 
   return {
     releasedCount: attemptIds.length,
-    weeks: [...new Set(heldRows.map((row) => row.weekStart as string))],
+    // Only weeked quizzes can affect a weekly score. A Topic Quiz has `weekStart = NULL`, and
+    // passing that through would put `null` into a value typed as a date, then render it as
+    // `week_start = $1` with a null parameter — a query SQL never matches, so it would burn a
+    // round-trip per null while silently recomputing nothing. Filtering here is also the correct
+    // outcome on the merits: Topic Quiz results never feed CGPA or Post-UTME (AGENTS.md §3), so
+    // there is nothing to recompute for them.
+    weeks: [...new Set(heldRows.map((row) => row.weekStart).filter((week) => week !== null))],
     userIds: [...new Set(heldRows.map((row) => row.userId))],
   };
 }
@@ -79,7 +69,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       body = null;
     }
     const parsed = releaseSchema.safeParse(body);
-    if (!parsed.success) return validationError(parsed.error);
+    if (!parsed.success) return errorResponse(parsed.error);
 
     // Release first, then recompute every affected (user, week) pair synchronously.
     const { releasedCount, weeks, userIds } = await releaseHeldAttempts(db, parsed.data);
@@ -96,7 +86,9 @@ export async function POST(request: Request): Promise<NextResponse> {
   } catch (error) {
     if (error instanceof NotFoundError) {
       return NextResponse.json(
-        { error: { code: "NOT_FOUND", message: "No held attempts match this selection" } },
+        {
+          error: { code: "NOT_FOUND", message: "No held attempts match this selection" },
+        },
         { status: 404 },
       );
     }

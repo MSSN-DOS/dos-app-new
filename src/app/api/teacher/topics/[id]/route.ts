@@ -1,6 +1,5 @@
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { ZodError } from "zod";
 
 import { errorResponse } from "@/lib/api/response";
 import { ForbiddenError } from "@/lib/auth/errors";
@@ -10,23 +9,6 @@ import { getTeachingScope, isCourseAllowed } from "@/lib/auth/teaching-scope";
 import { getDb } from "@/lib/db";
 import { questions, quizzes, topics } from "@/lib/db/schema";
 import { topicUpdateSchema } from "@/lib/validation/topics";
-
-function validationError(err: ZodError): NextResponse {
-  return NextResponse.json(
-    {
-      error: {
-        code: "VALIDATION_ERROR",
-        message: "Invalid input",
-        details: err.issues.map((i) => ({
-          field: i.path.join(".") || "body",
-          code: i.code,
-          message: i.message,
-        })),
-      },
-    },
-    { status: 422 },
-  );
-}
 
 function parseId(raw: string): number | null {
   const id = Number(raw);
@@ -76,7 +58,6 @@ export async function PATCH(
 
     return NextResponse.json(row);
   } catch (err) {
-    if (err instanceof ZodError) return validationError(err);
     return errorResponse(err);
   }
 }
@@ -143,7 +124,10 @@ export async function DELETE(
       );
     }
 
-    const [row] = await db.delete(topics).where(and(eq(topics.id, id), ownedWhere(auth))).returning();
+    const [row] = await db
+      .delete(topics)
+      .where(and(eq(topics.id, id), ownedWhere(auth)))
+      .returning();
     if (!row) {
       return NextResponse.json(
         { error: { code: "NOT_FOUND", message: "Topic not found" } },
@@ -153,7 +137,6 @@ export async function DELETE(
 
     return new NextResponse(null, { status: 204 });
   } catch (err) {
-    if (err instanceof ZodError) return validationError(err);
     return errorResponse(err);
   }
 }

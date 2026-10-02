@@ -8,7 +8,13 @@ vi.mock("@/lib/auth/guard", () => ({ requireAuth }));
 vi.mock("@/lib/db", () => ({ getDb }));
 
 import { GET, POST } from "./route";
-import { jsonRequest, makeDbMock, stubInsert, stubSelect, type DbMock } from "@/lib/testing/route-test";
+import {
+  jsonRequest,
+  makeDbMock,
+  stubInsert,
+  stubSelect,
+  type DbMock,
+} from "@/lib/testing/route-test";
 
 let db: DbMock;
 
@@ -152,9 +158,7 @@ describe("POST /api/teacher/resources", () => {
     expect(res.status).toBe(422);
     const body = await res.json();
     expect(body.error.code).toBe("VALIDATION_ERROR");
-    expect(body.error.details).toEqual([
-      expect.objectContaining({ field: "url" }),
-    ]);
+    expect(body.error.details).toEqual([expect.objectContaining({ field: "url" })]);
     expect(db.insert).not.toHaveBeenCalled();
   });
 

@@ -5,20 +5,9 @@ import { errorResponse } from "@/lib/api/response";
 import { requireAuth } from "@/lib/auth/guard";
 import { getDb } from "@/lib/db";
 import { roles, users } from "@/lib/db/schema";
-import {
-  departments,
-  faculties,
-  levels,
-} from "@/lib/db/schema/academic";
-import {
-  aspirantProfiles,
-  studentProfiles,
-} from "@/lib/db/schema/profiles";
-import {
-  bestScores,
-  cgpaRecords,
-  postUtmeScores,
-} from "@/lib/db/schema/performance";
+import { departments, faculties, levels } from "@/lib/db/schema/academic";
+import { aspirantProfiles, studentProfiles } from "@/lib/db/schema/profiles";
+import { bestScores, cgpaRecords, postUtmeScores } from "@/lib/db/schema/performance";
 import { getActiveSemester } from "@/lib/semester";
 
 export async function GET(request: Request) {
@@ -40,11 +29,21 @@ export async function GET(request: Request) {
     if (!userRow) {
       return NextResponse.json(
         { error: { code: "NOT_FOUND", message: "Account not found" } },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
-    const activeSemester = await getActiveSemester(db);
+    const active = await getActiveSemester(db);
+    // `no-session` is a real state now that the calendar is data: today can fall outside every
+    // session an Admin has entered. The shell already treats a null active semester as "nothing
+    // to show", so null is the honest value here rather than a fabricated semester.
+    const activeSemester = active.ok
+      ? {
+          semester: active.semester,
+          sessionLabel: active.sessionLabel,
+          source: active.source,
+        }
+      : null;
 
     let profile: unknown = null;
 
@@ -56,10 +55,7 @@ export async function GET(request: Request) {
           levelValue: levels.value,
         })
         .from(studentProfiles)
-        .innerJoin(
-          departments,
-          eq(studentProfiles.departmentId, departments.id)
-        )
+        .innerJoin(departments, eq(studentProfiles.departmentId, departments.id))
         .innerJoin(faculties, eq(departments.facultyId, faculties.id))
         .innerJoin(levels, eq(studentProfiles.levelId, levels.id))
         .where(eq(studentProfiles.userId, auth.userId))
@@ -97,7 +93,7 @@ export async function GET(request: Request) {
         .from(aspirantProfiles)
         .innerJoin(
           departments,
-          eq(aspirantProfiles.aspirationDepartmentId, departments.id)
+          eq(aspirantProfiles.aspirationDepartmentId, departments.id),
         )
         .where(eq(aspirantProfiles.userId, auth.userId))
         .limit(1);
@@ -122,9 +118,7 @@ export async function GET(request: Request) {
       profile = {
         aspirationDepartment: profileRow?.departmentName ?? null,
         postUtmeRaw: postUtmeRow ? Number(postUtmeRow.rawScore) : null,
-        postUtmeConverted: postUtmeRow
-          ? Number(postUtmeRow.convertedScore50)
-          : null,
+        postUtmeConverted: postUtmeRow ? Number(postUtmeRow.convertedScore50) : null,
         postUtmeWeekStart: postUtmeRow?.weekStart ?? null,
         quizzesTaken: takenRows.length,
       };

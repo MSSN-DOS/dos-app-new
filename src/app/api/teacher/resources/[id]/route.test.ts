@@ -51,7 +51,10 @@ describe("PATCH /api/teacher/resources/[id]", () => {
 
   it("returns 400 for a non-numeric id", async () => {
     requireAuth.mockResolvedValueOnce(TEACHER);
-    const res = await PATCH(jsonRequest("http://localhost/x", "PATCH", {}), params("abc"));
+    const res = await PATCH(
+      jsonRequest("http://localhost/x", "PATCH", {}),
+      params("abc"),
+    );
     expect(res.status).toBe(400);
   });
 
@@ -96,7 +99,10 @@ describe("PATCH /api/teacher/resources/[id]", () => {
     requireAuth.mockResolvedValueOnce(TEACHER);
 
     const res = await PATCH(
-      jsonRequest("http://localhost/x", "PATCH", { title: "New", url: "javascript:alert(1)" }),
+      jsonRequest("http://localhost/x", "PATCH", {
+        title: "New",
+        url: "javascript:alert(1)",
+      }),
       params("11"),
     );
     expect(res.status).toBe(422);
@@ -112,12 +118,18 @@ describe("PATCH /api/teacher/resources/[id]", () => {
     stubUpdate(db, { id: 11, title: "Limits (corrected)", bodyOrFileUrl: DRIVE_URL });
 
     const res = await PATCH(
-      jsonRequest("http://localhost/x", "PATCH", { title: "Limits (corrected)", url: DRIVE_URL }),
+      jsonRequest("http://localhost/x", "PATCH", {
+        title: "Limits (corrected)",
+        url: DRIVE_URL,
+      }),
       params("11"),
     );
 
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toMatchObject({ id: 11, title: "Limits (corrected)" });
+    await expect(res.json()).resolves.toMatchObject({
+      id: 11,
+      title: "Limits (corrected)",
+    });
   });
 });
 

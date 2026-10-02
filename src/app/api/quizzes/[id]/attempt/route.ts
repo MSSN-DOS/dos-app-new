@@ -17,6 +17,7 @@ import { errorResponse } from "@/lib/api/response";
 import { submitAttemptSchema } from "@/lib/validation/attempts";
 import { studentCanAccessQuiz } from "@/lib/quizzes/access";
 import { isCourseQuizWindowOpen } from "@/lib/quizzes/window";
+import { finalizeUnsubmittedAttempt } from "@/lib/quizzes/finalize-attempt";
 import {
   gradeAttempt,
   type GradingQuestion,
@@ -38,109 +39,9 @@ function shuffleForAttempt<T extends { id: number }>(rows: T[], attemptId: numbe
   return shuffled;
 }
 
-async function autoSubmitStaleAttempt(
-  db: ReturnType<typeof getDb>,
-  attemptId: number,
-  quizId: number,
-  userId: number,
-): Promise<boolean> {
-  const attachedRows = await db
-    .select({ id: questions.id, questionType: questions.questionType })
-    .from(quizQuestions)
-    .innerJoin(questions, eq(quizQuestions.questionId, questions.id))
-    .where(eq(quizQuestions.quizId, quizId))
-    .orderBy(asc(questions.id));
-  const attachedIds = attachedRows.map((r) => r.id);
-  const optionRows =
-    attachedIds.length > 0
-      ? await db
-          .select({
-            id: questionOptions.id,
-            questionId: questionOptions.questionId,
-            isCorrect: questionOptions.isCorrect,
-          })
-          .from(questionOptions)
-          .where(inArray(questionOptions.questionId, attachedIds))
-          .orderBy(asc(questionOptions.id))
-      : [];
-  const blankRows =
-    attachedIds.length > 0
-      ? await db
-          .select({
-            questionId: questionBlanks.questionId,
-            blankIndex: questionBlanks.blankIndex,
-            acceptedAnswer: questionBlanks.acceptedAnswer,
-          })
-          .from(questionBlanks)
-          .where(inArray(questionBlanks.questionId, attachedIds))
-          .orderBy(asc(questionBlanks.blankIndex))
-      : [];
-  const gradingQuestions: GradingQuestion[] = attachedRows.map((row) => ({
-    id: row.id,
-    questionType: row.questionType,
-    options: optionRows
-      .filter((o) => o.questionId === row.id)
-      .map((o) => ({ id: o.id, isCorrect: o.isCorrect ?? false }))
-      .sort((a, b) => a.id - b.id),
-    blanks: blankRows
-      .filter((b) => b.questionId === row.id)
-      .map((b) => ({ blankIndex: b.blankIndex, acceptedAnswer: b.acceptedAnswer }))
-      .sort((a, b) => (a.blankIndex ?? 0) - (b.blankIndex ?? 0)),
-  }));
-  const result = gradeAttempt(gradingQuestions, []);
-  const [row] = await db
-    .update(quizAttempts)
-    .set({ score: result.score.toFixed(2), submittedAt: new Date() })
-    .where(and(eq(quizAttempts.id, attemptId), isNull(quizAttempts.submittedAt)))
-    .returning({ id: quizAttempts.id });
-  if (!row) return false;
-  const attemptAnswerValues: (typeof attemptAnswers.$inferInsert)[] = [];
-  gradingQuestions.forEach((question, i) => {
-    const verdict = result.results[i];
-    if (question.questionType === "options") {
-      attemptAnswerValues.push({
-        attemptId: row.id,
-        questionId: question.id,
-        selectedOptionId: null,
-        textAnswer: null,
-        blankIndex: null,
-        isCorrect: verdict.isCorrect,
-      });
-    } else {
-      question.blanks.forEach((blank) => {
-        attemptAnswerValues.push({
-          attemptId: row.id,
-          questionId: question.id,
-          selectedOptionId: null,
-          textAnswer: null,
-          blankIndex: blank.blankIndex,
-          isCorrect: false,
-        });
-      });
-    }
-  });
-  if (attemptAnswerValues.length > 0) await db.insert(attemptAnswers).values(attemptAnswerValues);
-  const [existingBest] = await db
-    .select({ bestScore: bestScores.bestScore })
-    .from(bestScores)
-    .where(and(eq(bestScores.userId, userId), eq(bestScores.quizId, quizId)))
-    .limit(1);
-  if (!existingBest) {
-    await db
-      .insert(bestScores)
-      .values({ userId, quizId, bestScore: result.score.toFixed(2), achievedAt: new Date() });
-  } else if (result.score > Number(existingBest.bestScore)) {
-    await db
-      .update(bestScores)
-      .set({ bestScore: result.score.toFixed(2), achievedAt: new Date() })
-      .where(and(eq(bestScores.userId, userId), eq(bestScores.quizId, quizId)));
-  }
-  return true;
-}
-
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const auth = await requireAuth(request, ["student", "aspirant"]);
@@ -150,7 +51,7 @@ export async function GET(
     if (!Number.isInteger(quizId) || quizId < 1) {
       return NextResponse.json(
         { error: { code: "NOT_FOUND", message: "Quiz not found" } },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -170,6 +71,8 @@ export async function GET(
         status: quizzes.status,
         quizType: quizzes.quizType,
         weekStart: quizzes.weekStart,
+        opensAt: quizzes.opensAt,
+        closesAt: quizzes.closesAt,
         questionCount: quizzes.questionCount,
         timeLimitMinutes: quizzes.timeLimitMinutes,
         allowMultipleAttempts: quizzes.allowMultipleAttempts,
@@ -183,7 +86,7 @@ export async function GET(
     if (!quiz || quiz.status !== "published") {
       return NextResponse.json(
         { error: { code: "NOT_FOUND", message: "Quiz not found" } },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -196,7 +99,7 @@ export async function GET(
               message: "This quiz is not available to aspirants",
             },
           },
-          { status: 403 }
+          { status: 403 },
         );
       }
     } else if (!(await studentCanAccessQuiz(db, auth.userId, quiz))) {
@@ -207,7 +110,7 @@ export async function GET(
             message: "This quiz is not available to you",
           },
         },
-        { status: 403 }
+        { status: 403 },
       );
     }
 
@@ -222,16 +125,26 @@ export async function GET(
       .where(and(eq(quizAttempts.quizId, quizId), eq(quizAttempts.userId, auth.userId)))
       .orderBy(asc(quizAttempts.id));
     let openAttempt = priorRows.find((attempt) => attempt.submittedAt === null) ?? null;
-    let completedCount = priorRows.filter((attempt) => attempt.submittedAt !== null).length;
+    let completedCount = priorRows.filter(
+      (attempt) => attempt.submittedAt !== null,
+    ).length;
 
     // Auto-submit stale open attempt on expiry (time limit or window closed)
     // so single-attempt users aren't permanently locked out.
     if (openAttempt) {
       const expiresAt = openAttempt.startedAt.getTime() + quiz.timeLimitMinutes * 60_000;
       const timeExpired = Date.now() > expiresAt;
-      const windowExpired = !isCourseQuizWindowOpen(quiz.quizType, quiz.weekStart);
+      const windowExpired = !isCourseQuizWindowOpen(quiz.quizType, quiz.weekStart, undefined, {
+        opensAt: quiz.opensAt,
+        closesAt: quiz.closesAt,
+      });
       if (timeExpired || windowExpired) {
-        const stale = await autoSubmitStaleAttempt(db, openAttempt.id, quizId, auth.userId);
+        const stale = await finalizeUnsubmittedAttempt(
+          db,
+          openAttempt.id,
+          quizId,
+          auth.userId,
+        );
         if (stale) {
           priorRows = await db
             .select({
@@ -241,7 +154,9 @@ export async function GET(
               submittedAt: quizAttempts.submittedAt,
             })
             .from(quizAttempts)
-            .where(and(eq(quizAttempts.quizId, quizId), eq(quizAttempts.userId, auth.userId)))
+            .where(
+              and(eq(quizAttempts.quizId, quizId), eq(quizAttempts.userId, auth.userId)),
+            )
             .orderBy(asc(quizAttempts.id));
           openAttempt = null;
           completedCount = priorRows.filter((a) => a.submittedAt !== null).length;
@@ -249,15 +164,24 @@ export async function GET(
       }
     }
     // Enforce course-quiz window for starting (or restarting) an attempt.
-    if (!openAttempt && !isCourseQuizWindowOpen(quiz.quizType, quiz.weekStart)) {
+    if (
+      !openAttempt &&
+      !isCourseQuizWindowOpen(quiz.quizType, quiz.weekStart, undefined, {
+        opensAt: quiz.opensAt,
+        closesAt: quiz.closesAt,
+      })
+    ) {
       return NextResponse.json(
         {
           error: {
             code: "CONFLICT",
-            message: "This Course Quiz is outside its Saturday-Sunday window",
+            message:
+              quiz.opensAt || quiz.closesAt
+                ? "This Course Quiz is outside the availability window set by an admin"
+                : "This Course Quiz is outside its Saturday-Sunday window",
           },
         },
-        { status: 409 }
+        { status: 409 },
       );
     }
     if (!openAttempt && !quiz.allowMultipleAttempts && completedCount > 0) {
@@ -268,7 +192,7 @@ export async function GET(
             message: "You have already attempted this quiz",
           },
         },
-        { status: 409 }
+        { status: 409 },
       );
     }
 
@@ -363,7 +287,7 @@ export async function GET(
 
 export async function POST(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const auth = await requireAuth(request, ["student", "aspirant"]);
@@ -374,7 +298,7 @@ export async function POST(
     if (!Number.isInteger(quizId) || quizId < 1) {
       return NextResponse.json(
         { error: { code: "NOT_FOUND", message: "Quiz not found" } },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -393,7 +317,7 @@ export async function POST(
             })),
           },
         },
-        { status: 422 }
+        { status: 422 },
       );
     }
 
@@ -412,6 +336,8 @@ export async function POST(
         allowMultipleAttempts: quizzes.allowMultipleAttempts,
         quizType: quizzes.quizType,
         weekStart: quizzes.weekStart,
+        opensAt: quizzes.opensAt,
+        closesAt: quizzes.closesAt,
         timeLimitMinutes: quizzes.timeLimitMinutes,
         courseId: quizzes.courseId,
         jambSubjectId: quizzes.jambSubjectId,
@@ -422,7 +348,7 @@ export async function POST(
     if (!quiz || quiz.status !== "published") {
       return NextResponse.json(
         { error: { code: "NOT_FOUND", message: "Quiz not found" } },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -435,7 +361,7 @@ export async function POST(
               message: "This quiz is not available to aspirants",
             },
           },
-          { status: 403 }
+          { status: 403 },
         );
       }
     } else {
@@ -448,7 +374,7 @@ export async function POST(
               message: "This quiz is not available to you",
             },
           },
-          { status: 403 }
+          { status: 403 },
         );
       }
     }
@@ -464,7 +390,9 @@ export async function POST(
       .where(and(eq(quizAttempts.quizId, quizId), eq(quizAttempts.userId, auth.userId)))
       .orderBy(asc(quizAttempts.id));
     const openAttempt = priorRows.find((attempt) => attempt.submittedAt === null);
-    const completedCount = priorRows.filter((attempt) => attempt.submittedAt !== null).length;
+    const completedCount = priorRows.filter(
+      (attempt) => attempt.submittedAt !== null,
+    ).length;
     if (!openAttempt && !quiz.allowMultipleAttempts && completedCount > 0) {
       return NextResponse.json(
         {
@@ -473,12 +401,17 @@ export async function POST(
             message: "You have already attempted this quiz",
           },
         },
-        { status: 409 }
+        { status: 409 },
       );
     }
     if (!openAttempt) {
       // Enforce window for starting a submission without an open attempt.
-      if (!isCourseQuizWindowOpen(quiz.quizType, quiz.weekStart)) {
+      if (
+      !isCourseQuizWindowOpen(quiz.quizType, quiz.weekStart, undefined, {
+        opensAt: quiz.opensAt,
+        closesAt: quiz.closesAt,
+      })
+    ) {
         return NextResponse.json(
           {
             error: {
@@ -486,7 +419,7 @@ export async function POST(
               message: "This Course Quiz is outside its Saturday-Sunday window",
             },
           },
-          { status: 409 }
+          { status: 409 },
         );
       }
       return NextResponse.json(
@@ -496,7 +429,7 @@ export async function POST(
             message: "Start the quiz before submitting it",
           },
         },
-        { status: 409 }
+        { status: 409 },
       );
     }
     // Expired attempts are auto-submitted (grade whatever answers were sent)
@@ -589,7 +522,7 @@ export async function POST(
             message: "This quiz attempt was already submitted",
           },
         },
-        { status: 409 }
+        { status: 409 },
       );
     }
 
@@ -617,7 +550,8 @@ export async function POST(
           textAnswer: submitted,
           blankIndex: blank.blankIndex,
           isCorrect:
-            submitted !== null && normalize(blank.acceptedAnswer) === normalize(submitted),
+            submitted !== null &&
+            normalize(blank.acceptedAnswer) === normalize(submitted),
         });
       });
     });
@@ -654,7 +588,7 @@ export async function POST(
           message: "Submitted. Your score will appear once released.",
         },
       },
-      { status: 201 }
+      { status: 201 },
     );
   } catch (error) {
     console.error(error);

@@ -8,7 +8,12 @@ vi.mock("@/lib/auth/guard", () => ({ requireAuth }));
 vi.mock("@/lib/db", () => ({ getDb }));
 
 import { GET } from "./route";
-import { jsonRequest, makeDbMock, stubSelect, type DbMock } from "@/lib/testing/route-test";
+import {
+  jsonRequest,
+  makeDbMock,
+  stubSelect,
+  type DbMock,
+} from "@/lib/testing/route-test";
 
 let db: DbMock;
 
@@ -22,7 +27,13 @@ describe("GET /api/admin/users/aspirants", () => {
   it("returns the aspirant directory with latest Post-UTME score", async () => {
     stubSelect(db, [
       [
-        { id: 3, fullName: "Yusuf, F.", identifier: "12345678AB", isActive: true, aspirationDepartment: "Medicine & Surgery" },
+        {
+          id: 3,
+          fullName: "Yusuf, F.",
+          identifier: "12345678AB",
+          isActive: true,
+          aspirationDepartment: "Medicine & Surgery",
+        },
       ],
       [{ userId: 3, weekStart: "2026-08-24", convertedScore50: "76.00" }],
     ]);
@@ -30,7 +41,14 @@ describe("GET /api/admin/users/aspirants", () => {
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
       data: [
-        { id: 3, fullName: "Yusuf, F.", identifier: "12345678AB", isActive: true, aspirationDepartment: "Medicine & Surgery", latestPostUtme: "76.00" },
+        {
+          id: 3,
+          fullName: "Yusuf, F.",
+          identifier: "12345678AB",
+          isActive: true,
+          aspirationDepartment: "Medicine & Surgery",
+          latestPostUtme: "76.00",
+        },
       ],
       meta: { page: 1, pageSize: 1, total: 1, totalPages: 1 },
     });
@@ -38,7 +56,18 @@ describe("GET /api/admin/users/aspirants", () => {
   });
 
   it("returns null latestPostUtme when the aspirant has no scores yet", async () => {
-    stubSelect(db, [[{ id: 4, fullName: "New, B.", identifier: "87654321CD", isActive: true, aspirationDepartment: null }], []]);
+    stubSelect(db, [
+      [
+        {
+          id: 4,
+          fullName: "New, B.",
+          identifier: "87654321CD",
+          isActive: true,
+          aspirationDepartment: null,
+        },
+      ],
+      [],
+    ]);
     const res = await GET(jsonRequest("http://localhost/x?search=new", "GET"));
     const body = await res.json();
     expect(body.data[0].latestPostUtme).toBeNull();

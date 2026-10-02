@@ -13,7 +13,10 @@ export async function GET(request: Request): Promise<NextResponse> {
     const teacherId = auth.userId;
 
     const [allQuestions, publishedQuizzes, recent] = await Promise.all([
-      db.select({ id: questions.id }).from(questions).where(eq(questions.createdBy, teacherId)),
+      db
+        .select({ id: questions.id })
+        .from(questions)
+        .where(eq(questions.createdBy, teacherId)),
       db
         .select({ id: quizzes.id })
         .from(quizzes)

@@ -25,7 +25,7 @@ export interface QuizVisibilityRow {
 export async function studentCanAccessQuiz(
   db: Db,
   userId: number,
-  quiz: QuizVisibilityRow & { levelId?: number; semester?: string }
+  quiz: QuizVisibilityRow & { levelId?: number; semester?: string; sessionId?: number }
 ): Promise<boolean> {
   if (quiz.courseId === null || quiz.jambSubjectId !== null) {
     return false;
@@ -47,6 +47,7 @@ export async function studentCanAccessQuiz(
     .select({
       id: courses.id,
       semester: courses.semester,
+      sessionId: courses.sessionId,
       levelId: courses.levelId,
       scopeType: courses.scopeType,
       departmentId: courses.departmentId,
@@ -59,8 +60,16 @@ export async function studentCanAccessQuiz(
     return false;
   }
 
-  const activeSemester = await getActiveSemester(db);
-  if (course.semester !== activeSemester || course.levelId !== profile.levelId) {
+  // Session-aware (DESIGN.md §8, amended 2026-09-30): a course belongs to the active semester
+  // only if BOTH the semester and the session match. Matching on `semester` alone is what let
+  // 2025/26 Harmattan material and 2026/27 Harmattan material be indistinguishable.
+  const active = await getActiveSemester(db);
+  if (!active.ok) return false;
+  if (
+    course.semester !== active.semester ||
+    course.sessionId !== active.sessionId ||
+    course.levelId !== profile.levelId
+  ) {
     return false;
   }
 

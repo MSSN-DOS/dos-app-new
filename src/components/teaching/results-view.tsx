@@ -20,10 +20,12 @@ type ResultQuizRow = {
   held: number;
 };
 
-// Shared by /teacher/results and (later) any admin-shell twin — the API is role-guarded
-// admin+teacher, so the same UI serves both shells. `basePath` is the route prefix used
-// to open one quiz's results.
+// Shared by /teacher/results and the /admin/results twin — the API is role-guarded
+// admin+teacher, and an admin's ownership scope is null so the same list serves both
+// shells. `basePath` is the route prefix used to open one quiz's results; it also
+// decides the copy and which shell the empty state's link points back into.
 export function ResultsView({ basePath }: { basePath: string }) {
+  const isAdmin = basePath.startsWith("/admin");
   const resultsQuery = useQuery({
     queryKey: ["teacher", "results"],
     queryFn: () =>
@@ -71,7 +73,7 @@ export function ResultsView({ basePath }: { basePath: string }) {
           className="mb-2 text-[10.5px] uppercase tracking-[0.14em] text-brand"
           style={{ fontFamily: "JetBrains Mono, monospace" }}
         >
-          Teacher
+          {isAdmin ? "Admin" : "Teacher"}
         </p>
         <h1
           className="text-[26px] font-medium leading-[1.25] tracking-[-0.01em] text-ink"
@@ -80,8 +82,9 @@ export function ResultsView({ basePath }: { basePath: string }) {
           Results
         </h1>
         <p className="mt-[6px] max-w-[46ch] text-[13px] leading-[1.5] text-sub">
-          Quizzes of yours that people have sat. Scores stay hidden until the Board releases
-          them — you&apos;ll see the attempt either way.
+          {isAdmin
+            ? "Every quiz that has been sat, across all staff. Scores stay hidden until they are released — you see the attempt either way."
+            : "Quizzes of yours that people have sat. Scores stay hidden until the Board releases them — you see the attempt either way."}
         </p>
       </div>
 
@@ -97,11 +100,12 @@ export function ResultsView({ basePath }: { basePath: string }) {
             No attempts yet
           </p>
           <p className="mx-auto max-w-[34ch] text-[12px] leading-[1.55] text-sub">
-            Once someone sits one of your quizzes it appears here, whether or not its scores
-            have been released.
+            {isAdmin
+              ? "Once someone sits a quiz it appears here, whether or not its scores have been released."
+              : "Once someone sits one of your quizzes it appears here, whether or not its scores have been released."}
           </p>
           <Link
-            href="/teacher/quizzes"
+            href={isAdmin ? "/admin/quizzes" : "/teacher/quizzes"}
             className="mt-4 inline-flex min-h-11 items-center rounded-[11px] border border-edge bg-panel px-4 text-sm font-medium text-ink hover:bg-line focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
           >
             Go to quizzes

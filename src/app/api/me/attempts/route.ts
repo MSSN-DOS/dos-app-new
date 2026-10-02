@@ -71,13 +71,23 @@ export async function GET(request: Request): Promise<NextResponse> {
 
     if (role?.name === "student" && filters.jambSubjectId !== undefined) {
       return NextResponse.json(
-        { error: { code: "VALIDATION_ERROR", message: "Students can only filter by course" } },
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Students can only filter by course",
+          },
+        },
         { status: 422 },
       );
     }
     if (role?.name === "aspirant" && filters.courseId !== undefined) {
       return NextResponse.json(
-        { error: { code: "VALIDATION_ERROR", message: "Aspirants can only filter by JAMB subject" } },
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Aspirants can only filter by JAMB subject",
+          },
+        },
         { status: 422 },
       );
     }
@@ -105,7 +115,9 @@ export async function GET(request: Request): Promise<NextResponse> {
       .leftJoin(courses, eq(quizzes.courseId, courses.id))
       .leftJoin(topics, eq(quizzes.topicId, topics.id))
       .leftJoin(jambSubjects, eq(quizzes.jambSubjectId, jambSubjects.id))
-      .where(and(eq(quizAttempts.userId, auth.userId), isNotNull(quizAttempts.submittedAt)))
+      .where(
+        and(eq(quizAttempts.userId, auth.userId), isNotNull(quizAttempts.submittedAt)),
+      )
       .orderBy(desc(quizAttempts.submittedAt), asc(quizAttempts.id));
 
     const bestScores = new Map<number, number>();
@@ -119,8 +131,12 @@ export async function GET(request: Request): Promise<NextResponse> {
 
     const filteredRows = rows.filter((row) => {
       if (filters.type && row.quizType !== filters.type) return false;
-      if (filters.courseId !== undefined && row.courseId !== filters.courseId) return false;
-      if (filters.jambSubjectId !== undefined && row.jambSubjectId !== filters.jambSubjectId) {
+      if (filters.courseId !== undefined && row.courseId !== filters.courseId)
+        return false;
+      if (
+        filters.jambSubjectId !== undefined &&
+        row.jambSubjectId !== filters.jambSubjectId
+      ) {
         return false;
       }
       return true;
@@ -163,7 +179,10 @@ export async function GET(request: Request): Promise<NextResponse> {
       new Map(
         rows
           .filter((row) => row.jambSubjectId !== null && row.subjectName !== null)
-          .map((row) => [row.jambSubjectId, { id: row.jambSubjectId, name: row.subjectName }]),
+          .map((row) => [
+            row.jambSubjectId,
+            { id: row.jambSubjectId, name: row.subjectName },
+          ]),
       ).values(),
     );
 

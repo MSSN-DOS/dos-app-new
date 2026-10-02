@@ -1,6 +1,5 @@
 import { and, asc, eq, ilike, notInArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { ZodError } from "zod";
 
 import { errorResponse } from "@/lib/api/response";
 import { paginate, parsePagination } from "@/lib/api/pagination";
@@ -16,33 +15,14 @@ import {
   quizQuestions,
   quizzes,
 } from "@/lib/db/schema";
-import {
-  questionDraftSchema,
-  questionPublishSchema,
-} from "@/lib/validation/questions";
-
-function validationError(err: ZodError): NextResponse {
-  return NextResponse.json(
-    {
-      error: {
-        code: "VALIDATION_ERROR",
-        message: "Invalid input",
-        details: err.issues.map((i) => ({
-          field: i.path.join(".") || "body",
-          code: i.code,
-          message: i.message,
-        })),
-      },
-    },
-    { status: 422 },
-  );
-}
+import { sanitizeRichText } from "@/lib/sanitize";
+import { questionDraftSchema, questionPublishSchema } from "@/lib/validation/questions";
 
 // Two validation levels chosen by the request's declared status — a lenient
 // schema for draft saves, a strict one for publishing (AGENTS.md §3).
-function parseIntents(raw: unknown):
-  | { ok: true; intent: "draft" | "published" }
-  | { ok: false } {
+function parseIntents(
+  raw: unknown,
+): { ok: true; intent: "draft" | "published" } | { ok: false } {
   const status =
     typeof raw === "object" && raw !== null && "status" in raw
       ? (raw as { status?: unknown }).status
@@ -115,10 +95,7 @@ export async function GET(request: Request): Promise<NextResponse> {
       // attachment. ownerQ is null for admins, so skip the filter then.
       conds.push(
         ownerQ !== null
-          ? notInArray(
-              questions.id,
-              usedSub.where(eq(quizzes.createdBy, ownerQ)),
-            )
+          ? notInArray(questions.id, usedSub.where(eq(quizzes.createdBy, ownerQ)))
           : notInArray(questions.id, usedSub),
       );
     }
@@ -167,7 +144,11 @@ export async function POST(request: Request): Promise<NextResponse> {
             code: "VALIDATION_ERROR",
             message: "Invalid input",
             details: [
-              { field: "status", code: "invalid_value", message: "Status must be draft or published" },
+              {
+                field: "status",
+                code: "invalid_value",
+                message: "Status must be draft or published",
+              },
             ],
           },
         },
@@ -193,7 +174,12 @@ export async function POST(request: Request): Promise<NextResponse> {
         jambSubjectId: data.jambSubjectId ?? null,
         topicId: data.topicId ?? null,
         questionType: data.questionType,
-        bodyRichText: data.bodyRichText,
+        // Sanitised HERE, server-side, not in the component that happens to call this today.
+        // Question stems render through `dangerouslySetInnerHTML` in every student's attempt
+        // screen, so the client-side call in `questions-view.tsx` is a convenience, not the
+        // guarantee. Any caller that skips it — curl, a stale tab, a future import path — would
+        // otherwise be storing script that executes in every student's browser.
+        bodyRichText: sanitizeRichText(data.bodyRichText),
         status: intent.intent,
         createdBy: auth.userId,
       })
@@ -233,7 +219,6 @@ export async function POST(request: Request): Promise<NextResponse> {
       { status: 201 },
     );
   } catch (err) {
-    if (err instanceof ZodError) return validationError(err);
     return errorResponse(err);
   }
 }

@@ -14,7 +14,7 @@ import { studentProfiles } from "@/lib/db/schema/profiles";
 import { z } from "zod";
 import { errorResponse } from "@/lib/api/response";
 import { parseVideoLink } from "@/lib/content/video-link";
-import { getActiveSemester } from "@/lib/semester";
+import { activeCourseFilter, getActiveSemester } from "@/lib/semester";
 import { createResourceSignedUrl } from "@/lib/storage/supabase-storage";
 
 const querySchema = z.object({
@@ -147,7 +147,11 @@ export async function GET(request: Request) {
       // Videos are reference material, not semester-bound coursework — a recorded lecture is
       // still worth watching after the semester rolls over, so video rows skip the
       // active-semester filter that PDFs and articles still obey (Board decision 2026-09-17).
-      or(eq(contentItems.type, "video"), eq(courses.semester, activeSemester)),
+      // `activeCourseFilter` is fail-closed: with no calendar entered it is `false`, so this
+      // reduces to `type = 'video'` — video stays reachable and semester-bound PDFs/articles
+      // stay hidden, which is the correct degenerate case. That outcome is now by construction
+      // rather than a side effect of the filter being dropped.
+      or(eq(contentItems.type, "video"), activeCourseFilter(activeSemester)),
     ];
     if (courseIdFilter !== undefined) {
       conds.push(eq(contentItems.courseId, courseIdFilter));
@@ -185,7 +189,9 @@ interface ResourceRow {
 // URL instead of a permanent public link. Video rows carry a normalised watch/embed pair.
 // Article bodies pass through as-is. Branches on `type` explicitly, never on the string's
 // shape (DESIGN.md §6).
-async function withSignedUrls<T extends ResourceRow>(rows: T[]): Promise<Record<string, unknown>[]> {
+async function withSignedUrls<T extends ResourceRow>(
+  rows: T[],
+): Promise<Record<string, unknown>[]> {
   return Promise.all(
     rows.map(async ({ bodyOrFileUrl: storedValue, ...row }) => {
       if (row.type === "video") {

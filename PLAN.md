@@ -55,6 +55,9 @@ Nothing product-specific yet. Get a clean, correctly-configured repo that CI pas
 - **P3-4** `/teacher/quizzes` — quiz list + create flow, `quiz_type` branching (Topic vs. Course), question count fixed-at-50 for Course Quiz / free-form for Topic Quiz.
 - **P3-5** `/teacher/quizzes/[id]` — attach questions from the bank, configure time limit / pass mark / multiple-attempts / lose-focus policy / instructions.
 - **P3-6** Student/Aspirant-facing `GET /api/quizzes` — list, server-side scoped to the caller's Faculty/Department/Level/active-Semester (Students) or all JAMB subjects (Aspirants).
+- **P3-7** `/teacher/results` — per-quiz results for quizzes the caller authored. Held-score rule applies: the Teacher sees *that* an attempt exists and that it is held, never its mark (`DESIGN.md` §4), so `avgScore`/`passRate` stay `null` until something is released.
+- **P3-8** Unpublish transition for a published quiz, so an Admin can pull a quiz back before its results are final: `POST /api/teacher/quizzes/[id]/unpublish` (owner-or-admin) + a button in both shells. Blocked with a 409 naming the blocker once any attempt's `released_at` is set — released scores feed CGPA/Post-UTME irreversibly, so past that point the quiz is frozen.
+- **P3-9** `/admin/results` — admin-shell twin of `/teacher/results` over the same API (the routes are already `admin`+`teacher` guarded; an admin's ownership scope is `null`, so the list is site-wide). Admin already has Score Release/Held; this is the view those screens point at.
 
 ## Phase 4 — Quiz-taking, grading, attempts
 
@@ -77,6 +80,7 @@ Nothing product-specific yet. Get a clean, correctly-configured repo that CI pas
 - **P6-1** Supabase Storage bucket wiring, folder-path helper matching `DESIGN.md` §6 exactly (Student vs. Aspirant path shapes).
 - **P6-2** `/admin/content` — upload PDF / write article, scoped to a course or JAMB subject, page + API.
 - **P6-3** `/resources` (Student and Aspirant versions) — browse, scoped server-side to the caller.
+- **P6-4** Resource Links: Teachers submit `type = 'video'` **links** (external URL, no upload) through `/api/teacher/resources`; `pdf`/`article` stay Admin-only. "A link is not an upload" is the rule that keeps this inside the Admin-only-upload boundary in `AGENTS.md` §3. Videos bypass the active-semester filter so a recorded lecture survives a Harmattan→Rain rollover while PDFs/articles expire.
 
 ## Phase 7 — Semester automation
 
@@ -84,6 +88,7 @@ Nothing product-specific yet. Get a clean, correctly-configured repo that CI pas
 - **P7-2** `getActiveSemester()` resolver — auto mode (with gap-fallback behavior) + manual override read from `semester_settings`, unit-tested including the gap-fallback case.
 - **P7-3** `/admin/settings/semester` — toggle auto/manual, pick override, page + API.
 - **P7-4** Audit every place that filters by "active semester" (quiz list, course list, resource list) and confirm they all call the shared resolver, not an inline date check — this is a grep-and-verify task, not new logic.
+- **P7-5** ~~Open gap — the resolver has no "between sessions" state~~ **Session year in the data model, one row per course offering.** Board decision 2026-09-30: option (b) (session year in the data model), plus **Model B** — a course is one *offering*, so `CSC 201 · 2025/26 · Harmattan` and `CSC 201 · 2026/27 · Harmattan` are two rows and re-offering is a new row, never an edit. (b) alone would not have stopped the annual re-tagging treadmill; Model B is what removes it. Implemented: new `academic_sessions` table (calendar as data, not code), `courses.session_id` NOT NULL, `semester_settings.manual_override_session_id`, identity now `code + level + session + semester`, `DESIGN.md` §8 rewritten, storage paths carry the session segment, `/admin/settings/semester` grew the session manager (no new nav item), and a data migration backfilled existing rows. The long Jul→Oct gap is resolved *without* a third semester state: the most recently started session stays active at its final semester, which is §8's existing gap rule generalised from between-semesters to between-sessions.
 
 ## Phase 8 — Polish, admin directories, deploy
 

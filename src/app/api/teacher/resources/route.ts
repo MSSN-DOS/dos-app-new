@@ -1,6 +1,5 @@
 import { and, desc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { ZodError } from "zod";
 
 import { errorResponse } from "@/lib/api/response";
 import { ForbiddenError } from "@/lib/auth/errors";
@@ -11,23 +10,6 @@ import { parseVideoLink } from "@/lib/content/video-link";
 import { getDb } from "@/lib/db";
 import { contentItems, courses, jambSubjects } from "@/lib/db/schema";
 import { videoCreateSchema } from "@/lib/validation/content";
-
-function validationError(err: ZodError): NextResponse {
-  return NextResponse.json(
-    {
-      error: {
-        code: "VALIDATION_ERROR",
-        message: "Invalid input",
-        details: err.issues.map((i) => ({
-          field: i.path.join(".") || "body",
-          code: i.code,
-          message: i.message,
-        })),
-      },
-    },
-    { status: 422 },
-  );
-}
 
 /**
  * GET /api/teacher/resources — the caller's own video links (Admin sees all of them).
@@ -140,7 +122,6 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     return NextResponse.json(row, { status: 201 });
   } catch (err) {
-    if (err instanceof ZodError) return validationError(err);
     return errorResponse(err);
   }
 }

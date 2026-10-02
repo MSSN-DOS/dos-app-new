@@ -1,6 +1,5 @@
 import { asc, eq, inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { ZodError } from "zod";
 
 import { errorResponse } from "@/lib/api/response";
 import { paginate, parsePagination } from "@/lib/api/pagination";
@@ -18,23 +17,6 @@ import {
 import { generateInitialPassword } from "@/lib/teachers/password";
 import { formatStaffId, nextStaffId, nextStaffNumber } from "@/lib/teachers/staff-id";
 import { teacherCreateSchema } from "@/lib/validation/teachers";
-
-function validationError(err: ZodError): NextResponse {
-  return NextResponse.json(
-    {
-      error: {
-        code: "VALIDATION_ERROR",
-        message: "Invalid input",
-        details: err.issues.map((i) => ({
-          field: i.path.join(".") || "body",
-          code: i.code,
-          message: i.message,
-        })),
-      },
-    },
-    { status: 422 },
-  );
-}
 
 function isUniqueViolation(e: unknown): boolean {
   return (
@@ -168,7 +150,12 @@ export async function POST(request: Request): Promise<NextResponse> {
         : [];
     if (subjectRows.length !== jambSubjectIds.length) {
       return NextResponse.json(
-        { error: { code: "NOT_FOUND", message: "One or more JAMB subjects were not found" } },
+        {
+          error: {
+            code: "NOT_FOUND",
+            message: "One or more JAMB subjects were not found",
+          },
+        },
         { status: 404 },
       );
     }
@@ -199,13 +186,16 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     const assignmentValues = (userId: number) => [
       ...courseIds.map((courseId) => ({ userId, courseId, jambSubjectId: null })),
-      ...jambSubjectIds.map((jambSubjectId) => ({ userId, courseId: null, jambSubjectId })),
+      ...jambSubjectIds.map((jambSubjectId) => ({
+        userId,
+        courseId: null,
+        jambSubjectId,
+      })),
     ];
 
     let identifier = nextStaffId(takenIdentifiers);
     let created:
-      | { id: number; fullName: string; identifier: string; isActive: boolean }
-      | undefined;
+      { id: number; fullName: string; identifier: string; isActive: boolean } | undefined;
 
     for (let attempt = 0; attempt < MAX_ID_ATTEMPTS; attempt += 1) {
       try {
@@ -255,7 +245,6 @@ export async function POST(request: Request): Promise<NextResponse> {
       { status: 201 },
     );
   } catch (err) {
-    if (err instanceof ZodError) return validationError(err);
     return errorResponse(err);
   }
 }
