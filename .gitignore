@@ -3,9 +3,11 @@ node_modules/
 .env
 .env.*
 !.env.example
+temp_auto_push.bat
 *.tsbuildinfo
 .DS_Store
 .freebuff/
-.vscode/
 # agent tooling artifacts, not project source
 .openchamber/
+.gitignore
+branch_structure.json
