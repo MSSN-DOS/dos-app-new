@@ -11,6 +11,7 @@ import {
   assertDevEnvironment,
   describeDatabaseTarget,
   evaluateGuard,
+  loadEnvironmentFiles,
   type GuardInput,
 } from "./assert-dev-environment";
 
@@ -204,15 +205,33 @@ describe("evaluateGuard", () => {
 // The wrapper's only job is env loading, so these two exist to pin that job and nothing else — the
 // decisions themselves are `evaluateGuard`'s business and are covered above.
 describe("assertDevEnvironment", () => {
-  it("loads the env files itself, so a caller does not have to", () => {
+  it("decides on the environment as it stands at call time", () => {
     // Three scripts in a row got this order wrong — asserting before loading meant the guard fired
     // on "DATABASE_URL is not set" against a working dev database. This is the regression.
+    //
+    // The variables are supplied explicitly rather than deleted and left to ambient `.env.local`.
+    // The earlier version cleared them and relied on the developer's gitignored env file to put
+    // them back, reasoning that "loading can only make this less likely to throw". That reasoning
+    // is false on a clean machine: CI has no `.env.local` (`.gitignore` ignores `.env.*`), so the
+    // guard correctly refused and this test failed there while passing locally. A test that
+    // depends on untracked local state is the same defect class as the `toBeDefined()` and
+    // `T00:00:00Z` tests from the original review.
+    //
+    // Nothing here asserts *what* the guard decides with a missing or foreign URL — those cases
+    // are the `evaluateGuard` tests above, which take plain values and cannot drift. This is only
+    // about the wrapper: it loads, then delegates, and passes when the environment says dev.
     delete env.NODE_ENV;
-    delete env.DOS_DEV_PROJECT_REFS;
-    delete env.DATABASE_URL;
-    // Whatever `.env.local` holds, loading it can only ever make this *less* likely to throw than
-    // an empty environment, so a local/dev target must pass with the variables cleared here.
+    env.DATABASE_URL = conn(`postgres.${DEV_REF}`, "aws-1-eu-west-1.pooler.supabase.com");
+    env.DOS_DEV_PROJECT_REFS = DEV_REF;
     expect(() => assertDevEnvironment("test-script")).not.toThrow();
+  });
+
+  it("loadEnvironmentFiles is best-effort and never throws", () => {
+    // Its contract, and the part that matters when no env file exists at all: skip quietly
+    // rather than take the process down. This is safe to assert on any machine because the
+    // function does not care which files are present.
+    expect(() => loadEnvironmentFiles()).not.toThrow();
+    expect(() => loadEnvironmentFiles()).not.toThrow();
   });
 
   it("still refuses a production ref after loading", () => {
