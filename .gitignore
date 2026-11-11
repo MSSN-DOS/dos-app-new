@@ -2,8 +2,10 @@ node_modules/
 .next/
 .env
 .env.*
+temp_auto_push.bat
 !.env.example
 *.tsbuildinfo
 .DS_Store
 .freebuff/
-.vscode/
+.gitignore
+branch_structure.json

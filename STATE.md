@@ -216,6 +216,34 @@ Work top to bottom. Don't check a later phase's box before every task above it i
 
 ---
 
+## Phase 10 — Dual Student identifiers
+- [x] P10-1 — Students can sign up with a Matric Number **or** a JAMB Registration Number, and attach the other later (Board decision 2026-11-10)
+  - **Decision change:** DESIGN.md decision #3 now says a Student may register with either identifier and add the missing one from `/account/identifiers`; login matches all three columns. Aspirants stay JAMB-only. Also replaced the two-shape JAMB rule (8+2 *or* 12+2) with a single 12-digit-year + 2-letter shape — the 10-character form is rejected everywhere now, aspirants included.
+  - Schema: `users.matric_number` + `users.jamb_reg_number`, both `VARCHAR(50) NULL UNIQUE`, aliases for login next to the existing `NOT NULL UNIQUE` `users.identifier` (the signup value, unchanged). Migration `0009_fast_white_queen.sql` — additive only (2 `ADD COLUMN`, 2 unique constraints). `users` already had RLS + deny-all, so no new policy. **No backfill** — existing rows keep `identifier` only and can add their other value from the account page.
+  - Validation: `lib/validation/identifiers.ts` — `jambRegNumberSchema` narrowed to `^\d{12}[A-Z]{2}$`; `identifierTypeFor()` unchanged and remains the only place that decides which format an input is. `registerSchema` uses it for Students (either) and `jambRegNumberSchema` for Aspirants. New `addIdentifierSchema` with a `superRefine` that rejects anything matching neither format.
+  - API: `POST /api/auth/register` mirrors the entered value into its column and 409s on any unique violation. `POST /api/auth/login` matches `identifier OR matric_number OR jamb_reg_number`, preferring the `identifier` hit on a tie. New `PATCH /api/me` (student-only): fills whichever column is empty; 409 on a value already on the account, 409 on a type already set, 409 on a value another account holds, 404 unknown user. Adding is one-way — no edit, no removal.
+  - UI: `/account/identifiers` (`AuthCard`, TanStack Query) shows both values with a form for only the missing one; linked as **Login details** in the student user menu, role-gated because that menu also renders in the teacher shell. Register form's identifier label/hint now describes both formats for Students.
+  - Tests: new `api/auth/register/route.test.ts` (429/422×3/201×3/409), new `api/auth/login/route.test.ts` (429 with `Retry-After`, 422, 401×3, 200×2, plus a column-walking assertion that the WHERE clause touches all three alias columns), `api/me/route.test.ts` +10 PATCH cases, `identifiers.test.ts` rewritten for the single JAMB shape. Full suite 748 passed / 63 files (was 723/61).
+  - Left alone deliberately: `src/scripts/flush-dev.ts` still lists `12345678AB` — that list keys into rows that already exist in dev, it doesn't create identifiers, and login doesn't format-validate, so an old dev account stays reachable. Rewriting it would only break the "all keepers present" guard.
+  - Spec gap closed: `.agents/design/screens-auth.md` now has entries for both `/account/password` (written from the existing P2-7 page, so it documents shipped behavior rather than new decisions) and `/account/identifiers` (this task).
+  - Case handling (follow-up, 2026-11-11): uppercase letters are part of the format, but typing lowercase must never be the reason a student is rejected. Both `identifiers.ts` schemas now `.trim().toUpperCase()` **before** the regex and return the normalised value; `registerSchema` / `addIdentifierSchema` upper-case `identifier` so the route writes the uppercase form; register, sign-in and `/account/identifiers` convert as the user types. Sign-in compares `upper(column) = upper(input)` on all three columns (and in the tie-break `case when`) rather than only upper-casing the input, because a seeded/hand-set `BOOTSTRAP_ADMIN_IDENTIFIER` never went through these schemas — the cost is that one lookup can't use the unique index, acceptable at this table size and already rate-limited per identifier. Tests extended: lowercase in / uppercase stored on register and `PATCH /api/me`, lowercase login normalisation, lowercase `identifierTypeFor`. Full suite 752 passed / 63 files.
+
+---
+
+## Phase 11 — Public health endpoint / Supabase keep-alive
+
+- [x] P11-1 — `GET /api/health` + Vercel Cron (Board decision 2026-11-11)
+  - Reason: a Supabase Free-plan project is paused after 7 days without project activity, and restoring it is a manual dashboard step, so the deployed app needs scheduled traffic that doesn't depend on a human logging in.
+  - Board answers: **public unauthenticated** route (option A — documented exception, not a secret/cron-token scheme) and **Vercel Cron** as the driver (in-repo, ships with the app, can't silently stop existing).
+  - `src/app/api/health/route.ts` runs a bare `select 1` against the pooler and returns `200 {status,db,timestamp}` / `503 {status,db,timestamp}` — no version, no driver error text, no config, `Cache-Control: no-store`, `dynamic = "force-dynamic"` (a cached response would defeat the endpoint's entire purpose). A 4s `Promise.race` timeout keeps a paused DB from holding the invocation open; `connect_timeout` is client-wide in postgres.js, so changing it for a probe wasn't worth altering the shared client.
+  - No rate limit / TTL throttle, deliberately: serverless module state is per-instance and dies on cold start, so it would be theatre. `select 1` is the cheapest query in the app.
+  - `vercel.json` adds `crons: [{ path: "/api/health", schedule: "0 3 * * *" }]` — daily, the Hobby-plan ceiling. Daily is ample against a 7-day window and tolerates several missed runs.
+  - `src/app/api/health/route.test.ts` (5 cases): 200 + probe actually ran, callable with no credentials + `no-store`, 503 on rejection, no error detail leaks into the body, 503 when `getDb()` throws (missing `DATABASE_URL`). `makeDbMock`/`DbMock` in `src/lib/testing/route-test.ts` gained `execute` to support it.
+  - Rulebook amended in the same change: `AGENTS.md` §1 and `DESIGN.md` §7 now list the three public routes explicitly and record why `/api/health` is the one unauthenticated route with DB access. While editing that sentence the old text ("three explicitly public auth routes: register, login") was corrected — `/api/auth/onboarding` and `/api/auth/change-password` both call `requireAuth`, so register + login were the only public ones before this addition.
+  - **Depends on P8-5.** The route is testable now, but the cron can't fire until the app has a deployed URL. Until then it does not prevent a pause — nothing does.
+
+---
+
 ## Open items still needing a real answer from the Board (not blocking dev, but don't let these go silently forgotten)
 
 - [x] Confirm Post-UTME conversion formula (P5-3) — confirmed 2026-08-25: aggregate is out of 100, conversion is the identity (best_score is already a percentage = correct × 2 for the 50-question quiz)

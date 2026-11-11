@@ -64,7 +64,9 @@ export function LoginForm() {
         <Input
           id="identifier"
           value={identifier}
-          onChange={(e) => setIdentifier(e.target.value)}
+          // Identifiers are stored upper-case; showing what they typed in that shape is what they
+          // will see in the account screens. Sign-in itself matches case-insensitively either way.
+          onChange={(e) => setIdentifier(e.target.value.toUpperCase())}
           required
           autoComplete="username"
           maxLength={24}

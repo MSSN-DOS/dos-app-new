@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { KeyRound, LogOut } from "lucide-react";
+import { IdCard, KeyRound, LogOut } from "lucide-react";
 
 import { useAuth } from "@/components/auth/auth-provider";
 import {
@@ -160,6 +160,17 @@ export function StudentUserMenu() {
             <KeyRound className="size-4" aria-hidden="true" />
             Change password
           </DropdownMenuItem>
+          {/* Students only: they are the one role that can hold two sign-in identifiers
+              (Board decision 2026-11-10). Other roles would find nothing to add there. */}
+          {role === "student" ? (
+            <DropdownMenuItem
+              className="min-h-[44px] cursor-pointer gap-2 text-sm focus:bg-wash focus:text-ink"
+              onSelect={() => router.push("/account/identifiers")}
+            >
+              <IdCard className="size-4" aria-hidden="true" />
+              Login details
+            </DropdownMenuItem>
+          ) : null}
           <DropdownMenuItem
             variant="destructive"
             className="min-h-[44px] cursor-pointer gap-2 text-sm focus:bg-wash focus:text-ink data-[variant=destructive]:text-ruby data-[variant=destructive]:focus:bg-ruby/10 data-[variant=destructive]:focus:text-ruby"

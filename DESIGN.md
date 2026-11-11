@@ -14,7 +14,7 @@ This is the single source of truth for how the product behaves and how the code 
 |---|---|---|
 | 1 | Admin vs Teacher publishing boundary | Teachers publish quizzes and topics directly. No Admin approval step. |
 | 2 | Fill-in-the-gap grading | Case-insensitive exact match, auto-graded at submission. |
-| 3 | Identifier validation | Format-validated only (regex below), no cross-check against an external membership/JAMB list. |
+| 3 | Identifier validation | Format-validated only (regex below), no cross-check against an external membership/JAMB list. **Amended 2026-11-10:** a Student may sign up with *either* a Matric Number or a JAMB Registration Number, and may attach the other one later from `/account/identifiers`; login accepts any of `users.identifier`, `users.matric_number`, `users.jamb_reg_number`. Aspirants remain JAMB-only. See §2 "Identifier formats" and §7 step 1. |
 | 4 | Content upload permissions | Admin-only. Teachers cannot upload PDFs/articles. **Amended 2026-09-17:** Teachers *may* submit video **links** (an external URL — not an upload; see §6). |
 | 5 | Topic Quiz question count | Free-form — Teacher sets it per topic when building the quiz. |
 | 6 | Weekly Course Quiz release window | Default: opens Saturday 00:00, closes Monday 00:00 (Africa/Lagos, see §8). **Amended 2026-09-28:** an Admin may override either boundary per quiz (`quizzes.opens_at` / `quizzes.closes_at`, both nullable); NULL on both restores the default. Set on either side replaces that boundary only. |
@@ -35,11 +35,17 @@ This is the single source of truth for how the product behaves and how the code 
 
 Regex: `^\d{2}\/\d{2}[A-Z]{2}\d{3}$` — e.g. `21/30GN019`
 
-**JAMB Registration Number:** two accepted shapes
-- Standard (10 char): 8 digits + 2 uppercase letters → `^\d{8}[A-Z]{2}$`
-- Expanded (14 char): 4-digit year + 8 digits + 2 uppercase letters → `^\d{4}\d{8}[A-Z]{2}$` (equivalently `^\d{12}[A-Z]{2}$`)
+**JAMB Registration Number:** one accepted shape — 4-digit year + 8 digits + 2 uppercase letters, i.e. 12 digits + 2 letters (14 characters total).
 
-Both live in `lib/validation/identifiers.ts` as named Zod refinements (`matricNumberSchema`, `jambRegNumberSchema`), reused by both the registration form and the `/api/auth/register` handler — never duplicate the regex.
+Regex: `^\d{12}[A-Z]{2}$` — e.g. `202612345678AB`
+
+> **Amended 2026-11-10:** the older 10-character shape (8 digits + 2 letters) is **no longer accepted anywhere** — not in registration, not in login, not for aspirants. The prior "two accepted shapes" rule was replaced, not widened; anything matching only the 10-character shape must fail validation.
+
+Both live in `lib/validation/identifiers.ts` as named Zod refinements (`matricNumberSchema`, `jambRegNumberSchema`), reused by the registration form, the `/account/identifiers` form, and every handler that validates an identifier (`/api/auth/register`, `/api/me`) — never duplicate the regex. `identifierTypeFor(value)` there is the single place that decides which of the two an input is; the two formats are disjoint, so one call is unambiguous.
+
+**Case is not part of the format.** The letters must be uppercase, but nobody should be rejected for typing `21/30gn019` or `202612345678ab` on a phone keyboard (2026-11-11). Every schema trims and upper-cases the value *before* the format check and returns that normalised value, so whatever reaches the DB is uppercase — registration and `PATCH /api/me` both write the parsed value straight to the column. Sign-in compares case-insensitively on both sides (`upper(column) = upper(input)`) rather than upper-casing the input only, because a seeded or hand-set identifier such as `BOOTSTRAP_ADMIN_IDENTIFIER` is env-provided and never went through these schemas. The register, sign-in and `/account/identifiers` fields also convert as the user types, so they see the shape that will be stored.
+
+**Which identifier identifies a Student.** Students hold up to two identifiers, both on the `users` row: `identifier` (the one used at signup, which also drives `identifier_type`) plus `matric_number` and `jamb_reg_number`, each nullable and unique, filled while the value is known. Signup fills whichever column the entered format maps to; `PATCH /api/me` fills the other one later. Adding is one-way — once a value is set, the student cannot edit or remove it. Login matches `identifier OR matric_number OR jamb_reg_number`, preferring the `identifier` hit on a tie so a value shared with a bootstrap admin account resolves to the real owner.
 
 ### Known trade-off: JWT in localStorage
 
@@ -135,11 +141,12 @@ Rules that apply to both:
 
 ## 7. Auth flow
 
-1. **Register** (`POST /api/auth/register`): identifier (Matric or JAMB, format-validated per §2), full name, password. Creates a `users` row with `role_id` = `student` or `aspirant`, `identifier_type` set accordingly. Password hashed with `bcrypt` (or `argon2` — pick one in `AGENTS.md` and stick to it) before storage, never store plaintext even transiently beyond the request handler.
+1. **Register** (`POST /api/auth/register`): identifier (Matric or JAMB, format-validated per §2), full name, password. Creates a `users` row with `role_id` = `student` or `aspirant`, `identifier_type` set from the identifier's own format (a Student may use either; an Aspirant must use a JAMB number), and the matching one of `matric_number` / `jamb_reg_number` mirrored from the same value. Password hashed with `bcrypt` (or `argon2` — pick one in `AGENTS.md` and stick to it) before storage, never store plaintext even transiently beyond the request handler.
 2. **Onboarding** (`POST /api/auth/onboarding`, requires a valid JWT from step 1's auto-login): Students select Faculty → Department → Level; Aspirants select Department of Aspiration. Writes `student_profiles` / `aspirant_profiles`. A user cannot access any role-scoped page until this row exists — enforce in middleware, not just by hiding the nav link.
-3. **Login** (`POST /api/auth/login`): identifier + password → JWT (7-day expiry) signed with `JWT_SECRET`, containing `{ userId, roleId }` only — no PII in the payload beyond the numeric IDs.
-4. Client stores the JWT in `localStorage`, attaches `Authorization: Bearer <token>` to every `/api` call via a shared fetch wrapper (`lib/auth/client-fetch.ts`) — never hand-roll fetch calls with the header inline in a component.
-5. Every `/api` route (except `register`/`login`) verifies the JWT server-side via a shared `requireAuth(request, allowedRoles: Role[])` helper in `lib/auth/guard.ts`, which throws a typed `UnauthorizedError`/`ForbiddenError` caught by a shared error handler. No route should hand-roll its own auth check.
+3. **Login** (`POST /api/auth/login`): identifier + password, where the identifier may be the signup value, the Matric Number, or the JAMB number (§2) → JWT (7-day expiry) signed with `JWT_SECRET`, containing `{ userId, roleId }` only — no PII in the payload beyond the numeric IDs.
+4. **Attach the second identifier** (`PATCH /api/me`, Students only): `{ identifier }` → fills whichever of `matric_number` / `jamb_reg_number` is still empty. One-way — no edit, no removal. Rejects a value already on the account, a type already set, and a value another account holds.
+5. Client stores the JWT in `localStorage`, attaches `Authorization: Bearer <token>` to every `/api` call via a shared fetch wrapper (`lib/auth/client-fetch.ts`) — never hand-roll fetch calls with the header inline in a component.
+6. Every `/api` route (except `register`/`login`) verifies the JWT server-side via a shared `requireAuth(request, allowedRoles: Role[])` helper in `lib/auth/guard.ts`, which throws a typed `UnauthorizedError`/`ForbiddenError` caught by a shared error handler. No route should hand-roll its own auth check.
 - Admin accounts and Teacher accounts are **not self-registered**. Admin is bootstrap-seeded (`pnpm db:seed`); Teacher accounts are created by an Admin from `/admin/teachers` (`identifier_type = 'staff_id'`, Admin sets an initial password the Teacher changes on first login — first-login-forces-password-change is a nice-to-have, not required for MVP, track it in `STATE.md` as optional).
 
 ## 8. Active semester
@@ -193,6 +200,10 @@ Rules that apply to both:
 - `/history`
 - `/resources` — JAMB-subject scoped
 
+### Account (authenticated; role noted per page)
+- `/account/password` — change your own password (any role)
+- `/account/identifiers` — **Students only**: show both identifiers, attach whichever one is missing (decision 3, amended 2026-11-10)
+
 ### API surface (`/api/*`, mirrors the pages above 1:1)
 - `/api/auth/register`, `/api/auth/login`, `/api/auth/onboarding`
 - `/api/admin/structure/{levels,faculties,departments,courses}` — REST-style CRUD
@@ -205,10 +216,22 @@ Rules that apply to both:
 - `/api/admin/settings/semester`
 - `/api/teacher/topics`, `/api/teacher/questions`, `/api/teacher/quizzes`, `/api/teacher/quizzes/[id]`, `/api/teacher/results/[quizId]`
 - `/api/quizzes` (list, scoped server-side to the caller's role/structure — Student/Aspirant), `/api/quizzes/[id]/attempt` (POST to submit)
-- `/api/me` — current user + profile + CGPA/Post-UTME summary
+- `/api/me` — current user + profile + CGPA/Post-UTME summary; `PATCH` attaches the second identifier (Students only, decision 3)
+- `/api/health` — **public, unauthenticated** (see below): liveness + database reachability only
 - `/api/resources`
 
 Every route under `/api/admin/*` requires `role = admin`; `/api/teacher/*` requires `role = teacher`; everything else requiring auth checks role inline via `requireAuth`. No route is guarded only by folder convention — the `requireAuth` call inside the handler is the actual enforcement, folder naming is just for humans/agents navigating the repo.
+
+**Public routes (the complete list, amended 2026-11-11).** Exactly three routes are reachable without a token: `POST /api/auth/register`, `POST /api/auth/login`, and `GET /api/health`. Everything else calls `requireAuth()` inside the handler — including `/api/auth/onboarding` and `/api/auth/change-password`, which are authenticated despite living under `/api/auth/`.
+
+`GET /api/health` exists for one operational reason: Supabase pauses Free-plan projects after 7 days without project activity, and restoring one is a manual dashboard step. The route runs a bare `select 1` so scheduled traffic counts as activity, and it deliberately reports nothing beyond that:
+
+- `200 { status: "ok", db: "ok", timestamp }` when the query succeeds.
+- `503 { status: "degraded", db: "unreachable", timestamp }` when it fails — so an uptime monitor alerts on a genuinely dead app.
+- No database version, no driver error text, no environment details. A public endpoint that explains *why* its database is unreachable is an information-disclosure bug with a friendly name.
+- `Cache-Control: no-store` and `dynamic = "force-dynamic"`: if the platform ever served a cached copy, the endpoint would stop resetting the inactivity timer and silently defeat its own purpose.
+
+It is driven by the `crons` entry in `vercel.json` (daily, the Hobby-plan ceiling — the pause window is measured in days, so daily leaves a wide margin and a single missed run is harmless), and an external uptime monitor may hit it too. There is no rate limit or in-memory throttle on purpose: on serverless a per-instance TTL cache is unreliable security theatre, and `select 1` is cheaper than any other route in this app. It is the only intentionally unauthenticated route with database access; adding another requires the same explicit sign-off, not a copy of this pattern. Note it can only do its job once the app is deployed (P8-5) — before that there is no URL for the cron to call.
 
 ## 10. Data model
 
@@ -216,6 +239,7 @@ Treat `DOS-Site-Database-Schema.sql` as the base schema — translate it into `l
 
 - Add `quiz_attempts.released_at TIMESTAMP NULL` (§4, score release).
 - Add `semester_settings` table (§8, active semester).
+- Add `users.matric_number` and `users.jamb_reg_number`, both `VARCHAR NULL UNIQUE` (§2, dual Student identifiers). `users.identifier` stays `NOT NULL UNIQUE` and remains the signup value — the two new columns are aliases for login, not a replacement.
 - Everything else in the `.sql` file ships as-is.
 
 ## 11. Database permissions & Row-Level Security

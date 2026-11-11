@@ -22,7 +22,7 @@ beforeEach(() => {
 
 describe("GET /api/admin/users/aspirants/[id]", () => {
   const aspirantRow = [
-    { id: 3, fullName: "Yusuf, F.", identifier: "12345678AB", isActive: true, aspirationDepartment: "Medicine & Surgery" },
+    { id: 3, fullName: "Yusuf, F.", identifier: "202612345678AB", isActive: true, aspirationDepartment: "Medicine & Surgery" },
   ];
 
   it("returns profile, Post-UTME history and attempt history for an admin", async () => {
