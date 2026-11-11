@@ -118,6 +118,40 @@ FRAME: Onboarding — Aspirant
 
 ---
 
+### `/account/password`
+- **Task:** not in `PLAN.md` — added during P2-7's rework (Teachers get a generated one-time password, so they need a way to rotate it)
+- **Guard:** authenticated, **any** role (`admin` / `teacher` / `student` / `aspirant`). The route behind it is deliberately role-agnostic — it only ever touches the caller's own row.
+- **Purpose:** Change your own password by proving ownership with the current one. There is no self-service reset in the MVP (no email/SMS), so this is the only recovery path a user has.
+
+**Layout**
+- Centred single-column card (`AuthCard`, title "Change password") — not a full-width dashboard page. Reached from the header user menu entry **Change password** (present for every role).
+
+**Wireframe**
+```
+FRAME: Change password
+  FIELD: Current password       -> [ password ]
+  FIELD: New password           -> [ password ]
+  FIELD: Confirm new password   -> [ password ]
+  INLINE ERROR (role=alert)     -> shown under the fields, not as a toast
+  ACTION ROW: [ Change password: primary, full-width, h-11 ]
+```
+
+**Data / API**
+- `POST /api/auth/change-password` — `{ currentPassword, newPassword }`. Role-agnostic `requireAuth()` (no role list). Proves ownership by verifying `currentPassword` against the stored hash; no reset token, no email.
+- The confirmation field is **client-only** — it is never sent. The payload is exactly `currentPassword` + `newPassword`.
+- All three inputs are `maxLength={72}` and `autoComplete`-tagged (`current-password` / `new-password`) so a password manager fills them correctly.
+
+**Client-side validation** (mirrors `changePasswordSchema`, `lib/validation/auth.ts` — the same rule set at both ends, never a second copy elsewhere):
+- new password length 8–72 (also enforced server-side)
+- new password must differ from the current one (also enforced server-side)
+- confirmation must match the new password (client-only, since it's not sent)
+
+**States:** idle · submitting (button `aria-busy`, label → "Saving…", and `disabled` — the inputs themselves stay editable, only the submit is gated) · field error (inline `role="alert"`; a 422 `details[0].message` is surfaced verbatim, anything else falls back to the `ApiError` message or a generic retry line) · success (toast "Password changed", **all three fields cleared** — important on a shared/lab device).
+
+**Notes:** Changing a password does **not** revoke existing sessions — tokens are stateless 7-day JWTs (`DESIGN.md` §7), so another device signed in with the old password keeps working until its token expires. That is a known, documented limitation, not a bug to "fix" here without a Board decision on token revocation.
+
+---
+
 ### `/account/identifiers`
 - **Task:** not in `PLAN.md` — Board decision 2026-11-10 (dual Student identifiers, `DESIGN.md` §2 decision 3)
 - **Guard:** authenticated, `role = student` only. Rendered inside the normal authenticated shell; reachable from the student user menu as **Login details**, sibling to **Change password**.

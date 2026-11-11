@@ -225,7 +225,7 @@ Work top to bottom. Don't check a later phase's box before every task above it i
   - UI: `/account/identifiers` (`AuthCard`, TanStack Query) shows both values with a form for only the missing one; linked as **Login details** in the student user menu, role-gated because that menu also renders in the teacher shell. Register form's identifier label/hint now describes both formats for Students.
   - Tests: new `api/auth/register/route.test.ts` (429/422×3/201×3/409), new `api/auth/login/route.test.ts` (429 with `Retry-After`, 422, 401×3, 200×2, plus a column-walking assertion that the WHERE clause touches all three alias columns), `api/me/route.test.ts` +10 PATCH cases, `identifiers.test.ts` rewritten for the single JAMB shape. Full suite 748 passed / 63 files (was 723/61).
   - Left alone deliberately: `src/scripts/flush-dev.ts` still lists `12345678AB` — that list keys into rows that already exist in dev, it doesn't create identifiers, and login doesn't format-validate, so an old dev account stays reachable. Rewriting it would only break the "all keepers present" guard.
-  - Spec gap: `.agents/design/screens-auth.md` gained a `/account/identifiers` entry, but `/account/password` (its sibling) still has none — worth writing both at the next design pass.
+  - Spec gap closed: `.agents/design/screens-auth.md` now has entries for both `/account/password` (written from the existing P2-7 page, so it documents shipped behavior rather than new decisions) and `/account/identifiers` (this task).
 
 ---
 
