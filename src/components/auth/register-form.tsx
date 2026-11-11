@@ -10,7 +10,7 @@ import { ApiError } from "@/lib/auth/client-fetch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { jambRegNumberSchema, matricNumberSchema } from "@/lib/validation/identifiers";
+import { identifierTypeFor, jambRegNumberSchema } from "@/lib/validation/identifiers";
 import { toast } from "sonner";
 
 export function RegisterForm({ role }: { role: "student" | "aspirant" }) {
@@ -24,16 +24,31 @@ export function RegisterForm({ role }: { role: "student" | "aspirant" }) {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const idSchema = role === "student" ? matricNumberSchema : jambRegNumberSchema;
-  const idLabel = role === "student" ? "Matric Number" : "JAMB Registration Number";
+  // A Student may sign up with either identifier they already hold (Board decision 2026-11-10);
+  // the other one can be attached later from /account/identifiers. Aspirants are JAMB-only.
+  const idLabel =
+    role === "student"
+      ? "Matric Number or JAMB Registration Number"
+      : "JAMB Registration Number";
   const idHint =
-    role === "student" ? "Format: YY/FF/DD### (e.g. 21/30GN019)" : "10 chars (e.g. 12345678AB) or 14 chars (e.g. 123456789012AB)";
+    role === "student"
+      ? "Either works — Matric YY/FF/DD### (e.g. 21/30GN019) or JAMB 4-digit year + 8 digits + 2 letters (e.g. 202612345678AB). You can add the other one after signing up."
+      : "4-digit year + 8 digits + 2 letters (e.g. 202612345678AB)";
 
   function validate(): boolean {
     const errs: Record<string, string> = {};
     if (!fullName.trim()) errs.fullName = "Enter your full name as it appears on your records";
-    const idRes = idSchema.safeParse(identifier);
-    if (!idRes.success) errs.identifier = idRes.error.issues[0]?.message ?? "Check the format and try again";
+    if (role === "student") {
+      if (identifierTypeFor(identifier) === null) {
+        errs.identifier =
+          "Enter a valid Matric Number (YY/FF/DD###, e.g. 21/30GN019) or JAMB Registration Number (4-digit year + 8 digits + 2 letters, e.g. 202612345678AB)";
+      }
+    } else {
+      const idRes = jambRegNumberSchema.safeParse(identifier);
+      if (!idRes.success) {
+        errs.identifier = idRes.error.issues[0]?.message ?? "Check the format and try again";
+      }
+    }
     if (password.length < 8) errs.password = "Use at least 8 characters";
     if (confirm !== password) errs.confirm = "Passwords do not match — re-enter the same password";
     setFieldErrors(errs);

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { asc, desc, eq } from "drizzle-orm";
+import { ZodError } from "zod";
 
 import { errorResponse } from "@/lib/api/response";
 import { requireAuth } from "@/lib/auth/guard";
@@ -20,6 +21,36 @@ import {
   postUtmeScores,
 } from "@/lib/db/schema/performance";
 import { getActiveSemester } from "@/lib/semester";
+import { addIdentifierSchema } from "@/lib/validation/auth";
+import { identifierTypeFor } from "@/lib/validation/identifiers";
+
+// Same envelope the auth routes use, so the "Login details" form can map field messages without
+// a second error-parsing convention.
+function validationError(err: ZodError): NextResponse {
+  return NextResponse.json(
+    {
+      error: {
+        code: "VALIDATION_ERROR",
+        message: "Invalid input",
+        details: err.issues.map((i) => ({
+          field: i.path.join(".") || "body",
+          code: i.code,
+          message: i.message,
+        })),
+      },
+    },
+    { status: 422 },
+  );
+}
+
+function isUniqueViolation(e: unknown): boolean {
+  return (
+    typeof e === "object" &&
+    e !== null &&
+    "code" in e &&
+    (e as { code?: string }).code === "23505"
+  );
+}
 
 export async function GET(request: Request) {
   try {
@@ -30,6 +61,8 @@ export async function GET(request: Request) {
       .select({
         fullName: users.fullName,
         identifier: users.identifier,
+        matricNumber: users.matricNumber,
+        jambRegNumber: users.jambRegNumber,
         roleName: roles.name,
       })
       .from(users)
@@ -135,6 +168,8 @@ export async function GET(request: Request) {
         id: auth.userId,
         fullName: userRow.fullName,
         identifier: userRow.identifier,
+        matricNumber: userRow.matricNumber,
+        jambRegNumber: userRow.jambRegNumber,
         role: userRow.roleName,
         activeSemester,
         profile,
@@ -142,6 +177,106 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     console.error(error);
+    return errorResponse(error);
+  }
+}
+
+// Attaching the second sign-in identifier to a Student account (Board decision 2026-11-10).
+// Deliberately one-way: a value already set is never overwritten or cleared here, because a login
+// credential the student can silently swap is a security decision the Board hasn't made. Asking
+// to add one that's already present is a 409, not an update.
+export async function PATCH(request: Request) {
+  try {
+    const auth = await requireAuth(request, ["student"]);
+    const json = await request.json();
+    const data = addIdentifierSchema.parse(json);
+
+    const identifierType = identifierTypeFor(data.identifier);
+    if (!identifierType) {
+      // Unreachable: addIdentifierSchema already rejected anything matching neither format.
+      return NextResponse.json(
+        { error: { code: "VALIDATION_ERROR", message: "Invalid identifier" } },
+        { status: 422 },
+      );
+    }
+
+    const db = getDb();
+    const [userRow] = await db
+      .select({
+        identifier: users.identifier,
+        matricNumber: users.matricNumber,
+        jambRegNumber: users.jambRegNumber,
+      })
+      .from(users)
+      .where(eq(users.id, auth.userId))
+      .limit(1);
+
+    if (!userRow) {
+      return NextResponse.json(
+        { error: { code: "NOT_FOUND", message: "Account not found" } },
+        { status: 404 }
+      );
+    }
+
+    const isMatric = identifierType === "matric_number";
+    const typeLabel = isMatric ? "Matric Number" : "JAMB Registration Number";
+
+    // Already on this account in any of its three columns — the alias columns mirror the original
+    // sign-in value at registration, so this also catches re-submitting the value they signed up
+    // with. Compared case-insensitively so a differently-cased duplicate can't slip past.
+    const alreadyOnAccount = [userRow.identifier, userRow.matricNumber, userRow.jambRegNumber]
+      .filter((value): value is string => typeof value === "string")
+      .some((value) => value.toUpperCase() === data.identifier.toUpperCase());
+
+    if (alreadyOnAccount) {
+      return NextResponse.json(
+        { error: { code: "CONFLICT", message: "That identifier is already on your account" } },
+        { status: 409 },
+      );
+    }
+
+    // One identifier of each type at most: the other type must be the one being added.
+    if ((isMatric ? userRow.matricNumber : userRow.jambRegNumber) !== null) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "CONFLICT",
+            message: `You have already added a ${typeLabel}. Login details can't be changed once set.`,
+          },
+        },
+        { status: 409 },
+      );
+    }
+
+    try {
+      await db
+        .update(users)
+        .set(isMatric ? { matricNumber: data.identifier } : { jambRegNumber: data.identifier })
+        .where(eq(users.id, auth.userId));
+    } catch (e) {
+      if (isUniqueViolation(e)) {
+        return NextResponse.json(
+          {
+            error: {
+              code: "CONFLICT",
+              message: `Another account already uses that ${typeLabel}`,
+            },
+          },
+          { status: 409 },
+        );
+      }
+      throw e;
+    }
+
+    return NextResponse.json({
+      data: {
+        identifier: userRow.identifier,
+        matricNumber: isMatric ? data.identifier : userRow.matricNumber,
+        jambRegNumber: isMatric ? userRow.jambRegNumber : data.identifier,
+      },
+    });
+  } catch (error) {
+    if (error instanceof ZodError) return validationError(error);
     return errorResponse(error);
   }
 }

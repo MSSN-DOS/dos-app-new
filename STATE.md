@@ -216,6 +216,19 @@ Work top to bottom. Don't check a later phase's box before every task above it i
 
 ---
 
+## Phase 10 — Dual Student identifiers
+- [x] P10-1 — Students can sign up with a Matric Number **or** a JAMB Registration Number, and attach the other later (Board decision 2026-11-10)
+  - **Decision change:** DESIGN.md decision #3 now says a Student may register with either identifier and add the missing one from `/account/identifiers`; login matches all three columns. Aspirants stay JAMB-only. Also replaced the two-shape JAMB rule (8+2 *or* 12+2) with a single 12-digit-year + 2-letter shape — the 10-character form is rejected everywhere now, aspirants included.
+  - Schema: `users.matric_number` + `users.jamb_reg_number`, both `VARCHAR(50) NULL UNIQUE`, aliases for login next to the existing `NOT NULL UNIQUE` `users.identifier` (the signup value, unchanged). Migration `0009_fast_white_queen.sql` — additive only (2 `ADD COLUMN`, 2 unique constraints). `users` already had RLS + deny-all, so no new policy. **No backfill** — existing rows keep `identifier` only and can add their other value from the account page.
+  - Validation: `lib/validation/identifiers.ts` — `jambRegNumberSchema` narrowed to `^\d{12}[A-Z]{2}$`; `identifierTypeFor()` unchanged and remains the only place that decides which format an input is. `registerSchema` uses it for Students (either) and `jambRegNumberSchema` for Aspirants. New `addIdentifierSchema` with a `superRefine` that rejects anything matching neither format.
+  - API: `POST /api/auth/register` mirrors the entered value into its column and 409s on any unique violation. `POST /api/auth/login` matches `identifier OR matric_number OR jamb_reg_number`, preferring the `identifier` hit on a tie. New `PATCH /api/me` (student-only): fills whichever column is empty; 409 on a value already on the account, 409 on a type already set, 409 on a value another account holds, 404 unknown user. Adding is one-way — no edit, no removal.
+  - UI: `/account/identifiers` (`AuthCard`, TanStack Query) shows both values with a form for only the missing one; linked as **Login details** in the student user menu, role-gated because that menu also renders in the teacher shell. Register form's identifier label/hint now describes both formats for Students.
+  - Tests: new `api/auth/register/route.test.ts` (429/422×3/201×3/409), new `api/auth/login/route.test.ts` (429 with `Retry-After`, 422, 401×3, 200×2, plus a column-walking assertion that the WHERE clause touches all three alias columns), `api/me/route.test.ts` +10 PATCH cases, `identifiers.test.ts` rewritten for the single JAMB shape. Full suite 748 passed / 63 files (was 723/61).
+  - Left alone deliberately: `src/scripts/flush-dev.ts` still lists `12345678AB` — that list keys into rows that already exist in dev, it doesn't create identifiers, and login doesn't format-validate, so an old dev account stays reachable. Rewriting it would only break the "all keepers present" guard.
+  - Spec gap: `.agents/design/screens-auth.md` gained a `/account/identifiers` entry, but `/account/password` (its sibling) still has none — worth writing both at the next design pass.
+
+---
+
 ## Open items still needing a real answer from the Board (not blocking dev, but don't let these go silently forgotten)
 
 - [x] Confirm Post-UTME conversion formula (P5-3) — confirmed 2026-08-25: aggregate is out of 100, conversion is the identity (best_score is already a percentage = correct × 2 for the 50-question quiz)

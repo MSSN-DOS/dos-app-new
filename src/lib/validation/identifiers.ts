@@ -15,16 +15,16 @@ export const matricNumberSchema = z
   .trim()
   .regex(/^\d{2}\/\d{2}[A-Z]{2}\d{3}$/, "Invalid matric number (expected YY/FF/DD###, e.g. 21/30GN019)");
 
-// JAMB Registration Number — two accepted shapes:
-//   Standard (10 char): 8 digits + 2 uppercase letters  -> ^\d{8}[A-Z]{2}$
-//   Expanded (14 char): 4-digit year + 8 digits + 2 uppercase letters -> ^\d{12}[A-Z]{2}$
-// e.g. `12345678AB` or `202612345678AB`
+// JAMB Registration Number — one shape only (Board decision 2026-11-10):
+//   4-digit year + 8 digits + 2 uppercase letters -> ^\d{12}[A-Z]{2}$
+// e.g. `202612345678AB`. The older 8+2 shape was dropped everywhere, aspirants included, so
+// an identifier is unambiguous between the two types (matric is the only one with slashes).
 export const jambRegNumberSchema = z
   .string()
   .trim()
   .regex(
-    /^(\d{8}[A-Z]{2}|\d{12}[A-Z]{2})$/,
-    "Invalid JAMB registration number (expected 8 digits + 2 letters, or 4-digit year + 8 digits + 2 letters)",
+    /^\d{12}[A-Z]{2}$/,
+    "Invalid JAMB registration number (expected 4-digit year + 8 digits + 2 letters, e.g. 202612345678AB)",
   );
 
 // Discriminates which identifier type a raw string is, based on format. Used when the caller

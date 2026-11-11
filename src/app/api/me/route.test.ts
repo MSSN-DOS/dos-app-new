@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { UnauthorizedError } from "@/lib/auth/errors";
+import { ForbiddenError, UnauthorizedError } from "@/lib/auth/errors";
 
 const requireAuth = vi.hoisted(() => vi.fn());
 const getDb = vi.hoisted(() => vi.fn());
@@ -9,8 +9,13 @@ vi.mock("@/lib/auth/guard", () => ({ requireAuth }));
 vi.mock("@/lib/db", () => ({ getDb }));
 vi.mock("@/lib/semester", () => ({ getActiveSemester }));
 
-import { GET } from "./route";
-import { jsonRequest, makeDbMock, stubSelect, type DbMock } from "@/lib/testing/route-test";
+import { GET, PATCH } from "./route";
+import {
+  jsonRequest,
+  makeDbMock,
+  stubSelect,
+  type DbMock,
+} from "@/lib/testing/route-test";
 
 let db: DbMock;
 
@@ -33,7 +38,15 @@ describe("GET /api/me", () => {
   it("returns the student profile block with CGPA and quiz count", async () => {
     requireAuth.mockResolvedValue({ userId: 8, roleId: 3 });
     stubSelect(db, [
-      [{ fullName: "Test Student", identifier: "21/30GN001", roleName: "student" }],
+      [
+        {
+          fullName: "Test Student",
+          identifier: "21/30GN001",
+          matricNumber: "21/30GN001",
+          jambRegNumber: null,
+          roleName: "student",
+        },
+      ],
       [
         {
           departmentName: "Mathematics",
@@ -52,6 +65,8 @@ describe("GET /api/me", () => {
         id: 8,
         fullName: "Test Student",
         identifier: "21/30GN001",
+        matricNumber: "21/30GN001",
+        jambRegNumber: null,
         role: "student",
         activeSemester: "rain",
         profile: {
@@ -114,7 +129,15 @@ describe("GET /api/me", () => {
   it("returns the aspirant profile block with Post-UTME summary", async () => {
     requireAuth.mockResolvedValue({ userId: 9, roleId: 4 });
     stubSelect(db, [
-      [{ fullName: "Test Aspirant", identifier: "12345678JA", roleName: "aspirant" }],
+      [
+        {
+          fullName: "Test Aspirant",
+          identifier: "202612345678JA",
+          matricNumber: null,
+          jambRegNumber: "202612345678JA",
+          roleName: "aspirant",
+        },
+      ],
       [{ departmentName: "Medicine" }],
       [
         {
@@ -132,7 +155,9 @@ describe("GET /api/me", () => {
       data: {
         id: 9,
         fullName: "Test Aspirant",
-        identifier: "12345678JA",
+        identifier: "202612345678JA",
+        matricNumber: null,
+        jambRegNumber: "202612345678JA",
         role: "aspirant",
         activeSemester: "rain",
         profile: {
@@ -155,5 +180,167 @@ describe("GET /api/me", () => {
     const body = await res.json();
     expect(body.data.role).toBe("admin");
     expect(body.data.profile).toBeNull();
+  });
+});
+
+// Attaching the second sign-in identifier (Board decision 2026-11-10). One-way by design, so the
+// conflict paths matter as much as the happy path: a value already set must never be overwritten.
+describe("PATCH /api/me", () => {
+  let updatedValues: Record<string, unknown> | null;
+
+  beforeEach(() => {
+    updatedValues = null;
+    db.update.mockImplementation(() => ({
+      set: (values: Record<string, unknown>) => {
+        updatedValues = values;
+        return { where: async () => undefined };
+      },
+    }));
+  });
+
+  it("returns 401 when the caller is unauthenticated", async () => {
+    requireAuth.mockRejectedValueOnce(new UnauthorizedError("Missing token"));
+
+    const res = await PATCH(
+      jsonRequest("http://localhost/api/me", "PATCH", { identifier: "21/30GN019" }),
+    );
+
+    expect(res.status).toBe(401);
+    const body = await res.json();
+    expect(body.error.code).toBe("UNAUTHORIZED");
+    expect(db.update).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 for a non-student role", async () => {
+    requireAuth.mockRejectedValueOnce(new ForbiddenError("Forbidden"));
+
+    const res = await PATCH(
+      jsonRequest("http://localhost/api/me", "PATCH", { identifier: "21/30GN019" }),
+    );
+
+    expect(res.status).toBe(403);
+    expect(db.update).not.toHaveBeenCalled();
+  });
+
+  it("returns 422 with field details when the value matches neither format", async () => {
+    requireAuth.mockResolvedValue({ userId: 8, roleId: 3 });
+
+    const res = await PATCH(
+      jsonRequest("http://localhost/api/me", "PATCH", { identifier: "12345678AB" }),
+    );
+
+    expect(res.status).toBe(422);
+    const body = await res.json();
+    expect(body.error.code).toBe("VALIDATION_ERROR");
+    expect(body.error.details[0].field).toBe("identifier");
+    expect(db.update).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 when the account row is gone", async () => {
+    requireAuth.mockResolvedValue({ userId: 8, roleId: 3 });
+    stubSelect(db, [[]]);
+
+    const res = await PATCH(
+      jsonRequest("http://localhost/api/me", "PATCH", { identifier: "21/30GN019" }),
+    );
+
+    expect(res.status).toBe(404);
+    expect(db.update).not.toHaveBeenCalled();
+  });
+
+  it("returns 409 when the value is already on the account", async () => {
+    requireAuth.mockResolvedValue({ userId: 8, roleId: 3 });
+    stubSelect(db, [
+      [{ identifier: "21/30GN019", matricNumber: "21/30GN019", jambRegNumber: null }],
+    ]);
+
+    const res = await PATCH(
+      jsonRequest("http://localhost/api/me", "PATCH", { identifier: "21/30GN019" }),
+    );
+
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error.message).toBe("That identifier is already on your account");
+    expect(db.update).not.toHaveBeenCalled();
+  });
+
+  it("returns 409 when that identifier type is already set to a different value", async () => {
+    requireAuth.mockResolvedValue({ userId: 8, roleId: 3 });
+    stubSelect(db, [
+      [{ identifier: "21/30GN019", matricNumber: "21/30GN019", jambRegNumber: null }],
+    ]);
+
+    const res = await PATCH(
+      jsonRequest("http://localhost/api/me", "PATCH", { identifier: "21/30GN020" }),
+    );
+
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error.message).toContain("already added a Matric Number");
+    expect(db.update).not.toHaveBeenCalled();
+  });
+
+  it("returns 409 when another account already holds the value", async () => {
+    requireAuth.mockResolvedValue({ userId: 8, roleId: 3 });
+    stubSelect(db, [
+      [{ identifier: "202612345678AB", matricNumber: null, jambRegNumber: "202612345678AB" }],
+    ]);
+    db.update.mockImplementation(() => ({
+      set: () => ({
+        where: async () => {
+          throw Object.assign(new Error("duplicate key"), { code: "23505" });
+        },
+      }),
+    }));
+
+    const res = await PATCH(
+      jsonRequest("http://localhost/api/me", "PATCH", { identifier: "21/30GN019" }),
+    );
+
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error.message).toBe("Another account already uses that Matric Number");
+  });
+
+  it("attaches the missing JAMB number to a matric-signed-up student", async () => {
+    requireAuth.mockResolvedValue({ userId: 8, roleId: 3 });
+    stubSelect(db, [
+      [{ identifier: "21/30GN019", matricNumber: "21/30GN019", jambRegNumber: null }],
+    ]);
+
+    const res = await PATCH(
+      jsonRequest("http://localhost/api/me", "PATCH", { identifier: "202612345678AB" }),
+    );
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      data: {
+        identifier: "21/30GN019",
+        matricNumber: "21/30GN019",
+        jambRegNumber: "202612345678AB",
+      },
+    });
+    expect(updatedValues).toEqual({ jambRegNumber: "202612345678AB" });
+  });
+
+  it("attaches the missing matric number to a JAMB-signed-up student", async () => {
+    requireAuth.mockResolvedValue({ userId: 8, roleId: 3 });
+    stubSelect(db, [
+      [{ identifier: "202612345678AB", matricNumber: null, jambRegNumber: "202612345678AB" }],
+    ]);
+
+    const res = await PATCH(
+      jsonRequest("http://localhost/api/me", "PATCH", { identifier: "21/30GN019" }),
+    );
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      data: {
+        identifier: "202612345678AB",
+        matricNumber: "21/30GN019",
+        jambRegNumber: "202612345678AB",
+      },
+    });
+    expect(updatedValues).toEqual({ matricNumber: "21/30GN019" });
   });
 });

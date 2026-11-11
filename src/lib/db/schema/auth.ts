@@ -24,6 +24,13 @@ export const users = pgTable(
     fullName: varchar("full_name", { length: 150 }).notNull(),
     identifier: varchar("identifier", { length: 50 }).notNull().unique(),
     identifierType: identifierTypeEnum("identifier_type").notNull(),
+    // Students can sign in with either identifier they hold (Board decision 2026-11-10). The one
+    // used at sign-up is mirrored into the matching column below, and the other is attached later
+    // from /account/identifiers. Both are nullable because Teachers/Admins/Aspirants have neither,
+    // and `identifier` remains the account's original sign-in value. Matric and JAMB shapes are
+    // disjoint, so one unique index per column is enough to block same-type duplicates.
+    matricNumber: varchar("matric_number", { length: 50 }).unique(),
+    jambRegNumber: varchar("jamb_reg_number", { length: 50 }).unique(),
     passwordHash: varchar("password_hash", { length: 255 }).notNull(),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     isActive: boolean("is_active").notNull().default(true),
