@@ -158,6 +158,24 @@ describe("POST /api/auth/login", () => {
     expect(names).toContain("jamb_reg_number");
   });
 
+  it("normalises a lowercase identifier before the lookup", async () => {
+    stubSelectCapturingWhere([studentRow()]);
+
+    const res = await POST(
+      jsonRequest("http://localhost/api/auth/login", "POST", {
+        identifier: "202612345678ab",
+        password: "password123",
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    // The comparison is `upper(column) = <param>`, so the param must be the upper-case form,
+    // otherwise a lower-case login attempt would find nothing.
+    const values = columnNames(capturedWhere);
+    expect(values).toContain("202612345678AB");
+    expect(values).not.toContain("202612345678ab");
+  });
+
   it("signs an aspirant in with their JAMB number", async () => {
     stubSelect(db, [
       [{ id: 9, roleId: 4, passwordHash: "hashed-password", isActive: true, role: "aspirant" }],

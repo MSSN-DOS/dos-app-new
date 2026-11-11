@@ -3,6 +3,11 @@ import { z } from "zod";
 // Identifier formats are locked in DESIGN.md §2. These two named Zod schemas are the single
 // source of truth — reused by both the registration form (client) and the /api/auth/register
 // handler (server). Never redefine the regex elsewhere.
+//
+// Both schemas trim and upper-case before the format check, because the required letters are
+// upper-case but people type however their keyboard is set (`21/30gn019`, `202612345678ab`).
+// The parsed output is the normalised value, so anything written to the DB is upper-case and
+// therefore matchable case-insensitively at sign-in.
 
 // Matric Number: `YY/FF/DD###`
 //   YY  2-digit year of entry
@@ -13,6 +18,7 @@ import { z } from "zod";
 export const matricNumberSchema = z
   .string()
   .trim()
+  .toUpperCase()
   .regex(/^\d{2}\/\d{2}[A-Z]{2}\d{3}$/, "Invalid matric number (expected YY/FF/DD###, e.g. 21/30GN019)");
 
 // JAMB Registration Number — one shape only (Board decision 2026-11-10):
@@ -22,6 +28,7 @@ export const matricNumberSchema = z
 export const jambRegNumberSchema = z
   .string()
   .trim()
+  .toUpperCase()
   .regex(
     /^\d{12}[A-Z]{2}$/,
     "Invalid JAMB registration number (expected 4-digit year + 8 digits + 2 letters, e.g. 202612345678AB)",

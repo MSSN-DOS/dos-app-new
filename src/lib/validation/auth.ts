@@ -7,10 +7,13 @@ import { identifierTypeFor, jambRegNumberSchema } from "./identifiers";
 // 2026-11-10 — whichever they hold today; the other can be attached later from
 // /account/identifiers), an Aspirant must supply a JAMB registration number. This keeps the
 // single source of truth (identifiers.ts) and avoids any second copy of the regexes.
+//
+// `identifier` is upper-cased here, not just format-checked: the parsed value is what the route
+// writes to the DB, so normalising at this level is what makes `21/30gn019` store as `21/30GN019`.
 export const registerSchema = z
   .object({
     fullName: z.string().trim().min(1).max(150),
-    identifier: z.string().trim(),
+    identifier: z.string().trim().toUpperCase(),
     password: z.string().min(8).max(72),
     role: z.enum(["student", "aspirant"]),
   })
@@ -43,10 +46,11 @@ export const loginSchema = z.object({
 });
 
 // Attaching the second identifier to an existing Student account. The shape decides which column
-// fills, so a bad value has to fail here rather than reach the route unresolved.
+// fills, so a bad value has to fail here rather than reach the route unresolved. Upper-cased for
+// the same reason as registration: the route writes the parsed value straight to the column.
 export const addIdentifierSchema = z
   .object({
-    identifier: z.string().trim().min(1, "Enter the identifier you want to add"),
+    identifier: z.string().trim().toUpperCase().min(1, "Enter the identifier you want to add"),
   })
   .strict()
   .superRefine((val, ctx) => {

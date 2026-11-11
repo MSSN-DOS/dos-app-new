@@ -15,8 +15,8 @@ describe("matricNumberSchema", () => {
     expect(matricNumberSchema.safeParse("211/30GN019").success).toBe(false);
   });
 
-  it("rejects lowercase department letters", () => {
-    expect(matricNumberSchema.safeParse("21/30gn019").success).toBe(false);
+  it("accepts lowercase department letters and returns them upper-cased", () => {
+    expect(matricNumberSchema.parse("21/30gn019")).toBe("21/30GN019");
   });
 
   it("rejects wrong serial width", () => {
@@ -41,8 +41,8 @@ describe("jambRegNumberSchema", () => {
     expect(jambRegNumberSchema.safeParse("12345678AB").success).toBe(false);
   });
 
-  it("rejects lowercase trailing letters", () => {
-    expect(jambRegNumberSchema.safeParse("202612345678ab").success).toBe(false);
+  it("accepts lowercase trailing letters and returns them upper-cased", () => {
+    expect(jambRegNumberSchema.parse("202612345678ab")).toBe("202612345678AB");
   });
 
   it("rejects a 13-digit value", () => {
@@ -73,5 +73,10 @@ describe("identifierTypeFor", () => {
 
   it("returns null for a value matching neither format", () => {
     expect(identifierTypeFor("not-an-id")).toBeNull();
+  });
+
+  it("recognises both formats typed in lowercase", () => {
+    expect(identifierTypeFor("21/30gn019")).toBe("matric_number");
+    expect(identifierTypeFor("202612345678ab")).toBe("jamb_reg_number");
   });
 });

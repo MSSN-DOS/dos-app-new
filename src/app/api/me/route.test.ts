@@ -343,4 +343,18 @@ describe("PATCH /api/me", () => {
     });
     expect(updatedValues).toEqual({ matricNumber: "21/30GN019" });
   });
+
+  it("upper-cases a lowercase value before storing it", async () => {
+    requireAuth.mockResolvedValue({ userId: 8, roleId: 3 });
+    stubSelect(db, [
+      [{ identifier: "21/30GN019", matricNumber: "21/30GN019", jambRegNumber: null }],
+    ]);
+
+    const res = await PATCH(
+      jsonRequest("http://localhost/api/me", "PATCH", { identifier: "202612345678ab" }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(updatedValues).toEqual({ jambRegNumber: "202612345678AB" });
+  });
 });

@@ -113,7 +113,9 @@ export function RegisterForm({ role }: { role: "student" | "aspirant" }) {
         <Input
           id="identifier"
           value={identifier}
-          onChange={(e) => setIdentifier(e.target.value)}
+          // Both formats require upper-case letters; convert as they type rather than bouncing
+          // them back with a format error over a lower-case `gn`. The server normalises too.
+          onChange={(e) => setIdentifier(e.target.value.toUpperCase())}
           required
           maxLength={24}
           autoComplete="username"

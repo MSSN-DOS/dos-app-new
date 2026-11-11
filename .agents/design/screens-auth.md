@@ -22,7 +22,7 @@ FRAME: Login
   NOTE: New student? Register  ·  New aspirant? Register  (links to /register/student, /register/aspirant)
 ```
 
-A Student may sign in with **either** identifier — the signup value, their Matric Number, or their JAMB number (`DESIGN.md` §2, amended 2026-11-10). The input is plain text; the server matches all three columns, so the field doesn't need to guess the format.
+A Student may sign in with **either** identifier — the signup value, their Matric Number, or their JAMB number (`DESIGN.md` §2, amended 2026-11-10). The input is plain text; the server matches all three columns, so the field doesn't need to guess the format. Case doesn't matter: the field upper-cases as they type and the server compares case-insensitively, so `21/30gn019` signs in the same as `21/30GN019` (2026-11-11).
 
 **Data / API**
 - `POST /api/auth/login` — `{ identifier, password }` → `{ token, role }`. On success, store token (per `DESIGN.md` §7), redirect by role: admin → `/admin`, teacher → `/teacher`, student/aspirant → `/dashboard` (or `/onboarding` first if their profile row doesn't exist yet).
@@ -45,7 +45,7 @@ A Student may sign in with **either** identifier — the signup value, their Mat
 ```
 FRAME: Register — Student
   FIELD: Full name -> [ text input ]
-  FIELD: Matric Number or JAMB Reg No. -> [ text input, format hint: YY/FF/DD### or 12 digits + 2 letters ]
+  FIELD: Matric Number or JAMB Reg No. -> [ text input, format hint: YY/FF/DD### or 12 digits + 2 letters, upper-cased as you type ]
   FIELD: Password -> [ password input ]
   FIELD: Confirm password -> [ password input ]
   ACTION ROW: [Create account: primary]
@@ -69,7 +69,7 @@ FRAME: Register — Student
 ```
 FRAME: Register — Aspirant
   FIELD: Full name -> [ text input ]
-  FIELD: JAMB Registration Number -> [ text input, format hint: 12 digits + 2 letters, e.g. 202612345678AB ]
+  FIELD: JAMB Registration Number -> [ text input, format hint: 12 digits + 2 letters, e.g. 202612345678AB, upper-cased as you type ]
   FIELD: Password -> [ password input ]
   FIELD: Confirm password -> [ password input ]
   ACTION ROW: [Create account: primary]
@@ -165,14 +165,14 @@ FRAME: Change password
 FRAME: Login details
   ROW: Matric Number      -> 21/30GN019        (or "Not added")
   ROW: JAMB Reg. Number   -> 202612345678AB    (or "Not added")
-  FIELD: <only the missing one> -> [ text input, format hint: YY/FF/DD### ]
+  FIELD: <only the missing one> -> [ text input, format hint: YY/FF/DD###, upper-cased as you type ]
   ACTION ROW: [Add Matric Number / Add JAMB Number: primary]
   NOTE: You can sign in with either one. This can't be changed once added.
 ```
 
 **Data / API**
 - `GET /api/me` — reads `matricNumber` / `jambRegNumber` off the caller's row.
-- `PATCH /api/me` — `{ identifier }`; the value's own format decides which column fills. Server rejects a value already on the account and a type already set, both 409. Client-side validation mirrors the server schema, is-as-you-type.
+- `PATCH /api/me` — `{ identifier }`; the value's own format decides which column fills. Server rejects a value already on the account and a type already set, both 409. Client-side validation mirrors the server schema, is-as-you-type, and upper-cases the value as it's typed (letters are required uppercase, but typing lowercase must never be the reason an add fails).
 - If both are already present, the page shows the two values and no form at all.
 
 **States:** loading (query pending) · error (query failed — retry, not a blank card) · one identifier missing (form for that one) · both present (read-only summary) · submitting · field error (bad format, inline) · conflict (409 → human-readable message, form stays open).

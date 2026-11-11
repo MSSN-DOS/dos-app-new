@@ -134,6 +134,25 @@ describe("POST /api/auth/register", () => {
     });
   });
 
+  it("upper-cases a lowercase identifier before storing it", async () => {
+    const res = await POST(
+      jsonRequest("http://localhost/api/auth/register", "POST", {
+        fullName: "Test Student",
+        identifier: "202612345678ab",
+        password: "password123",
+        role: "student",
+      }),
+    );
+
+    expect(res.status).toBe(201);
+    expect(insertedValues).toMatchObject({
+      identifier: "202612345678AB",
+      identifierType: "jamb_reg_number",
+      matricNumber: null,
+      jambRegNumber: "202612345678AB",
+    });
+  });
+
   it("registers an aspirant with a 12+2 JAMB number", async () => {
     stubSelect(db, [[{ id: 4, name: "aspirant" }]]);
 

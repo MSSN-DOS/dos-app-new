@@ -140,7 +140,7 @@ export default function LoginDetailsPage() {
                     autoComplete="off"
                     placeholder={copy.placeholder}
                     value={value}
-                    onChange={(e) => setValue(e.target.value)}
+                    onChange={(e) => setValue(e.target.value.toUpperCase())}
                   />
                   <p className="text-xs text-muted-foreground">{copy.hint}</p>
                 </div>
