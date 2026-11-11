@@ -217,9 +217,21 @@ Rules that apply to both:
 - `/api/teacher/topics`, `/api/teacher/questions`, `/api/teacher/quizzes`, `/api/teacher/quizzes/[id]`, `/api/teacher/results/[quizId]`
 - `/api/quizzes` (list, scoped server-side to the caller's role/structure — Student/Aspirant), `/api/quizzes/[id]/attempt` (POST to submit)
 - `/api/me` — current user + profile + CGPA/Post-UTME summary; `PATCH` attaches the second identifier (Students only, decision 3)
+- `/api/health` — **public, unauthenticated** (see below): liveness + database reachability only
 - `/api/resources`
 
 Every route under `/api/admin/*` requires `role = admin`; `/api/teacher/*` requires `role = teacher`; everything else requiring auth checks role inline via `requireAuth`. No route is guarded only by folder convention — the `requireAuth` call inside the handler is the actual enforcement, folder naming is just for humans/agents navigating the repo.
+
+**Public routes (the complete list, amended 2026-11-11).** Exactly three routes are reachable without a token: `POST /api/auth/register`, `POST /api/auth/login`, and `GET /api/health`. Everything else calls `requireAuth()` inside the handler — including `/api/auth/onboarding` and `/api/auth/change-password`, which are authenticated despite living under `/api/auth/`.
+
+`GET /api/health` exists for one operational reason: Supabase pauses Free-plan projects after 7 days without project activity, and restoring one is a manual dashboard step. The route runs a bare `select 1` so scheduled traffic counts as activity, and it deliberately reports nothing beyond that:
+
+- `200 { status: "ok", db: "ok", timestamp }` when the query succeeds.
+- `503 { status: "degraded", db: "unreachable", timestamp }` when it fails — so an uptime monitor alerts on a genuinely dead app.
+- No database version, no driver error text, no environment details. A public endpoint that explains *why* its database is unreachable is an information-disclosure bug with a friendly name.
+- `Cache-Control: no-store` and `dynamic = "force-dynamic"`: if the platform ever served a cached copy, the endpoint would stop resetting the inactivity timer and silently defeat its own purpose.
+
+It is driven by the `crons` entry in `vercel.json` (daily, the Hobby-plan ceiling — the pause window is measured in days, so daily leaves a wide margin and a single missed run is harmless), and an external uptime monitor may hit it too. There is no rate limit or in-memory throttle on purpose: on serverless a per-instance TTL cache is unreliable security theatre, and `select 1` is cheaper than any other route in this app. It is the only intentionally unauthenticated route with database access; adding another requires the same explicit sign-off, not a copy of this pattern. Note it can only do its job once the app is deployed (P8-5) — before that there is no URL for the cron to call.
 
 ## 10. Data model
 
