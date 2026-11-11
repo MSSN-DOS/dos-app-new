@@ -5,8 +5,9 @@ import { getDb } from "@/lib/db";
 
 // Public and unauthenticated on purpose — see DESIGN.md §7 "Public routes" and AGENTS.md §1.
 // Its job is to make one cheap query so a Supabase Free-plan project (paused after 7 days of
-// project inactivity) never goes a week without activity. Vercel Cron drives it once a day
-// via `vercel.json`; any external uptime monitor may hit it too.
+// project inactivity) never goes a week without activity. An external uptime monitor
+// (UptimeRobot) drives it on a short interval from outside the platform — there is no in-repo
+// scheduler, because the ping must not depend on this app's deploy config to keep firing.
 export const dynamic = "force-dynamic";
 
 // A paused or unreachable database should fail fast instead of holding the invocation open

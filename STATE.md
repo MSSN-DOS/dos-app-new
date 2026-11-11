@@ -232,15 +232,16 @@ Work top to bottom. Don't check a later phase's box before every task above it i
 
 ## Phase 11 — Public health endpoint / Supabase keep-alive
 
-- [x] P11-1 — `GET /api/health` + Vercel Cron (Board decision 2026-11-11)
+- [x] P11-1 — `GET /api/health` + external uptime monitor (Board decision 2026-11-11)
   - Reason: a Supabase Free-plan project is paused after 7 days without project activity, and restoring it is a manual dashboard step, so the deployed app needs scheduled traffic that doesn't depend on a human logging in.
-  - Board answers: **public unauthenticated** route (option A — documented exception, not a secret/cron-token scheme) and **Vercel Cron** as the driver (in-repo, ships with the app, can't silently stop existing).
+  - Board answers: **public unauthenticated** route (option A — documented exception, not a secret/cron-token scheme), driven by an **external uptime monitor (UptimeRobot)** configured outside the repo.
   - `src/app/api/health/route.ts` runs a bare `select 1` against the pooler and returns `200 {status,db,timestamp}` / `503 {status,db,timestamp}` — no version, no driver error text, no config, `Cache-Control: no-store`, `dynamic = "force-dynamic"` (a cached response would defeat the endpoint's entire purpose). A 4s `Promise.race` timeout keeps a paused DB from holding the invocation open; `connect_timeout` is client-wide in postgres.js, so changing it for a probe wasn't worth altering the shared client.
   - No rate limit / TTL throttle, deliberately: serverless module state is per-instance and dies on cold start, so it would be theatre. `select 1` is the cheapest query in the app.
-  - `vercel.json` adds `crons: [{ path: "/api/health", schedule: "0 3 * * *" }]` — daily, the Hobby-plan ceiling. Daily is ample against a 7-day window and tolerates several missed runs.
+  - Driver changed to UptimeRobot (2026-11-11, after the route had already been built): a `vercel.json` cron was the original plan and was removed. Reason: crons only run on production deployments of the project that owns the file, so the keep-alive would quietly stop if the deploy target or config changed, and a cron failure is invisible unless someone reads the Vercel dashboard. An external monitor keeps firing regardless of how the app is deployed and alerts on failure. Nothing in the repo configures it — settings below are for the dashboard.
+  - UptimeRobot setup (user-side, once the app is deployed): monitor type HTTP(s), URL `https://<deployed-host>/api/health`, interval 5 minutes (free-tier minimum; even 60 minutes would clear the 7-day window, so the short interval is for alerting, not for the pause), treat any non-2xx as down. 503 ⇒ the app is up but the database is not, which is the signal worth waking up for.
   - `src/app/api/health/route.test.ts` (5 cases): 200 + probe actually ran, callable with no credentials + `no-store`, 503 on rejection, no error detail leaks into the body, 503 when `getDb()` throws (missing `DATABASE_URL`). `makeDbMock`/`DbMock` in `src/lib/testing/route-test.ts` gained `execute` to support it.
   - Rulebook amended in the same change: `AGENTS.md` §1 and `DESIGN.md` §7 now list the three public routes explicitly and record why `/api/health` is the one unauthenticated route with DB access. While editing that sentence the old text ("three explicitly public auth routes: register, login") was corrected — `/api/auth/onboarding` and `/api/auth/change-password` both call `requireAuth`, so register + login were the only public ones before this addition.
-  - **Depends on P8-5.** The route is testable now, but the cron can't fire until the app has a deployed URL. Until then it does not prevent a pause — nothing does.
+  - **Depends on P8-5.** The route is testable now, but the monitor can't fire until the app has a deployed URL. Until then it does not prevent a pause — nothing does.
 
 ---
 
