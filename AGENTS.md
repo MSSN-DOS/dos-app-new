@@ -87,3 +87,13 @@ If a Supabase MCP server is connected in this session, treat it as **admin-level
 - **Never write, log, or echo the service-role key or any MCP auth token** in code, comments, commit messages, or conversation — including partially, for debugging. If a query result would expose it, don't run that query.
 - **Don't run data-exploration queries against real user data** even in dev — the dev project should only ever contain seeded/synthetic rows (per §2's seed script scope, deliberately not real Faculties/Departments/Courses). If you find real-looking user data in a "dev" project, stop and flag it — it means the safety boundary already broke before you got here.
 - Setup and config live in `.mcp.json` at the repo root — see `README.md` §"Connecting an agent to the DB" for the exact shape. Don't add a second MCP DB connection or point an existing one at a different project ref without this being an explicit, visible change to that file (i.e., something a human reviewing the diff would actually see).
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
