@@ -53,19 +53,28 @@ FRAME: Questions — List
   LIST ROW: "The powerhouse of the cell is the ____." | Fill-in-gap | Draft pill
   LIST ROW: "Salah is performed how many times daily?" | Options | Published pill
 
-FRAME: Question Editor
-  ACTION ROW: [Fill in the gap] [Options]  -- type toggle, only editable on a new question
-  FIELD: Body -> [ rich text area: Bold / Sub / Superscript toolbar ]
-  FIELD (Fill-in-gap): Accepted answer(s) -> [ one input per blank, "+ Add blank" ]
-  FIELD (Options): Options -> [ radio-marked list, min 2, "+ Add option", radio marks the single correct one ]
-  FIELD: Course/Topic or JAMB Subject -> [ select ]
-  ACTION ROW: [Save as draft] [Publish: primary, disabled/greyed with tooltip if incomplete]
-  NOTE: Publishing is blocked until question text and all required options/blanks are filled in.
+FRAME: Type chooser (dialog, shown first when adding — skipped when editing an existing question)
+  ACTION CARD: [Fill in the gap]  "A sentence with one or more blanks. Graded on an exact, case-insensitive match."
+  ACTION CARD: [Multiple choice]  "One question with two or more options. Exactly one is marked correct."
+  NOTE: Question type is fixed after save — hence it's chosen before the editor opens, not toggled inside it.
+
+FRAME: Question Editor (single scroll region + sticky footer)
+  HEADER: [ ordinal badge: "+" for new / "#{id}" when editing ] · "Add a question" | "Question #{id}"
+          · type chip [Fill-in-gap | Options] · [Change type] (new questions only — reopens the chooser)
+  FIELD: Question text -> [ rich text area: Bold / Italic / Underline / Sub / Sup / bullet + grouped science symbol toolbars ]
+  FIELD (Fill-in-gap): Accepted answers -> [ numbered badge + input per blank, dashed "Add another accepted answer" ]
+  FIELD (Options): Options -> [ letter-badged A–H row + input; correct row is brand-tinted with a filled "CORRECT" chip,
+          every other row shows "SELECT AS ANSWER"; dashed "Add new option", min 2 ]
+  FIELD: Belongs to -> [ Course / Topic | JAMB subject ] toggle, then the matching select(s)
+  FOOTER (sticky): blocker summary -> ["N things needed before publishing" + the list | "Ready to publish"] · [Save as draft] [Publish]
+  NOTE: Publishing is blocked until question text and all required options/blanks are filled in. Publish stays disabled for the whole time a blocker exists, and the blocker list is always visible next to it — the reason is never hidden in a tooltip.
 ```
 
 **Data / API:** `GET/POST/PATCH/DELETE /api/teacher/questions`. Two Zod schemas per `AGENTS.md` §3 — lenient for draft-save, strict for publish. The "Publish" button's disabled state should reflect the *strict* schema's validity in real time, not just reject on click.
 
-**States:** loading · empty · error · save-as-draft-always-available (even with an empty body — draft has no requirements) · publish-blocked (clear inline reason, e.g. "Add at least one correct option").
+**States:** loading · empty · error · save-as-draft-always-available (even with an empty body — draft has no requirements) · publish-blocked (the sticky footer names each missing item in a list; no tooltip-only reason).
+
+**Visual reference:** question authoring follows the QuizBoot authoring flow (type chooser first, letter-badged options with an explicit "select as answer" affordance, dashed add-row, sticky action footer). Expressed in the existing `--dos-*` tokens only — no new palette, no raw colour values.
 
 ---
 
