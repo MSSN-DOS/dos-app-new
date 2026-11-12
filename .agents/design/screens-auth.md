@@ -93,9 +93,9 @@ FRAME: Register — Aspirant
 **Wireframe — Student branch**
 ```
 FRAME: Onboarding — Student
-  FIELD: Faculty -> [ select ]
-  FIELD: Department -> [ select, options filtered by Faculty above, disabled until Faculty chosen ]
-  FIELD: Level -> [ select, options filtered by Department above, disabled until Department chosen ]
+  FIELD: Faculty -> [ picker, searchable ]
+  FIELD: Department -> [ picker, options filtered by Faculty above, disabled until Faculty chosen ]
+  FIELD: Level -> [ picker, options filtered by Department above, disabled until Department chosen ]
   ACTION ROW: [Continue to dashboard: primary]
   NOTE: No GPA/CGPA entry — the platform calculates it from quiz results.
 ```
@@ -103,18 +103,39 @@ FRAME: Onboarding — Student
 **Wireframe — Aspirant branch**
 ```
 FRAME: Onboarding — Aspirant
-  FIELD: Department of Aspiration -> [ select, all departments, not filtered ]
+  FIELD: Department of Aspiration -> [ picker, all departments, grouped by faculty, not filtered ]
   ACTION ROW: [Continue to dashboard: primary]
   NOTE: No JAMB score entry — the platform calculates Post-UTME from quiz results.
 ```
 
+**Field control — shared `StructurePicker`** (`src/components/structure/structure-picker.tsx`)
+- Every academic-structure field on this screen uses this one control, not a `Select`, not `Popover + Command`. A 114-department list inside a narrow popover was the defect this replaces.
+- Trigger is a `Button` (`h-11`, `≥44px`), labelled by the field, showing the current selection or the placeholder, with `ChevronDown`.
+- Mobile (`< md`): bottom sheet (`Drawer`) — title = field label, description = current selection, `≥44px` rows, bottom safe-area padding.
+- Desktop (`≥ md`): `Popover` at the trigger's width.
+- Both: pinned search input (auto-focused, searches **label or group name**), a live "N results" count, a scroll area with `overscroll-contain`, and sticky `bg-popover` section headers when options carry a `group`.
+- Selected row is marked with a check **and** `aria-pressed`, and is kept visible rather than reordered.
+- Empty search shows an inline "No matches" line, never a blank panel.
+- The picker takes pre-normalized `{ id, label, group? }` options — it knows nothing about faculties or departments, so it stays reusable and testable.
+
+**Wireframe — Aspirant department grouping**
+```
+The aspirant list is one flat 114-row fetch grouped on the client:
+  group = the faculty name for that department's facultyId
+  order = faculty name ASC, then department name ASC
+Grouping is client-side on purpose — every department row already carries facultyId,
+so the API needs no change. Searching matches department OR faculty name, so
+"engineering" surfaces every engineering department.
+```
+
 **Data / API**
-- `GET /api/admin/structure/faculties`, then `.../departments?facultyId=`, then `.../levels?departmentId=` (from `department_levels`) — cascading selects, each dependent select's options only fetched once its parent is chosen.
+- `GET /api/structure/faculties`, then `.../departments?facultyId=`, then `.../levels?departmentId=` (from `department_levels`) — cascading pickers, each dependent picker's options only fetched once its parent is chosen.
+- Aspirant: `GET /api/structure/departments` (no `facultyId` → every department, each with its `facultyId`) plus `GET /api/structure/faculties` for the group labels. Both are cached under the `["structure", …]` query keys, so they are not refetched per screen.
 - `POST /api/auth/onboarding` — `{ facultyId, departmentId, levelId }` (Student) or `{ aspirationDepartmentId }` (Aspirant). On success, redirect to `/dashboard`.
 
-**States:** loading (cascading selects show a disabled/loading state while their parent's choice resolves), empty (no Faculties exist yet — Admin hasn't set up structure; show a clear "not ready yet, check back soon" message rather than an empty dropdown that looks broken), submitting, error.
+**States:** loading (pickering trigger shows "Loading…" and is disabled; dependent pickers say "Choose a faculty/department first…"), empty (no Faculties exist yet — Admin hasn't set up structure; show a clear "not ready yet, check back soon" message rather than an empty picker that looks broken; a department with no levels gets its own empty line), submitting, error.
 
-**Notes:** This screen is functionally untestable until Phase 2's Admin structure CRUD exists — build the form in Phase 1 (P1-9), but don't consider it actually verified until P2-8.
+**Notes:** This screen is functionally untestable until Phase 2's Admin structure CRUD exists — build the form in Phase 1 (P1-9), but don't consider it actually verified until P2-8. The real University of Ilorin structure (16 faculties / 114 departments) is loaded by `pnpm db:import:structure`; see `STATE.md` for the flagged per-department level-set assumption.
 
 ---
 

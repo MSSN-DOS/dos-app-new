@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 
@@ -10,105 +10,33 @@ import { roleDashboardPath } from "@/components/auth/redirect-if-authenticated";
 import { apiFetch, ApiError } from "@/lib/auth/client-fetch";
 import { toast } from "sonner";
 import { AuthCard } from "@/components/auth/auth-card";
+import {
+  StructurePicker,
+  type StructureOption,
+} from "@/components/structure/structure-picker";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
-import { Check, ChevronDown } from "lucide-react";
 
 interface Option {
   id: number;
   name?: string;
   value?: number;
-}
-
-function SelectField({
-  id,
-  label,
-  placeholder,
-  value,
-  onChange,
-  disabled,
-  items,
-  loading,
-  labelKey,
-}: {
-  id: string;
-  label: string;
-  placeholder: string;
-  value: string;
-  onChange: (value: string) => void;
-  disabled?: boolean;
-  items: Option[];
-  loading: boolean;
-  labelKey: "name" | "value";
-}) {
-  const [open, setOpen] = useState(false);
-  const selected = items.find((item) => String(item.id) === value);
-  const display = selected ? (labelKey === "name" ? selected.name : String(selected.value)) : "";
-  return (
-    <div className="space-y-2 min-w-0">
-      <Label htmlFor={id}>{label}</Label>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            id={id}
-            variant="outline"
-            role="combobox"
-            aria-expanded={open}
-            aria-label={label}
-            disabled={disabled || loading}
-            className={cn(
-              "h-11 min-h-[44px] w-full min-w-0 justify-between bg-transparent px-3 py-2 text-sm font-normal",
-              !value && "text-muted-foreground",
-            )}
-          >
-            <span className="truncate text-left">{loading ? "Loading…" : display || placeholder}</span>
-            <ChevronDown className="ml-2 size-4 shrink-0 opacity-50" aria-hidden="true" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-          <Command>
-            <CommandInput placeholder={`Search ${label.toLowerCase()}…`} className="h-9" />
-            <CommandList>
-              <CommandEmpty className="py-6 text-center text-sm text-muted-foreground">No results found.</CommandEmpty>
-              <CommandGroup>
-                {items.map((item) => {
-                  const text = labelKey === "name" ? (item.name ?? "") : String(item.value ?? "");
-                  return (
-                    <CommandItem
-                      key={item.id}
-                      value={`${text} ${item.id}`}
-                      onSelect={() => {
-                        onChange(String(item.id));
-                        setOpen(false);
-                      }}
-                      className="min-h-[44px] wrap-break-word"
-                    >
-                      <span className="truncate wrap-break-word">{text}</span>
-                      <Check
-                        className={cn("ml-auto size-4 shrink-0", value === String(item.id) ? "opacity-100" : "opacity-0")}
-                        aria-hidden="true"
-                      />
-                    </CommandItem>
-                  );
-                })}
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
-    </div>
-  );
+  facultyId?: number;
 }
 
 function SubmitButton({ submitting, label }: { submitting: boolean; label: string }) {
   return (
-    <Button type="submit" disabled={submitting} aria-busy={submitting} className="w-full min-w-0">
+    <Button
+      type="submit"
+      disabled={submitting}
+      aria-busy={submitting}
+      className="w-full min-w-0"
+    >
       {submitting ? (
         <>
-          <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden="true" />
+          <Loader2
+            className="animate-spin motion-reduce:animate-none"
+            aria-hidden="true"
+          />
           Saving…
         </>
       ) : (
@@ -121,7 +49,11 @@ function SubmitButton({ submitting, label }: { submitting: boolean; label: strin
 function FormError({ error }: { error: string | null }) {
   if (!error) return null;
   return (
-    <p role="alert" aria-live="assertive" className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive wrap-break-word">
+    <p
+      role="alert"
+      aria-live="assertive"
+      className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive wrap-break-word"
+    >
       {error}
     </p>
   );
@@ -131,8 +63,8 @@ function StructureUnavailable({ onRetry }: { onRetry: () => void }) {
   return (
     <div className="space-y-4 text-center min-w-0">
       <p className="text-sm leading-relaxed text-muted-foreground wrap-break-word">
-        The Board hasn&apos;t published the academic structure yet, so there&apos;s nothing to
-        choose from. Try reloading — if it persists, check back later.
+        The Board hasn&apos;t published the academic structure yet, so there&apos;s
+        nothing to choose from. Try reloading — if it persists, check back later.
       </p>
       <Button variant="outline" onClick={onRetry} className="w-full min-w-0">
         Reload
@@ -166,7 +98,13 @@ export default function OnboardingPage() {
     if (statusQuery.isSuccess) router.replace("/dashboard"); // already onboarded
   }, [statusQuery.isSuccess, router]);
 
-  if (loading || !isAuthenticated || !roleOk || statusQuery.isPending || statusQuery.isSuccess) {
+  if (
+    loading ||
+    !isAuthenticated ||
+    !roleOk ||
+    statusQuery.isPending ||
+    statusQuery.isSuccess
+  ) {
     return (
       <main className="flex min-h-dvh items-center justify-center bg-background">
         <p className="text-sm text-muted-foreground">Loading…</p>
@@ -190,7 +128,8 @@ function StudentForm() {
 
   const facultiesQuery = useQuery({
     queryKey: ["structure", "faculties"],
-    queryFn: () => apiFetch<{ data: Option[] }>("/structure/faculties").then((r) => r.data ?? []),
+    queryFn: () =>
+      apiFetch<{ data: Option[] }>("/structure/faculties").then((r) => r.data ?? []),
   });
   const departmentsQuery = useQuery({
     queryKey: ["structure", "departments", facultyId],
@@ -221,8 +160,7 @@ function StudentForm() {
   }
 
   const submitMutation = useMutation({
-    mutationFn: (body: string) =>
-      apiFetch("/auth/onboarding", { method: "POST", body }),
+    mutationFn: (body: string) => apiFetch("/auth/onboarding", { method: "POST", body }),
     onSuccess: () => {
       toast.success("Profile saved");
       router.push("/dashboard");
@@ -254,40 +192,59 @@ function StudentForm() {
         <StructureUnavailable onRetry={() => void facultiesQuery.refetch()} />
       ) : (
         <form onSubmit={onSubmit} className="space-y-4">
-          <SelectField
+          <StructurePicker
             id="faculty"
             label="Faculty"
             placeholder="Select faculty…"
             value={facultyId}
             onChange={onFacultyChange}
-            items={facultiesQuery.data ?? []}
+            options={(facultiesQuery.data ?? []).map((item) => ({
+              id: item.id,
+              label: item.name ?? "",
+            }))}
             loading={facultiesQuery.isPending}
-            labelKey="name"
+            countLabel="faculty"
+            emptyLabel="No faculty matches that search."
           />
-          <SelectField
+          <StructurePicker
             id="department"
             label="Department"
-            placeholder="Select department…"
+            placeholder={
+              facultyId === "" ? "Choose a faculty first…" : "Select department…"
+            }
             value={departmentId}
             onChange={onDepartmentChange}
             disabled={facultyId === "" || departmentsQuery.isError}
-            items={departmentsQuery.data ?? []}
+            options={(departmentsQuery.data ?? []).map((item) => ({
+              id: item.id,
+              label: item.name ?? "",
+            }))}
             loading={facultyId !== "" && departmentsQuery.isPending}
-            labelKey="name"
+            countLabel="department"
+            emptyLabel="No department matches that search."
           />
-          <SelectField
+          <StructurePicker
             id="level"
             label="Level"
-            placeholder="Select level…"
+            placeholder={
+              departmentId === "" ? "Choose a department first…" : "Select level…"
+            }
             value={levelId}
             onChange={setLevelId}
             disabled={departmentId === "" || levelsQuery.isError}
-            items={levelsQuery.data ?? []}
+            options={(levelsQuery.data ?? []).map((item) => ({
+              id: item.id,
+              label: String(item.value ?? ""),
+            }))}
             loading={departmentId !== "" && levelsQuery.isPending}
-            labelKey="value"
+            countLabel="level"
+            emptyLabel="This department has no levels yet — check back later."
           />
           <FormError error={error} />
-          <SubmitButton submitting={submitMutation.isPending} label="Continue to dashboard" />
+          <SubmitButton
+            submitting={submitMutation.isPending}
+            label="Continue to dashboard"
+          />
           <p className="text-center text-xs text-muted-foreground">
             No GPA/CGPA entry — the platform calculates it from quiz results.
           </p>
@@ -307,10 +264,31 @@ function AspirantForm() {
     queryFn: () =>
       apiFetch<{ data: Option[] }>("/structure/departments").then((r) => r.data ?? []),
   });
+  // Only used to label department groups — the department rows already carry `facultyId`.
+  const facultiesQuery = useQuery({
+    queryKey: ["structure", "faculties"],
+    queryFn: () =>
+      apiFetch<{ data: Option[] }>("/structure/faculties").then((r) => r.data ?? []),
+  });
+
+  // Grouped by faculty, then alphabetical inside each group: 114 departments as one flat
+  // list is unusable, and the groups double as the faculty name the aspirant may be
+  // searching for instead of a department.
+  const departmentOptions = useMemo<StructureOption[]>(() => {
+    const facultyNames = new Map(
+      (facultiesQuery.data ?? []).map((item) => [item.id, item.name ?? ""]),
+    );
+    return (departmentsQuery.data ?? [])
+      .map((item) => ({
+        id: item.id,
+        label: item.name ?? "",
+        group: facultyNames.get(item.facultyId ?? -1) ?? "Other departments",
+      }))
+      .sort((a, b) => a.group.localeCompare(b.group) || a.label.localeCompare(b.label));
+  }, [departmentsQuery.data, facultiesQuery.data]);
 
   const submitMutation = useMutation({
-    mutationFn: (body: string) =>
-      apiFetch("/auth/onboarding", { method: "POST", body }),
+    mutationFn: (body: string) => apiFetch("/auth/onboarding", { method: "POST", body }),
     onSuccess: () => {
       toast.success("Profile saved");
       router.push("/dashboard");
@@ -342,18 +320,23 @@ function AspirantForm() {
         <StructureUnavailable onRetry={() => void departmentsQuery.refetch()} />
       ) : (
         <form onSubmit={onSubmit} className="space-y-4">
-          <SelectField
+          <StructurePicker
             id="aspiration"
             label="Department of aspiration"
             placeholder="Select department…"
             value={aspirationDepartmentId}
             onChange={setAspirationDepartmentId}
-            items={departmentsQuery.data ?? []}
+            options={departmentOptions}
             loading={departmentsQuery.isPending}
-            labelKey="name"
+            countLabel="department"
+            emptyLabel="No department matches that search."
+            searchPlaceholder="Search department or faculty…"
           />
           <FormError error={error} />
-          <SubmitButton submitting={submitMutation.isPending} label="Continue to dashboard" />
+          <SubmitButton
+            submitting={submitMutation.isPending}
+            label="Continue to dashboard"
+          />
           <p className="text-center text-xs text-muted-foreground">
             No JAMB score entry — the platform calculates Post-UTME from quiz results.
           </p>
