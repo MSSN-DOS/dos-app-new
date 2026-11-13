@@ -15,6 +15,32 @@ import { jambSubjects } from "./jamb";
 import { users } from "./auth";
 import { denyPublicPolicy } from "./rls";
 
+export const passages = pgTable(
+  "passages",
+  {
+    id: serial("id").primaryKey(),
+    // A passage lives in the same track as its sub-questions, so ownership and
+    // listing rules stay identical to the question bank's.
+    courseId: integer("course_id").references(() => courses.id),
+    jambSubjectId: integer("jamb_subject_id").references(() => jambSubjects.id),
+    topicId: integer("topic_id").references(() => topics.id),
+    title: varchar("title", { length: 200 }),
+    bodyRichText: text("body_rich_text").notNull(),
+    status: contentStatusEnum("status").notNull().default("draft"),
+    createdBy: integer("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  () => [
+    check(
+      "passages_track_check",
+      sql`(course_id IS NOT NULL AND jamb_subject_id IS NULL) OR (course_id IS NULL AND jamb_subject_id IS NOT NULL)`
+    ),
+    denyPublicPolicy("passages"),
+  ]
+).enableRLS();
+
 export const questions = pgTable(
   "questions",
   {
@@ -24,6 +50,14 @@ export const questions = pgTable(
     topicId: integer("topic_id").references(() => topics.id),
     questionType: questionTypeEnum("question_type").notNull(),
     bodyRichText: text("body_rich_text").notNull(),
+    // Optional explanation shown after the attempt when the quiz reveals answers.
+    // Never sent to a client that is not allowed to see the answer key.
+    reasonRichText: text("reason_rich_text"),
+    // Passage questions: one shared passage, several ordinary sub-questions beneath
+    // it. Sub-questions stay `options` / `fill_in_gap` rows, so no enum change.
+    passageId: integer("passage_id").references(() => passages.id, {
+      onDelete: "set null",
+    }),
     status: contentStatusEnum("status").notNull().default("draft"),
     createdBy: integer("created_by")
       .notNull()

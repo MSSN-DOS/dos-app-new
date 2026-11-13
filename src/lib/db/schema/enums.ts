@@ -29,6 +29,22 @@ export const questionTypeEnum = pgEnum("question_type", [
 
 export const contentStatusEnum = pgEnum("status", ["draft", "published"]);
 
+// Quiz authoring (P12). `private` is the default so a half-built quiz is never
+// listed to students, and an existing quiz keeps its current reach on migration.
+export const quizVisibilityEnum = pgEnum("quiz_visibility", [
+  "public",
+  "private",
+]);
+
+// One type serves both "show answers after" and "show result after": the question
+// is *when*, and never-immediately-after-the-attempt is covered by `after_release`
+// (the existing held-score rule — an Admin still has to release the score).
+export const reviewPolicyEnum = pgEnum("review_policy", [
+  "never",
+  "after_attempt",
+  "after_release",
+]);
+
 export const quizTypeEnum = pgEnum("quiz_type", ["topic", "course"]);
 
 export const loseFocusPolicyEnum = pgEnum("lose_focus_policy", [
