@@ -1,15 +1,17 @@
 import { z } from "zod";
 
+import { RICH_TEXT_MAX_LENGTH } from "./primitives";
+
 // Questions live on exactly one track — a Course (optionally within a Topic) or a
 // JAMB subject, never both. Mirrors the DB CHECK `questions_track_check`.
 const nullableInt = z.union([z.coerce.number().int().min(1), z.null()]);
 
-const optionInputSchema = z.object({
+export const optionInputSchema = z.object({
   optionText: z.string().max(1000),
   isCorrect: z.boolean(),
 });
 
-const blankInputSchema = z.object({
+export const blankInputSchema = z.object({
   acceptedAnswer: z.string().max(255),
 });
 
@@ -18,9 +20,15 @@ const questionFields = {
   courseId: nullableInt.optional(),
   jambSubjectId: nullableInt.optional(),
   topicId: nullableInt.optional(),
+  // Sub-questions of a shared passage carry the passage's id. The passage itself is
+  // validated by `passages.ts`; a sub-question needs nothing beyond the normal rules.
+  passageId: nullableInt.optional(),
   // Draft has no completeness requirements — even an empty body saves (per
   // .agents/design/screens-teacher.md). Publish enforces the real rules below.
-  bodyRichText: z.string().max(20000),
+  bodyRichText: z.string().max(RICH_TEXT_MAX_LENGTH),
+  // Shown after an attempt when the quiz reveals answers. Optional at every level:
+  // an explanation is a nicety, not a publish requirement.
+  reasonRichText: z.string().max(RICH_TEXT_MAX_LENGTH).optional(),
   options: z.array(optionInputSchema).optional(),
   blanks: z.array(blankInputSchema).optional(),
 };
@@ -45,6 +53,73 @@ function requireSingleTrack(
   }
 }
 
+// The publish rules for a question's answer payload, kept in one exported function so
+// the quiz builder validates a different wrapper (it adds marks/order, drops track)
+// with exactly the same rules instead of a second copy (AGENTS.md §1).
+export function checkAnswerPayload(
+  data: {
+    questionType: "fill_in_gap" | "options";
+    options?: { optionText: string; isCorrect: boolean }[];
+    blanks?: { acceptedAnswer: string }[];
+  },
+  ctx: z.RefinementCtx,
+) {
+  const options = data.options ?? [];
+  const blanks = data.blanks ?? [];
+
+  if (data.questionType === "options") {
+    if (options.length < 2) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["options"],
+        message: "Options questions need at least two options before publishing",
+      });
+      return;
+    }
+    if (options.some((o) => o.optionText.trim() === "")) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["options"],
+        message: "Every option needs text before publishing",
+      });
+    }
+    // Single-select is the only mode that ships, so True/False needs no separate
+    // rule: it is an options question with exactly two options and one correct.
+    const correctCount = options.filter((o) => o.isCorrect).length;
+    if (correctCount === 0) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["options"],
+        message: "Mark one option as correct before publishing",
+      });
+    } else if (correctCount > 1) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["options"],
+        message: "Only one option may be marked correct (single-select questions)",
+      });
+    }
+  }
+
+  if (data.questionType === "fill_in_gap") {
+    if (blanks.length < 1) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["blanks"],
+        message: "Fill-in-gap questions need at least one blank before publishing",
+      });
+      return;
+    }
+    if (blanks.some((b) => b.acceptedAnswer.trim() === "")) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["blanks"],
+        message: "Every blank needs an accepted answer before publishing",
+      });
+    }
+  }
+}
+
 // Lenient: draft-save always succeeds structurally; only the track XOR is enforced
 // (the DB would reject it anyway, better as a 422 than a 500).
 export const questionDraftSchema = z
@@ -58,62 +133,13 @@ export type QuestionDraftInput = z.infer<typeof questionDraftSchema>;
 export const questionPublishSchema = z
   .object({
     ...questionFields,
-    bodyRichText: z.string().trim().min(1, "Question text is required before publishing").max(20000),
+    bodyRichText: z.string().trim().min(1, "Question text is required before publishing").max(RICH_TEXT_MAX_LENGTH),
     options: z.array(optionInputSchema).default([]),
     blanks: z.array(blankInputSchema).default([]),
   })
   .superRefine((data, ctx) => {
     requireSingleTrack(data, ctx);
-
-    if (data.questionType === "options") {
-      if (data.options.length < 2) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["options"],
-          message: "Options questions need at least two options before publishing",
-        });
-        return;
-      }
-      if (data.options.some((o) => o.optionText.trim() === "")) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["options"],
-          message: "Every option needs text before publishing",
-        });
-      }
-      const correctCount = data.options.filter((o) => o.isCorrect).length;
-      if (correctCount === 0) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["options"],
-          message: "Mark one option as correct before publishing",
-        });
-      } else if (correctCount > 1) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["options"],
-          message: "Only one option may be marked correct (single-select questions)",
-        });
-      }
-    }
-
-    if (data.questionType === "fill_in_gap") {
-      if (data.blanks.length < 1) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["blanks"],
-          message: "Fill-in-gap questions need at least one blank before publishing",
-        });
-        return;
-      }
-      if (data.blanks.some((b) => b.acceptedAnswer.trim() === "")) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["blanks"],
-          message: "Every blank needs an accepted answer before publishing",
-        });
-      }
-    }
+    checkAnswerPayload(data, ctx);
   });
 
 export type QuestionPublishInput = z.infer<typeof questionPublishSchema>;

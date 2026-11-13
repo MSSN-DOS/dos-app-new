@@ -16,6 +16,12 @@ export interface DurationParts {
 
 const MAX_HOURS = 99;
 
+/**
+ * Ceiling the hour select can produce. The validation schema imports this rather
+ * than restating a limit, so a value the form can display is never rejected on save.
+ */
+export const MAX_QUIZ_DURATION_SECONDS = MAX_HOURS * 3600 + 59 * 60 + 59;
+
 function isIntInRange(value: number, min: number, max: number): boolean {
   return Number.isInteger(value) && value >= min && value <= max;
 }
@@ -31,6 +37,17 @@ export function composeDurationSeconds(parts: DurationParts): number | null {
   if (!isIntInRange(minutes, 0, 59)) return null;
   if (!isIntInRange(seconds, 0, 59)) return null;
   return hours * 3600 + minutes * 60 + seconds;
+}
+
+/**
+ * Same as `composeDurationSeconds`, except that an all-zero selection means "no time
+ * limit" and becomes `null` — the stored shape for untimed. Invalid parts also collapse
+ * to `null`; callers that need to tell "untimed" from "impossible" must use
+ * `composeDurationSeconds` directly, which the selects cannot produce either way.
+ */
+export function durationSecondsFromParts(parts: DurationParts): number | null {
+  const composed = composeDurationSeconds(parts);
+  return composed === null || composed === 0 ? null : composed;
 }
 
 /** Inverse of `composeDurationSeconds`, for painting an existing quiz into the selects. */
