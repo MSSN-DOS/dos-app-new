@@ -63,7 +63,8 @@ If this app ever handles anything more sensitive than quiz scores, revisit this 
 ```
 Faculty
  └─ Department (belongs to one Faculty; has a set of active Levels via department_levels)
-     └─ Level (100/200/300/400/500/600 — which ones apply is per-Department)
+     └─ Level (the platform runs 100 and 200 — Board answer 2026-11-13; the table can hold
+        others and an Admin can attach one to a Department, but onboarding only offers 100/200)
          └─ Course (belongs to a Level + Semester, has a scope_type)
              └─ Topic (created by Admin or Teacher)
 ```

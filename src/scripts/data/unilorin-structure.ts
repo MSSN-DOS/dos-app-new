@@ -7,9 +7,10 @@
 // Ordering here is irrelevant — the API sorts faculties and departments by name. It is kept in
 // the Board's original order so a human can diff it against the source document.
 //
-// NOTE: programme length is not encoded here. Every department is linked to 100–600 because the
-// Board has not confirmed which departments stop at 400 or 500. See STATE.md — an Admin can trim
-// a department's level set through /admin/structure/departments at any time.
+// NOTE: programme length is not encoded here. Every department is linked to the two levels the
+// platform runs (100 and 200 — Board answer 2026-11-13), not per-department programme lengths.
+// If a department later needs 300+, an Admin adds that level to it through
+// /admin/structure/departments; nothing in this file has to change.
 
 export interface StructureFaculty {
   name: string;
@@ -209,7 +210,8 @@ export const UNILORIN_STRUCTURE: StructureFaculty[] = [
   },
 ];
 
-// Every department is linked to the full 100–600 range until the Board confirms per-department
-// programme lengths. Superset on purpose: a wrong extra option is a nuisance, a missing one
-// blocks a real student from finishing onboarding.
-export const LEVEL_VALUES = [100, 200, 300, 400, 500, 600] as const;
+// The levels this platform serves. Board answer 2026-11-13: 100 and 200 only. The `levels` table
+// may still hold other rows (an Admin can add one, and existing Courses can be scoped to one), but
+// these are the only levels the import links departments to, so these are the only levels a
+// student is offered during onboarding.
+export const LEVEL_VALUES = [100, 200] as const;

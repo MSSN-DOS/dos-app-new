@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import process from "node:process";
 
-import { inArray } from "drizzle-orm";
+import { inArray, notInArray } from "drizzle-orm";
 
 import { getDb } from "../lib/db";
 import { departmentLevels, departments, faculties, levels } from "../lib/db/schema";
@@ -15,16 +15,22 @@ import { LEVEL_VALUES, UNILORIN_STRUCTURE } from "./data/unilorin-structure";
 // re-parents, or deletes anything, so re-running it after an Admin has edited the structure is
 // safe — their edits survive.
 //
+// The one exception is opt-in: `--prune-levels` deletes department–level links whose level is not
+// in LEVEL_VALUES. Needed once when the Board narrowed the served levels to 100/200, but not run
+// by default, because it would also strip a level an Admin deliberately attached.
+//
 // Deliberately separate from `db:seed`: seed creates role + bootstrap-admin scaffolding and is
 // run on every environment; this is real reference data loaded once per database.
 async function main(): Promise<void> {
+  const pruneLevels = process.argv.includes("--prune-levels");
+
   // Load env (mirrors drizzle.config.ts) so DATABASE_URL resolves for the client.
   if (fs.existsSync(".env.local")) process.loadEnvFile?.(".env.local");
   if (fs.existsSync(".env")) process.loadEnvFile?.(".env");
 
   const db = getDb();
 
-  // 1. Levels 100–600 (shared across the whole university).
+  // 1. The levels this platform serves (100 and 200 — Board answer 2026-11-13).
   await db
     .insert(levels)
     .values(LEVEL_VALUES.map((value) => ({ value })))
@@ -88,7 +94,7 @@ async function main(): Promise<void> {
     await db.insert(departments).values(newDepartments);
   }
 
-  // 4. Link every imported department to 100–600 (superset until programme lengths are confirmed).
+  // 4. Link every imported department to the served levels.
   const importedDepartments = await db
     .select({ id: departments.id })
     .from(departments)
@@ -100,6 +106,18 @@ async function main(): Promise<void> {
 
   if (departmentLevelLinks.length > 0) {
     await db.insert(departmentLevels).values(departmentLevelLinks).onConflictDoNothing();
+  }
+
+  // 4b. Optional: drop links to levels the platform no longer serves, so the onboarding picker
+  // cannot offer e.g. 400 to a student. Only strips the department–level link — the `levels` row
+  // itself is left alone, because a Course may already be scoped to it.
+  let prunedLinks = 0;
+  if (pruneLevels) {
+    const pruned = await db
+      .delete(departmentLevels)
+      .where(notInArray(departmentLevels.levelId, levelIds))
+      .returning({ departmentId: departmentLevels.departmentId });
+    prunedLinks = pruned.length;
   }
 
   // 5. Verify the end state rather than trusting the inserts.
@@ -125,6 +143,11 @@ async function main(): Promise<void> {
     `Departments: ${verifiedDepartments.length}/${expectedDepartments} present across those faculties`,
   );
   console.log(`Department–level links ensured: ${departmentLevelLinks.length}`);
+  if (pruneLevels) {
+    console.log(
+      `Department–level links pruned (levels outside ${LEVEL_VALUES.join("/")}): ${prunedLinks}`,
+    );
+  }
 
   if (verifiedFaculties.length !== UNILORIN_STRUCTURE.length) {
     throw new Error("Faculty count mismatch after import — check for a partial failure.");

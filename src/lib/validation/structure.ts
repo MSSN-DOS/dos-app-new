@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-// Levels are a flat list (currently 100–600 per DESIGN.md §3). Value is just a positive
-// integer — the range is real Board data entered through the UI, not a hard schema rule.
+// Levels are a flat list (100 and 200 are the ones the platform serves — DESIGN.md §3). Value is
+// just a positive integer — the range is real Board data entered through the UI, not a schema rule.
 export const levelCreateSchema = z.object({
   value: z.coerce.number().int().min(1).max(9999),
 });

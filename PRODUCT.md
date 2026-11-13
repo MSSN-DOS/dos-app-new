@@ -34,7 +34,7 @@ The only free platform whose academic structure is owned and entered by the MSSN
 
 **Technical constraints:** Next.js App Router + TypeScript strict + Tailwind + shadcn/ui; pnpm; Drizzle ORM over Supabase Postgres (RLS deny-all + revoked anon grants, Next.js API is sole access path); Zod validation (single schema reused client and server); custom JWT `Authorization: Bearer` (7-day expiry, `localStorage`, no refresh); TanStack Query for client server-state; `lib/auth/guard.ts` `requireAuth()` is enforcement for every `/api` route except register/login.
 
-**Terminology:** Faculty, Department, Level (100–600 per-Department), Course `scope_type` (department/faculty/general/interfaculty), Topic, Course Quiz vs Topic Quiz, `released_at` null=held, `week_start`, `best_scores`, `cgpa_value` / `converted_score_50`.
+**Terminology:** Faculty, Department, Level (the platform serves 100 and 200 — Board answer 2026-11-13), Course `scope_type` (department/faculty/general/interfaculty), Topic, Course Quiz vs Topic Quiz, `released_at` null=held, `week_start`, `best_scores`, `cgpa_value` / `converted_score_50`.
 
 **Undecided:** Post-UTME conversion `round(raw/2)` is a placeholder pending Board confirmation — marked `TODO(board-confirm)` in code and STATE.md.
 
