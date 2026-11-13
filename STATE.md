@@ -253,6 +253,40 @@ Work top to bottom. Don't check a later phase's box before every task above it i
 
 ---
 
+## Phase 12 — Quiz authoring rebuild (details, settings panel, question builder)
+
+Rebuilds the Teacher/Admin quiz-authoring surface to the QuizBoot reference. Numbered 12 because 9–11 are already taken above; **note the doc drift: `PLAN.md` stops at Phase 8 and has no entry for Phases 9–12** — STATE.md is the record of what actually shipped, PLAN.md was never extended. Worth reconciling at the next planning pass, not worth rewriting history for.
+
+Scope decisions taken before any code:
+- Shipping question types are True/False, Multiple choice, Fill in the gap, Passage. **Essay is deferred** (needs manual grading plus an "unmarked" attempt state, and `attempt_answers.textAnswer` is `varchar(255)`); **Audio Response is not in scope**. Dropping Essay is what keeps this phase's migration additive — no `question_type` enum change at all.
+- Deferred deliberately, not forgotten: paid/challenge/prize quizzes, premium badges, likes, comments, sharing, leaderboard, 50:50, auto-answer, extra time, result images/quotes, "Teleport Questions", AI-provider connect banner, spreadsheet import, and cover image / inline image insert (the last two need the same bucket-policy + Storage-quota decisions as Teacher uploads).
+- Teacher-owned scheduling **replaces** the `weekStart`-derived Course Quiz window that P9-1 let an Admin override. It writes the same `opens_at`/`closes_at` columns, so the resolver and the P9 panel keep working; the DESIGN.md §8 note about the derivation being a default now needs a teacher-owned-window sentence.
+
+- [x] P12-1 — Pure helpers for marks, duration and settings validation
+  - `lib/quizzes/marks.ts`: `distributeMarks()` hands out integers with the remainder to the **earliest** questions (10 over 3 → 4/3/3) and rejects a total below the question count rather than creating 0-mark questions the publish validator would then have to special-case. `sumMarks()` for the live total.
+  - `lib/quizzes/duration.ts`: seconds are the stored unit because the duration control is three selects, so minutes alone would silently drop a value the form let someone enter. `composeDurationSeconds` / `splitDurationSeconds` / `formatDurationSeconds`.
+  - `lib/validation/quiz-settings.ts`: the `questionDraftSchema`/`questionPublishSchema` two-level pattern extended to the settings panel. `focusLossPolicyFor()` maps "permit losing focus" to `warn` (not permitted) / `ignore` (permitted) and **never** `auto_submit` — a stray tab switch should cost a warning, not a submitted attempt.
+  - Deviations flagged, not silently taken: `shuffleQuestions` and `shuffleOptions` are two toggles even though the reference shows one line (shuffling answers only is a different, reasonable choice); and the two "show after" controls share one `review_policy` enum because both answer the same *when* question.
+  - 31 tests; `tsc --noEmit` and eslint clean.
+
+- [x] P12-2 — Schema + migration `0010_yellow_jack_flag.sql`
+  - `quizzes` gains `visibility` (`private` default, so a half-built quiz is never listed), `shuffle_questions`, `shuffle_options`, `allow_resume`, `auto_next_question`, `require_login_to_attempt`, `show_answers_after`, `show_result_after`, `show_calculator`, `deduct_marks_for_wrong`, and `time_limit_seconds`.
+  - `time_limit_seconds` is **nullable** (null = untimed) because duration is optional, but `time_limit_minutes` stays `NOT NULL` and deprecated: the migration backfills every existing quiz from `minutes * 60`, so no already-timed quiz reads as untimed. The backfill is hand-added to the generated file (a data migration can't be expressed in the schema DSL — same precedent as `0001`'s `REVOKE`). **Follow-up, not done here:** dropping `NOT NULL` on `time_limit_minutes` so a genuinely untimed quiz can be saved; today every consumer still reads minutes, so loosening it means touching the attempt route's expiry maths in the same change.
+  - `questions` gains `reason_rich_text` (revealed only when the quiz shows answers) and `passage_id`.
+  - `quiz_questions` gains `sort_order` (drag-reorder had nothing to persist — the join table had no order column at all) and `marks` (integer; marks are whole numbers everywhere else), plus a `marks >= 0` check.
+  - New `passages` table (course/xor/jamb track, matching `questions`' discipline) and `user_preferences` (`user_id, key` → `jsonb`) for "save as my defaults" — keyed so a new default never needs a migration. Both ship with RLS enabled and the deny-all `anon`/`authenticated` policy in the same migration.
+  - No `question_type` enum change: True/False and Multiple choice are `options` rows, Fill in the gap is `fill_in_gap`, Passage is the new table.
+  - Applied to the **dev** database only. Verified after: 8/8 quizzes carry `time_limit_seconds`, both tables and both policies present.
+
+- [ ] P12-3 — Shared Zod schemas for quiz details and questions (draft + publish), including the True/False variant and Passage sub-questions
+- [ ] P12-4 — Rich-text editor (Tiptap + KaTeX) and the `sanitizeRichText` allowlist expansion (code, blockquote, hr, highlight, sub/sup, math)
+- [ ] P12-5 — Question builder UI: numbered collapsible cards, type-chooser modal, dnd-kit reorder with keyboard sensor, marks Apply, bulk delete/duplicate, empty state
+- [ ] P12-6 — Settings panel: searchable collapsible groups, ★ pinning, per-user defaults
+- [ ] P12-7 — API routes for quiz details, per-question marks/order, passages and user preferences (each with the AGENTS.md §5 endpoint test)
+- [ ] P12-8 — Wire the pages (sticky save bar, Preview) and update `.agents/design/screens-teacher.md`
+
+---
+
 ## Open items still needing a real answer from the Board (not blocking dev, but don't let these go silently forgotten)
 
 - [x] Confirm Post-UTME conversion formula (P5-3) — confirmed 2026-08-25: aggregate is out of 100, conversion is the identity (best_score is already a percentage = correct × 2 for the 50-question quiz)
