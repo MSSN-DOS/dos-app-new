@@ -1,3 +1,5 @@
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ForbiddenError, UnauthorizedError } from "@/lib/auth/errors";
@@ -15,6 +17,7 @@ import {
   makeDbMock,
   stubSelect,
   type DbMock,
+  type Row,
 } from "@/lib/testing/route-test";
 
 let db: DbMock;
@@ -187,13 +190,22 @@ describe("GET /api/me", () => {
 // conflict paths matter as much as the happy path: a value already set must never be overwritten.
 describe("PATCH /api/me", () => {
   let updatedValues: Record<string, unknown> | null;
+  let updateCondition: SQL | undefined;
+  let returnedRows: Row[];
 
   beforeEach(() => {
     updatedValues = null;
+    updateCondition = undefined;
+    returnedRows = [];
     db.update.mockImplementation(() => ({
       set: (values: Record<string, unknown>) => {
         updatedValues = values;
-        return { where: async () => undefined };
+        return {
+          where: (condition: SQL) => {
+            updateCondition = condition;
+            return { returning: async () => returnedRows };
+          },
+        };
       },
     }));
   });
@@ -287,9 +299,13 @@ describe("PATCH /api/me", () => {
     ]);
     db.update.mockImplementation(() => ({
       set: () => ({
-        where: async () => {
-          throw Object.assign(new Error("duplicate key"), { code: "23505" });
-        },
+        where: () => ({
+          returning: async () => {
+            throw new Error("query failed", {
+              cause: Object.assign(new Error("duplicate key"), { code: "23505" }),
+            });
+          },
+        }),
       }),
     }));
 
@@ -307,6 +323,8 @@ describe("PATCH /api/me", () => {
     stubSelect(db, [
       [{ identifier: "21/30GN019", matricNumber: "21/30GN019", jambRegNumber: null }],
     ]);
+
+    returnedRows = [{ identifier: "21/30GN019", matricNumber: "21/30GN019", jambRegNumber: "202612345678AB" }];
 
     const res = await PATCH(
       jsonRequest("http://localhost/api/me", "PATCH", { identifier: "202612345678AB" }),
@@ -329,6 +347,8 @@ describe("PATCH /api/me", () => {
       [{ identifier: "202612345678AB", matricNumber: null, jambRegNumber: "202612345678AB" }],
     ]);
 
+    returnedRows = [{ identifier: "202612345678AB", matricNumber: "21/30GN019", jambRegNumber: "202612345678AB" }];
+
     const res = await PATCH(
       jsonRequest("http://localhost/api/me", "PATCH", { identifier: "21/30GN019" }),
     );
@@ -344,11 +364,31 @@ describe("PATCH /api/me", () => {
     expect(updatedValues).toEqual({ matricNumber: "21/30GN019" });
   });
 
+  it.each([
+    ["21/30GN019", "matric_number"],
+    ["202612345678AB", "jamb_reg_number"],
+  ])("returns 409 if another request fills the slot for %s first", async (identifier, column) => {
+    requireAuth.mockResolvedValue({ userId: 8, roleId: 3 });
+    const originalIdentifier = column === "matric_number" ? "202612345679AB" : "21/30GN020";
+    stubSelect(db, [[{ identifier: originalIdentifier, matricNumber: null, jambRegNumber: null }]]);
+
+    const res = await PATCH(jsonRequest("http://localhost/api/me", "PATCH", { identifier }));
+
+    expect(res.status).toBe(409);
+    expect(updateCondition).toBeDefined();
+    const query = new PgDialect().sqlToQuery(updateCondition!);
+    expect(query.sql).toContain('"users"."id" = $1');
+    expect(query.sql).toContain(`"users"."${column}" is null`);
+    expect(query.params).toEqual([8]);
+  });
+
   it("upper-cases a lowercase value before storing it", async () => {
     requireAuth.mockResolvedValue({ userId: 8, roleId: 3 });
     stubSelect(db, [
       [{ identifier: "21/30GN019", matricNumber: "21/30GN019", jambRegNumber: null }],
     ]);
+
+    returnedRows = [{ identifier: "21/30GN019", matricNumber: "21/30GN019", jambRegNumber: "202612345678AB" }];
 
     const res = await PATCH(
       jsonRequest("http://localhost/api/me", "PATCH", { identifier: "202612345678ab" }),

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { ZodError } from "zod";
 
 import { errorResponse } from "@/lib/api/response";
@@ -44,12 +44,10 @@ function validationError(err: ZodError): NextResponse {
 }
 
 function isUniqueViolation(e: unknown): boolean {
-  return (
-    typeof e === "object" &&
-    e !== null &&
-    "code" in e &&
-    (e as { code?: string }).code === "23505"
-  );
+  if (typeof e !== "object" || e === null) return false;
+  if ("code" in e && e.code === "23505") return true;
+  const cause = "cause" in e ? e.cause : undefined;
+  return typeof cause === "object" && cause !== null && "code" in cause && cause.code === "23505";
 }
 
 export async function GET(request: Request) {
@@ -235,9 +233,9 @@ export async function PATCH(request: Request) {
       );
     }
 
-    // One identifier of each type at most: the other type must be the one being added.
-    if ((isMatric ? userRow.matricNumber : userRow.jambRegNumber) !== null) {
-      return NextResponse.json(
+    const slot = isMatric ? users.matricNumber : users.jambRegNumber;
+    const slotAlreadySet = () =>
+      NextResponse.json(
         {
           error: {
             code: "CONFLICT",
@@ -246,13 +244,24 @@ export async function PATCH(request: Request) {
         },
         { status: 409 },
       );
+
+    if ((isMatric ? userRow.matricNumber : userRow.jambRegNumber) !== null) {
+      return slotAlreadySet();
     }
 
     try {
-      await db
+      const [updatedUser] = await db
         .update(users)
         .set(isMatric ? { matricNumber: data.identifier } : { jambRegNumber: data.identifier })
-        .where(eq(users.id, auth.userId));
+        .where(and(eq(users.id, auth.userId), isNull(slot)))
+        .returning({
+          identifier: users.identifier,
+          matricNumber: users.matricNumber,
+          jambRegNumber: users.jambRegNumber,
+        });
+
+      if (!updatedUser) return slotAlreadySet();
+      return NextResponse.json({ data: updatedUser });
     } catch (e) {
       if (isUniqueViolation(e)) {
         return NextResponse.json(
@@ -267,14 +276,6 @@ export async function PATCH(request: Request) {
       }
       throw e;
     }
-
-    return NextResponse.json({
-      data: {
-        identifier: userRow.identifier,
-        matricNumber: isMatric ? data.identifier : userRow.matricNumber,
-        jambRegNumber: isMatric ? userRow.jambRegNumber : data.identifier,
-      },
-    });
   } catch (error) {
     if (error instanceof ZodError) return validationError(error);
     return errorResponse(error);
