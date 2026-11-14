@@ -57,6 +57,34 @@
       "when": 1789851211504,
       "tag": "0007_worthless_swarm",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790551287448,
+      "tag": "0008_handy_marvel_apes",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1794307752510,
+      "tag": "0009_fast_white_queen",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1794564217944,
+      "tag": "0010_yellow_jack_flag",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1794615154927,
+      "tag": "0011_colorful_odin",
+      "breakpoints": true
     }
   ]
 }

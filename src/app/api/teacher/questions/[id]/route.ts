@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 
@@ -58,7 +58,7 @@ function parseId(rawId: string): number | null {
 // Teachers only see/edit their own bank entries; admins see everything.
 function ownedWhere(auth: AuthContext) {
   const scope = ownershipScope(auth);
-  return scope === null ? undefined : eq(questions.createdBy, scope);
+  return and(isNull(questions.builderQuizId), scope === null ? undefined : eq(questions.createdBy, scope));
 }
 
 export async function GET(

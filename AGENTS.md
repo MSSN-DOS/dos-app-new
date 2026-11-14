@@ -20,7 +20,7 @@ Read `DESIGN.md` before touching any code that isn't a pure config/scaffold file
 - **Styling is Tailwind + shadcn/ui.** Don't add another CSS-in-JS library, don't add a second component kit. **shadcn-first: before hand-writing any UI primitive or pattern (sidebar, sheet/dialog, table, tabs, toast, dropdown…), check the shadcn registry and install it via the CLI (`pnpm dlx shadcn@latest add <component>`).** Hand-roll only when no shadcn equivalent exists. shadcn primitives in `components/ui/` are generated, not hand-authored — don't invent a parallel component API style, and don't re-implement what a generated primitive already does (e.g. responsive nav belongs in the `sidebar` primitive with `SidebarTrigger`, not a custom mobile toggle).
 - **Colors always resolve to the CSS variable tokens in `DESIGN.md` §12.** Never write a raw hex/hsl value directly in a component or a Tailwind class. If a token you need doesn't exist yet, add it to `globals.css` in both `:root` and `.dark`, don't work around it with an inline style.
 - **Mobile-first is the default, non-negotiable.** The audience is mostly on phones (Nigerian students/aspirants). Author every screen for the narrow viewport first, then enhance for larger screens — Tailwind responsive classes must be written mobile-first (`base` → `sm` → `md` → `lg`), never `md:*` with a desktop-only default that breaks below it. Every interactive target is ≥44×44px, body text ≥16px on mobile, and no horizontal scroll. Touch/responsive behavior is verified, not assumed.
-- **Every `/api` route handler calls `requireAuth()` (or is one of the three explicitly public auth routes: register, login).** No route relies on folder placement alone for access control — that's a convenience for humans reading the repo, not the actual enforcement mechanism.
+- **Every `/api` route handler calls `requireAuth()` except `POST /api/auth/register` and `POST /api/auth/login`.** No route relies on folder placement alone for access control. The unauthenticated database keep-alive route was withdrawn by the Board on 2026-11-13; do not recreate it or add a keep-alive scheduler.
 - **Never hand-roll a `fetch()` call with the auth header inline in a component.** Use the shared client fetch wrapper (`lib/auth/client-fetch.ts`) so the header, base URL, and error handling stay in one place.
 - **Client server-state fetching is TanStack Query, exclusively** (decided 2026-08-24). No new `useEffect` + `useState` + `fetch` loops in client components — use `useQuery`/`useMutation` with the shared provider (`components/providers/query-provider.tsx`). `apiFetch` stays as the transport layer inside `queryFn`/`mutationFn`; it does not get bypassed. Loading/error/empty states come from query state (`isPending`, `isError`, `refetch()`), not manual reload counters or effect-driven state machines.
 
@@ -87,3 +87,13 @@ If a Supabase MCP server is connected in this session, treat it as **admin-level
 - **Never write, log, or echo the service-role key or any MCP auth token** in code, comments, commit messages, or conversation — including partially, for debugging. If a query result would expose it, don't run that query.
 - **Don't run data-exploration queries against real user data** even in dev — the dev project should only ever contain seeded/synthetic rows (per §2's seed script scope, deliberately not real Faculties/Departments/Courses). If you find real-looking user data in a "dev" project, stop and flag it — it means the safety boundary already broke before you got here.
 - Setup and config live in `.mcp.json` at the repo root — see `README.md` §"Connecting an agent to the DB" for the exact shape. Don't add a second MCP DB connection or point an existing one at a different project ref without this being an explicit, visible change to that file (i.e., something a human reviewing the diff would actually see).
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

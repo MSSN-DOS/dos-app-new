@@ -1,0 +1,21 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ForbiddenError, UnauthorizedError } from "@/lib/auth/errors";
+import { jsonRequest, makeDbMock, stubInsert, stubSelect, stubTransaction, stubUpdate, type DbMock } from "@/lib/testing/route-test";
+const requireAuth = vi.hoisted(() => vi.fn()); const getDb = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/auth/guard", () => ({ requireAuth })); vi.mock("@/lib/db", () => ({ getDb }));
+import { GET, PATCH } from "./route";
+let db: DbMock;
+const params = { params: Promise.resolve({ id: "1" }) };
+const quiz = { id: 1, createdBy: 5, courseId: 9, status: "published", deductMarksForWrong: true };
+const body = { attemptId: 77, answers: [{ questionId: 10, awardedMarks: 3 }] };
+const pending = { id: 77, quizId: 1, userId: 8, score: null, submittedAt: new Date(), releasedAt: null };
+beforeEach(() => { vi.clearAllMocks(); db = makeDbMock(); getDb.mockReturnValue(db); requireAuth.mockResolvedValue({ userId: 5, roleId: 1, roleName: "admin" }); stubTransaction(db, db); stubUpdate(db, { id: 77 }); stubInsert(db, {}); });
+describe("manual essay grading", () => {
+  it.each([GET, PATCH])("requires auth for %s", async (handler) => { requireAuth.mockRejectedValueOnce(new UnauthorizedError()); expect((await handler(jsonRequest("http://localhost/x"), params)).status).toBe(401); });
+  it.each([GET, PATCH])("rejects disallowed roles for %s", async (handler) => { requireAuth.mockRejectedValueOnce(new ForbiddenError()); expect((await handler(jsonRequest("http://localhost/x"), params)).status).toBe(403); });
+  it("lists pending essays for the teacher", async () => { stubSelect(db, [[quiz], [{ id: 77, studentName: "Test student" }], [{ id: 10, bodyRichText: "Explain", marks: 5 }], [{ attemptId: 77, questionId: 10, textAnswer: "Response" }]]); const response = await GET(jsonRequest("http://localhost/x"), params); expect(response.status).toBe(200); expect((await response.json()).data[0].essays[0].answer).toBe("Response"); });
+  it("stores teacher awards and leaves the result held", async () => { stubSelect(db, [[quiz], [pending], [{ id: 10, questionType: "essay", marks: 5 }], [], [], [{ attemptId: 77, questionId: 10, textAnswer: "Response", blankIndex: null }]]); let values: Record<string, unknown>[] = []; const original = db.update.getMockImplementation()!; db.update.mockImplementation((...args: unknown[]) => { const chain = original(...args) as { set: (value: Record<string, unknown>) => unknown }; return { set: (value: Record<string, unknown>) => { values = [...values, value]; return chain.set(value); } }; }); const response = await PATCH(jsonRequest("http://localhost/x", "PATCH", body), params); expect(response.status).toBe(200); expect(values).toContainEqual({ score: "60.00" }); expect(values.some((v) => "releasedAt" in v)).toBe(false); expect(await response.json()).toEqual({ data: { scoreStatus: "held" } }); });
+  it("rejects awards above configured marks", async () => { stubSelect(db, [[quiz], [pending], [{ id: 10, questionType: "essay", marks: 2 }], [], []]); const response = await PATCH(jsonRequest("http://localhost/x", "PATCH", body), params); expect(response.status).toBe(422); expect((await response.json()).error.details).toHaveLength(1); expect(db.update).not.toHaveBeenCalled(); });
+  it("rejects already graded or released attempts", async () => { stubSelect(db, [[quiz], [{ ...pending, score: "60.00", releasedAt: new Date() }]]); expect((await PATCH(jsonRequest("http://localhost/x", "PATCH", body), params)).status).toBe(409); });
+  it("validates duplicate and negative awards", async () => { const response = await PATCH(jsonRequest("http://localhost/x", "PATCH", { attemptId: 77, answers: [{ questionId: 10, awardedMarks: -1 }] }), params); expect(response.status).toBe(422); expect((await response.json()).error.details.length).toBeGreaterThan(0); });
+});

@@ -14,10 +14,10 @@ This is the single source of truth for how the product behaves and how the code 
 |---|---|---|
 | 1 | Admin vs Teacher publishing boundary | Teachers publish quizzes and topics directly. No Admin approval step. |
 | 2 | Fill-in-the-gap grading | Case-insensitive exact match, auto-graded at submission. |
-| 3 | Identifier validation | Format-validated only (regex below), no cross-check against an external membership/JAMB list. |
+| 3 | Identifier validation | Format-validated only (regex below), no cross-check against an external membership/JAMB list. **Amended 2026-11-10:** a Student may sign up with *either* a Matric Number or a JAMB Registration Number, and may attach the other one later from `/account/identifiers`; login accepts any of `users.identifier`, `users.matric_number`, `users.jamb_reg_number`. Aspirants remain JAMB-only. See §2 "Identifier formats" and §7 step 1. |
 | 4 | Content upload permissions | Admin-only. Teachers cannot upload PDFs/articles. **Amended 2026-09-17:** Teachers *may* submit video **links** (an external URL — not an upload; see §6). |
 | 5 | Topic Quiz question count | Free-form — Teacher sets it per topic when building the quiz. |
-| 6 | Weekly Course Quiz release window | Fixed: opens Saturday 00:00, closes Sunday 23:59 (server timezone, see §8). |
+| 6 | Weekly Course Quiz release window | Default: opens Saturday 00:00, closes Monday 00:00 (Africa/Lagos, see §8). **Amended 2026-09-28:** an Admin may override either boundary per quiz (`quizzes.opens_at` / `quizzes.closes_at`, both nullable); NULL on both restores the default. Set on either side replaces that boundary only. |
 | 7 | Notifications | In-app only for MVP. No email/SMS. |
 | 8 | Department/Faculty list source | Board enters manually via Admin UI. No external import. |
 | 9 | Course catalogue ownership | Board/Admin owns it, entered manually via Admin UI. |
@@ -35,11 +35,17 @@ This is the single source of truth for how the product behaves and how the code 
 
 Regex: `^\d{2}\/\d{2}[A-Z]{2}\d{3}$` — e.g. `21/30GN019`
 
-**JAMB Registration Number:** two accepted shapes
-- Standard (10 char): 8 digits + 2 uppercase letters → `^\d{8}[A-Z]{2}$`
-- Expanded (14 char): 4-digit year + 8 digits + 2 uppercase letters → `^\d{4}\d{8}[A-Z]{2}$` (equivalently `^\d{12}[A-Z]{2}$`)
+**JAMB Registration Number:** one accepted shape — 4-digit year + 8 digits + 2 uppercase letters, i.e. 12 digits + 2 letters (14 characters total).
 
-Both live in `lib/validation/identifiers.ts` as named Zod refinements (`matricNumberSchema`, `jambRegNumberSchema`), reused by both the registration form and the `/api/auth/register` handler — never duplicate the regex.
+Regex: `^\d{12}[A-Z]{2}$` — e.g. `202612345678AB`
+
+> **Amended 2026-11-10:** the older 10-character shape (8 digits + 2 letters) is **no longer accepted anywhere** — not in registration, not in login, not for aspirants. The prior "two accepted shapes" rule was replaced, not widened; anything matching only the 10-character shape must fail validation.
+
+Both live in `lib/validation/identifiers.ts` as named Zod refinements (`matricNumberSchema`, `jambRegNumberSchema`), reused by the registration form, the `/account/identifiers` form, and every handler that validates an identifier (`/api/auth/register`, `/api/me`) — never duplicate the regex. `identifierTypeFor(value)` there is the single place that decides which of the two an input is; the two formats are disjoint, so one call is unambiguous.
+
+**Case is not part of the format.** The letters must be uppercase, but nobody should be rejected for typing `21/30gn019` or `202612345678ab` on a phone keyboard (2026-11-11). Every schema trims and upper-cases the value *before* the format check and returns that normalised value, so whatever reaches the DB is uppercase — registration and `PATCH /api/me` both write the parsed value straight to the column. Sign-in compares case-insensitively on both sides (`upper(column) = upper(input)`) rather than upper-casing the input only, because a seeded or hand-set identifier such as `BOOTSTRAP_ADMIN_IDENTIFIER` is env-provided and never went through these schemas. The register, sign-in and `/account/identifiers` fields also convert as the user types, so they see the shape that will be stored.
+
+**Which identifier identifies a Student.** Students hold up to two identifiers, both on the `users` row: `identifier` (the one used at signup, which also drives `identifier_type`) plus `matric_number` and `jamb_reg_number`, each nullable and unique, filled while the value is known. Signup fills whichever column the entered format maps to; `PATCH /api/me` fills the other one later. Adding is one-way — once a value is set, the student cannot edit or remove it. Login matches `identifier OR matric_number OR jamb_reg_number`, preferring the `identifier` hit on a tie so a value shared with a bootstrap admin account resolves to the real owner.
 
 ### Known trade-off: JWT in localStorage
 
@@ -57,7 +63,8 @@ If this app ever handles anything more sensitive than quiz scores, revisit this 
 ```
 Faculty
  └─ Department (belongs to one Faculty; has a set of active Levels via department_levels)
-     └─ Level (100/200/300/400/500/600 — which ones apply is per-Department)
+     └─ Level (the platform runs 100 and 200 — Board answer 2026-11-13; the table can hold
+        others and an Admin can attach one to a Department, but onboarding only offers 100/200)
          └─ Course (belongs to a Level + Semester, has a scope_type)
              └─ Topic (created by Admin or Teacher)
 ```
@@ -81,12 +88,12 @@ Two types, same `quizzes` table, discriminated by `quiz_type`:
 |---|---|---|
 | Tied to | One `topic_id` | A `course_id` (or `jamb_subject_id` for Aspirants) + `week_start` |
 | Question count | Free-form, Teacher decides | Fixed 50 |
-| Cadence | Ad hoc, whenever a Teacher publishes one | Weekly, opens Saturday 00:00 / closes Sunday 23:59 |
+| Cadence | Ad hoc, whenever a Teacher publishes one | Weekly, opens Saturday 00:00 / closes Monday 00:00 WAT (Admin-overridable per quiz, decision 6) |
 | Counts toward CGPA / Post-UTME / leaderboard | No | Yes — only source that counts |
 
 Rules that apply to both:
 - Every attempt is recorded in `quiz_attempts`; only the highest `score` per `(user_id, quiz_id)` is written to `best_scores` and counts toward the official record.
-- Multiple attempts are allowed only if `allow_multiple_attempts = true` on the quiz; when true, questions are reshuffled per attempt from the question bank pool.
+- Multiple attempts are allowed only if `allow_multiple_attempts = true`. Question and answer shuffling are separately configurable, and resume restores the original attempt time and saved responses.
 - A question can't be published with missing text or a required option — enforce this in the Zod schema for the "publish" action specifically (the "save as draft" action has no such requirement).
 - Options questions are single-select only (`attempt_answers.selected_option_id` is a single FK) — the question bank's `is_correct` flag should therefore be true on exactly one `question_option` per question; enforce this at question-creation time, not just at grading time.
 
@@ -95,15 +102,23 @@ Rules that apply to both:
 - **Options:** correct iff `selected_option_id` matches the option where `is_correct = true`.
 - **Fill in the gap:** correct iff the trimmed, lowercased submitted answer matches `question_blanks.accepted_answer` (also trimmed/lowercased), regardless of `question_blanks.case_sensitive` — that column is unused under the resolved case-insensitive-always rule; keep it in the schema for future flexibility but the grading code path ignores it for MVP.
 - Multi-blank questions: every blank must be correct for the question to count as correct (no partial credit for MVP).
-- Score = `(questions answered correctly / question_count) * 100`, stored as `NUMERIC(6,2)` on `quiz_attempts.score`.
-- Grading happens synchronously on submit — no async job queue needed at this scale.
+- **Amended 2026-11-14:** configured whole question marks determine the score: `max(0, earned_marks) / total_marks * 100`, stored as `NUMERIC(6,2)`. Apply total marks distributes whole marks as evenly as possible, with remainder marks assigned to the earliest questions. Gaps remain all-or-nothing. With deductions enabled an incorrect, answered objective question loses its full marks; unanswered questions earn zero.
+- Objective grading happens synchronously on submit. Essays are manually graded by the teacher/Admin, with awards between zero and the question's marks, and are excluded from automatic deductions. Attempts containing essays have `score = NULL` until every essay is graded.
 
 ### Score release
 
-- On submit, `quiz_attempts.submitted_at` and `score` are written immediately, but the score is **not shown to the student/aspirant** until Admin releases it.
+- On submit, `quiz_attempts.submitted_at` is written immediately. Completed objective scores stay held; essays must finish manual grading before Admin release is available. The score and pass/fail are **not sent to the student/aspirant** until release, and can be hidden by the quiz's results setting. Answers and explanations follow their separate review setting.
 - Add a `released_at TIMESTAMP NULL` column to `quiz_attempts` (not in the original schema — this is a deliberate addition, see `DESIGN.md` changelog at the bottom). `NULL` = held.
 - Admin release actions: release one quiz's attempts, or bulk-release all attempts for a given `week_start`. Both just set `released_at = now()` on the matching rows.
 - Until released, the Student/Aspirant UI shows "Score pending" (see wireframe) — the raw score is not sent to the client at all while held, not just hidden in the UI.
+
+### Authoring rebuild (P12, 2026-11-14)
+
+- Teacher/Admin builder supports True/False (an options preset), single-answer multiple choice, `[gap]` fill-in-gap, shared passages with sub-questions, and manually graded essays. Course Quizzes retain exactly 50 questions. Drafts allow incomplete questions; publishing validates every question, passage, schedule and marks allocation.
+- Description, instructions, questions, options, passages and explanations share Tiptap rich text with KaTeX. Cover and inline quiz images use a private Supabase bucket through authenticated, owner-scoped endpoints; this is separate from Admin-only PDF/article resources.
+- Quiz access remains signed-in and scoped to the existing academic track. Public/Private controls are omitted and the compatibility visibility column does not grant access.
+- Teachers may enable a start time and optional end time in Africa/Lagos. An enabled schedule uses the same `opens_at`/`closes_at` columns as the Admin availability override and replaces the week-derived window; without scheduling, Course Quizzes retain their existing default/override window. Duration is optional and stored in seconds; null is untimed.
+- Per-user setting defaults and pins are stored in `user_preferences`. New quizzes apply the current user's defaults, with fresh schedule dates and a default pass mark of 60.
 
 ## 5. Performance tracking
 
@@ -135,11 +150,12 @@ Rules that apply to both:
 
 ## 7. Auth flow
 
-1. **Register** (`POST /api/auth/register`): identifier (Matric or JAMB, format-validated per §2), full name, password. Creates a `users` row with `role_id` = `student` or `aspirant`, `identifier_type` set accordingly. Password hashed with `bcrypt` (or `argon2` — pick one in `AGENTS.md` and stick to it) before storage, never store plaintext even transiently beyond the request handler.
+1. **Register** (`POST /api/auth/register`): identifier (Matric or JAMB, format-validated per §2), full name, password. Creates a `users` row with `role_id` = `student` or `aspirant`, `identifier_type` set from the identifier's own format (a Student may use either; an Aspirant must use a JAMB number), and the matching one of `matric_number` / `jamb_reg_number` mirrored from the same value. Password hashed with `bcrypt` (or `argon2` — pick one in `AGENTS.md` and stick to it) before storage, never store plaintext even transiently beyond the request handler.
 2. **Onboarding** (`POST /api/auth/onboarding`, requires a valid JWT from step 1's auto-login): Students select Faculty → Department → Level; Aspirants select Department of Aspiration. Writes `student_profiles` / `aspirant_profiles`. A user cannot access any role-scoped page until this row exists — enforce in middleware, not just by hiding the nav link.
-3. **Login** (`POST /api/auth/login`): identifier + password → JWT (7-day expiry) signed with `JWT_SECRET`, containing `{ userId, roleId }` only — no PII in the payload beyond the numeric IDs.
-4. Client stores the JWT in `localStorage`, attaches `Authorization: Bearer <token>` to every `/api` call via a shared fetch wrapper (`lib/auth/client-fetch.ts`) — never hand-roll fetch calls with the header inline in a component.
-5. Every `/api` route (except `register`/`login`) verifies the JWT server-side via a shared `requireAuth(request, allowedRoles: Role[])` helper in `lib/auth/guard.ts`, which throws a typed `UnauthorizedError`/`ForbiddenError` caught by a shared error handler. No route should hand-roll its own auth check.
+3. **Login** (`POST /api/auth/login`): identifier + password, where the identifier may be the signup value, the Matric Number, or the JAMB number (§2) → JWT (7-day expiry) signed with `JWT_SECRET`, containing `{ userId, roleId }` only — no PII in the payload beyond the numeric IDs.
+4. **Attach the second identifier** (`PATCH /api/me`, Students only): `{ identifier }` → fills whichever of `matric_number` / `jamb_reg_number` is still empty. One-way — no edit, no removal. Rejects a value already on the account, a type already set, and a value another account holds.
+5. Client stores the JWT in `localStorage`, attaches `Authorization: Bearer <token>` to every `/api` call via a shared fetch wrapper (`lib/auth/client-fetch.ts`) — never hand-roll fetch calls with the header inline in a component.
+6. Every `/api` route (except `register`/`login`) verifies the JWT server-side via a shared `requireAuth(request, allowedRoles: Role[])` helper in `lib/auth/guard.ts`, which throws a typed `UnauthorizedError`/`ForbiddenError` caught by a shared error handler. No route should hand-roll its own auth check.
 - Admin accounts and Teacher accounts are **not self-registered**. Admin is bootstrap-seeded (`pnpm db:seed`); Teacher accounts are created by an Admin from `/admin/teachers` (`identifier_type = 'staff_id'`, Admin sets an initial password the Teacher changes on first login — first-login-forces-password-change is a nice-to-have, not required for MVP, track it in `STATE.md` as optional).
 
 ## 8. Active semester
@@ -193,6 +209,10 @@ Rules that apply to both:
 - `/history`
 - `/resources` — JAMB-subject scoped
 
+### Account (authenticated; role noted per page)
+- `/account/password` — change your own password (any role)
+- `/account/identifiers` — **Students only**: show both identifiers, attach whichever one is missing (decision 3, amended 2026-11-10)
+
 ### API surface (`/api/*`, mirrors the pages above 1:1)
 - `/api/auth/register`, `/api/auth/login`, `/api/auth/onboarding`
 - `/api/admin/structure/{levels,faculties,departments,courses}` — REST-style CRUD
@@ -201,13 +221,16 @@ Rules that apply to both:
 - `/api/admin/content`
 - `/api/admin/leaderboard`
 - `/api/admin/scores/release`
+- `/api/admin/quizzes/[id]/window` — PATCH the Course Quiz availability override (decision 6)
 - `/api/admin/settings/semester`
 - `/api/teacher/topics`, `/api/teacher/questions`, `/api/teacher/quizzes`, `/api/teacher/quizzes/[id]`, `/api/teacher/results/[quizId]`
 - `/api/quizzes` (list, scoped server-side to the caller's role/structure — Student/Aspirant), `/api/quizzes/[id]/attempt` (POST to submit)
-- `/api/me` — current user + profile + CGPA/Post-UTME summary
+- `/api/me` — current user + profile + CGPA/Post-UTME summary; `PATCH` attaches the second identifier (Students only, decision 3)
 - `/api/resources`
 
 Every route under `/api/admin/*` requires `role = admin`; `/api/teacher/*` requires `role = teacher`; everything else requiring auth checks role inline via `requireAuth`. No route is guarded only by folder convention — the `requireAuth` call inside the handler is the actual enforcement, folder naming is just for humans/agents navigating the repo.
+
+**Public routes (complete list, amended 2026-11-13).** Only `POST /api/auth/register` and `POST /api/auth/login` are reachable without a token. Every other API handler calls `requireAuth()`, including onboarding and password changes. The Board withdrew the database keep-alive endpoint and its scheduler; do not recreate them.
 
 ## 10. Data model
 
@@ -215,6 +238,7 @@ Treat `DOS-Site-Database-Schema.sql` as the base schema — translate it into `l
 
 - Add `quiz_attempts.released_at TIMESTAMP NULL` (§4, score release).
 - Add `semester_settings` table (§8, active semester).
+- Add `users.matric_number` and `users.jamb_reg_number`, both `VARCHAR NULL UNIQUE` (§2, dual Student identifiers). `users.identifier` stays `NOT NULL UNIQUE` and remains the signup value — the two new columns are aliases for login, not a replacement.
 - Everything else in the `.sql` file ships as-is.
 
 ## 11. Database permissions & Row-Level Security
@@ -307,3 +331,4 @@ Icons: **lucide-react only** — the one sanctioned icon library (shadcn uses it
 
 - Added `quiz_attempts.released_at` and `semester_settings` — not in `DOS-Site-Database-Schema.sql`, both needed to implement resolved decisions #10 and #11 above.
 - Post-UTME conversion formula (`raw / 2`) is a placeholder pending explicit Board confirmation — everything else in this document is resolved and final for MVP scope.
+- Added `quizzes.opens_at` / `quizzes.closes_at` (nullable, plus a `quizzes_window_check` CHECK constraint) — not in `DOS-Site-Database-Schema.sql`. Needed to implement the 2026-09-28 Board amendment to resolved decision #6, which made the weekly Course Quiz window Admin-overridable instead of fixed. Resolution lives in `lib/quizzes/window.ts` (`resolveCourseQuizWindow`); the API is `PATCH /api/admin/quizzes/[id]/window`, Admin-only, Course Quizzes only (Topic Quizzes have no window → 409).

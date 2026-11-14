@@ -167,7 +167,7 @@ FRAME: Student Detail (drill-down, /admin/students/[id])
 ```
 FRAME: Aspirants
   FIELD: Search -> [ text input: name or JAMB reg no. ]
-  LIST ROW: Yusuf, F. — 12345678AB | Aspiring: Medicine & Surgery | Post-UTME 38/50 | [View]
+  LIST ROW: Yusuf, F. — 202612345678AB | Aspiring: Medicine & Surgery | Post-UTME 38/50 | [View]
 ```
 
 **Data / API:** `GET /api/admin/users/aspirants?search=`, `GET /api/admin/users/aspirants/[id]`. Same detail-drill-down shape as Students, swap CGPA for Post-UTME history.

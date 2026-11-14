@@ -1,36 +1,222 @@
-// Lightweight HTML sanitizer for rich-text question bodies.
-// Strips executable content (<script>, <style>, event handlers, javascript: URLs)
-// without adding a runtime dependency. For full XSS coverage, prefer DOMPurify
-// when a heavier sanitizer is acceptable.
-export function sanitizeRichText(html: string): string {
-  if (!html) return "";
+/**
+ * Dependency-free HTML sanitizer for rich-text bodies.
+ *
+ * Rich text is authored in the Tiptap editor and rendered to students with
+ * `dangerouslySetInnerHTML`, so this function is a boundary, not a formatting
+ * helper: whatever survives here is markup we are willing to put inside a page.
+ *
+ * Strategy — strip, then rebuild:
+ *
+ *   1. Remove elements whose *contents* must never survive (script, style,
+ *      iframe, svg, MathML, …) and drop comments/CDATA.
+ *   2. Rewrite every remaining tag against a tag allowlist. A tag that is not
+ *      allowed loses the tag and keeps its text.
+ *   3. Re-emit **no** attribute except the two hand-written ones on a math node.
+ *
+ * Step 3 is the part that matters. Attributes are discarded rather than
+ * filtered, so `onerror=`, `style=`, `src=` and every future attribute are
+ * rejected by construction instead of by an ever-growing blocklist. Nothing
+ * allowed here can hold a URL, so there is no `javascript:`/`data:` surface
+ * left to defend.
+ *
+ * Limitation worth knowing: this is a tokenizer over tag-shaped text, not a
+ * real HTML parser. It is deliberately biased towards throwing markup away
+ * (over-escaping `<`, over-stripping) rather than preserving it, and it runs to
+ * a fixed point so removing a tag cannot splice a forbidden tag back together
+ * (`<scr<script>ipt>`). If this ever needs to accept untrusted HTML that must
+ * round-trip faithfully, replace it with `sanitize-html`/DOMPurify rather than
+ * growing this file.
+ */
+
+/** Elements whose contents are dropped entirely, not just un-tagged. */
+const CONTENT_DROPPING_TAGS = [
+  "script",
+  "style",
+  "iframe",
+  "frame",
+  "frameset",
+  "object",
+  "embed",
+  "applet",
+  "template",
+  "noscript",
+  "title",
+  "textarea",
+  "svg",
+  "math",
+  "base",
+  "meta",
+  "link",
+];
+
+/** Tags that survive, matching what the editor toolbar can actually produce. */
+const ALLOWED_TAGS = new Set([
+  "p",
+  "br",
+  "hr",
+  "strong",
+  "b",
+  "em",
+  "i",
+  "u",
+  "s",
+  "mark",
+  "sub",
+  "sup",
+  "code",
+  "pre",
+  "blockquote",
+  "ul",
+  "ol",
+  "li",
+  "span",
+  "div",
+  "img",
+]);
+
+/** Tags with no closing form. */
+const VOID_TAGS = new Set(["br", "hr", "img"]);
+
+/**
+ * The only tags allowed to carry data, and the exact `data-type` they must
+ * carry for it. `@tiptap/extension-mathematics` serialises an atom node as
+ * `<span data-type="inline-math" data-latex="…"></span>`; the payload is the
+ * LaTeX source, re-rendered by KaTeX at display time rather than trusted as
+ * markup.
+ */
+const MATH_TAGS: Record<string, string> = {
+  span: "inline-math",
+  div: "block-math",
+};
+
+const TAG_PATTERN = /<(\/?)([a-zA-Z][a-zA-Z0-9:-]*)((?:[^>"']|"[^"]*"|'[^']*')*)>/g;
+
+function stripContentDroppingTags(html: string): string {
   let out = html;
-  // Remove script/style/iframe/object/embed tags and contents
-  out = out.replace(/<(script|style|iframe|object|embed)[^>]*>[\s\S]*?<\/\1\s*>/gi, "");
-  // Strip event handler attributes (onclick, onerror, etc.) — quoted or unquoted
-  out = out.replace(/\s+on\w+\s*=\s*(?:'[^']*'|"[^"]*"|[^\s>]+)/gi, "");
-  // Neutralize javascript: / data: / vbscript: in href/src/xlink:href
-  out = out.replace(
-    /\s+(href|src|xlink:href)\s*=\s*(?:'[^']*'|"[^"]*"|[^\s>]+)/gi,
-    (match) => {
-      const lower = match.toLowerCase();
-      if (lower.includes("javascript:") || lower.includes("data:text/html") || lower.includes("vbscript:")) {
+  for (const tag of CONTENT_DROPPING_TAGS) {
+    const pattern = new RegExp(`<${tag}(?:\\s[^>]*)?>[\\s\\S]*?<\\/${tag}\\s*>`, "gi");
+    let next = out.replace(pattern, "");
+    // A self-closing or unclosed variant (`<iframe … />`) has no closing tag to
+    // pair with, so the scoped pass above cannot reach it.
+    const lone = new RegExp(`<${tag}(?:\\s[^>]*)?\\/?>`, "gi");
+    next = next.replace(lone, "");
+    while (next !== out) {
+      out = next;
+      next = out.replace(pattern, "").replace(lone, "");
+    }
+  }
+  return out;
+}
+
+function readAttribute(raw: string, name: string): string | null {
+  const pattern = new RegExp(
+    `\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s"'>]+))`,
+    "i",
+  );
+  const match = pattern.exec(raw);
+  if (!match) return null;
+  return match[1] ?? match[2] ?? match[3] ?? null;
+}
+
+function escapeAttributeValue(value: string): string {
+  // `&` is left alone on purpose: LaTeX alignment uses it, and it cannot break
+  // out of a quoted attribute once `"` and `<`/`>` are gone. Leaving it also
+  // keeps the function idempotent — re-running never double-escapes.
+  return value.replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function keepAttributes(tag: string, raw: string): string {
+  if (tag === "img") {
+    const path = readAttribute(raw, "data-storage-path");
+    const src = readAttribute(raw, "src");
+    if (
+      !path ||
+      !/^quizzes\/[1-9]\d*\/[a-zA-Z0-9_-]+\.(png|jpe?g|webp)$/.test(path) ||
+      !src
+    )
+      return "";
+    // Only persisted object paths or private Supabase signed object URLs survive.
+    // No data URLs, arbitrary remote trackers, event handlers, classes or styles.
+    if (src !== path) {
+      try {
+        const url = new URL(src);
+        if (
+          url.protocol !== "https:" ||
+          !/^[a-z0-9-]+\.supabase\.co$/.test(url.hostname) ||
+          url.username ||
+          url.password ||
+          url.port ||
+          url.pathname !== `/storage/v1/object/sign/quiz-images/${path}` ||
+          !url.searchParams.get("token")
+        )
+          return "";
+      } catch {
         return "";
       }
-      return match;
+    }
+    const alt = readAttribute(raw, "alt") ?? "";
+    return ` src="${escapeAttributeValue(src)}" data-storage-path="${path}" alt="${escapeAttributeValue(alt)}"`;
+  }
+  const mathType = MATH_TAGS[tag];
+  if (!mathType) return "";
+
+  const declared = readAttribute(raw, "data-type");
+  if (!declared || declared.toLowerCase() !== mathType) return "";
+
+  const latex = readAttribute(raw, "data-latex");
+  if (latex === null) return "";
+
+  return ` data-type="${mathType}" data-latex="${escapeAttributeValue(latex)}"`;
+}
+
+function rewriteTags(html: string): string {
+  return html.replace(
+    TAG_PATTERN,
+    (_match, closing: string, rawName: string, rawAttributes: string) => {
+      const tag = rawName.toLowerCase();
+      if (!ALLOWED_TAGS.has(tag)) return "";
+      if (closing) return VOID_TAGS.has(tag) ? "" : `</${tag}>`;
+      if (tag === "img") {
+        const attributes = keepAttributes(tag, rawAttributes);
+        return attributes ? `<img${attributes}>` : "";
+      }
+      if (VOID_TAGS.has(tag)) return `<${tag}>`;
+      return `<${tag}${keepAttributes(tag, rawAttributes)}>`;
     },
   );
-  // Allow only a safe allowlist: b, i, u, em, strong, sub, sup, br, p, ul, ol, li, span (for styling)
-  // Strip any tag not in allowlist while keeping its inner text
-  const allow = new Set(["b", "i", "u", "em", "strong", "sub", "sup", "br", "p", "ul", "ol", "li", "span", "div"]);
-  out = out.replace(/<\/?([a-z][a-z0-9]*)\b[^>]*>/gi, (m, tag: string) => {
-    const t = tag.toLowerCase();
-    if (allow.has(t)) return m.replace(/\s+style\s*=\s*(?:'[^']*'|"[^"]*"|[^\s>]+)/gi, "");
-    // Keep text content for disallowed tags by removing the tag itself
-    // But keep closing behavior: remove entirely
-    if (m.startsWith("</")) return "";
-    // Self-closing or opening: remove tag but not inner text (handled by regex replacement)
-    return "";
-  });
+}
+
+export function sanitizeRichText(html: string): string {
+  if (!html) return "";
+
+  let out = stripContentDroppingTags(html);
+  out = out.replace(/<!--[\s\S]*?-->/g, "");
+  out = out.replace(/<!\[CDATA\[[\s\S]*?\]\]>/g, "");
+
+  // Rewrite to a fixed point. One pass is not enough: dropping a tag can bring
+  // a forbidden tag's opening and closing halves together.
+  for (let pass = 0; pass < 5; pass += 1) {
+    const next = rewriteTags(out);
+    if (next === out) break;
+    out = next;
+  }
+
   return out;
+}
+
+/** Empty editor paragraphs and formatting marks are not publishable content. */
+export function hasRichTextContent(html: string): boolean {
+  const clean = sanitizeRichText(html);
+  if (clean.includes("<img ")) return true;
+  const formulas = [
+    ...clean.matchAll(/data-type="(?:inline|block)-math" data-latex="([^"]*)"/g),
+  ];
+  if (formulas.some((match) => match[1].trim() !== "")) return true;
+  return (
+    clean
+      .replace(/<[^>]*>/g, "")
+      .replace(/&nbsp;|&#160;|&#x0*a0;/gi, " ")
+      .replace(/[\u200B-\u200D\uFEFF]/g, "")
+      .trim() !== ""
+  );
 }

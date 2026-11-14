@@ -146,7 +146,7 @@ export function AdminSidebar() {
                     asChild
                   >
                     <SidebarMenuItem>
-                      <SidebarMenuButton asChild isActive={active} tooltip={item.label}>
+                      <SidebarMenuButton asChild isActive={active} tooltip={item.label} className="min-h-11">
                         <Link href={item.href}>
                           <item.icon />
                           <span>{item.label}</span>
@@ -155,6 +155,7 @@ export function AdminSidebar() {
                       {item.children ? (
                         <>
                           <SidebarMenuAction
+                            className="top-0 right-0 size-11"
                             aria-label={`${isOpen(item, active) ? "Collapse" : "Expand"} ${item.label}`}
                             onClick={() =>
                               setSectionOverride((prev) => ({
@@ -198,7 +199,7 @@ export function AdminSidebar() {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton tooltip="Log out" onClick={handleLogout}>
+            <SidebarMenuButton tooltip="Log out" onClick={handleLogout} className="min-h-11">
               <LogOut />
               <span>Log out</span>
             </SidebarMenuButton>

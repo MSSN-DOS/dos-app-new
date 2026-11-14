@@ -159,7 +159,7 @@ export default function LevelsPage() {
       <AdminPageHeader
         kicker="Structure"
         title="Levels"
-        description="Academic levels (e.g. 100–600) available for departments and students."
+        description="Academic levels available for departments and students (the platform serves 100 and 200)."
         actions={
           <Button onClick={openAdd} className="min-h-11 shrink-0 rounded-xl">
             Add level

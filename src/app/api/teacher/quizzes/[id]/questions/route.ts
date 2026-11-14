@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 import { errorResponse } from "@/lib/api/response";
@@ -113,7 +113,7 @@ export async function POST(
     const [question] = await db
       .select({ id: questions.id, status: questions.status, createdBy: questions.createdBy })
       .from(questions)
-      .where(eq(questions.id, questionId))
+      .where(and(eq(questions.id, questionId), isNull(questions.builderQuizId)))
       .orderBy(asc(questions.id));
     if (!question) {
       return NextResponse.json(

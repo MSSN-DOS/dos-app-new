@@ -22,7 +22,7 @@ describe("GET /api/admin/users/aspirants", () => {
   it("returns the aspirant directory with latest Post-UTME score", async () => {
     stubSelect(db, [
       [
-        { id: 3, fullName: "Yusuf, F.", identifier: "12345678AB", isActive: true, aspirationDepartment: "Medicine & Surgery" },
+        { id: 3, fullName: "Yusuf, F.", identifier: "202612345678AB", isActive: true, aspirationDepartment: "Medicine & Surgery" },
       ],
       [{ userId: 3, weekStart: "2026-08-24", convertedScore50: "76.00" }],
     ]);
@@ -30,7 +30,7 @@ describe("GET /api/admin/users/aspirants", () => {
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
       data: [
-        { id: 3, fullName: "Yusuf, F.", identifier: "12345678AB", isActive: true, aspirationDepartment: "Medicine & Surgery", latestPostUtme: "76.00" },
+        { id: 3, fullName: "Yusuf, F.", identifier: "202612345678AB", isActive: true, aspirationDepartment: "Medicine & Surgery", latestPostUtme: "76.00" },
       ],
       meta: { page: 1, pageSize: 1, total: 1, totalPages: 1 },
     });

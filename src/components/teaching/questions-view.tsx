@@ -3,12 +3,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
+  AlignLeft,
   Beaker,
   FlaskConical,
   Calculator,
   Atom,
+  Check,
   ChevronLeft,
   ChevronRight,
+  ListChecks,
   Pencil,
   Trash2,
   Sparkles,
@@ -81,6 +84,7 @@ const TYPE_LABEL: Record<QuestionType, string> = { fill_in_gap: "Fill-in-gap", o
 const NONE = "__none__";
 const ALL = "__all__";
 const PAGE_SIZE = 10;
+const OPTION_LETTERS = ["A", "B", "C", "D", "E", "F", "G", "H"];
 type PageMeta = { page: number; pageSize: number; total: number; totalPages: number };
 type PaginatedQuestions = { data: QuestionRow[]; meta: PageMeta };
 
@@ -270,6 +274,7 @@ export function QuestionsView() {
   });
 
   // ── editor state ─────────────────────────────────────────────────────────
+  const [typePickerOpen, setTypePickerOpen] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [formType, setFormType] = useState<QuestionType>("fill_in_gap");
@@ -327,6 +332,11 @@ export function QuestionsView() {
     resetEditor();
     if (bodyRef.current) bodyRef.current.innerHTML = "";
     setBodyText("");
+    setTypePickerOpen(true);
+  };
+  const pickType = (t: QuestionType) => {
+    setFormType(t);
+    setTypePickerOpen(false);
     setEditorOpen(true);
   };
   const openEdit = async (q: QuestionRow) => {
@@ -636,37 +646,72 @@ export function QuestionsView() {
         </div>
       )}
 
+      {/* ── type picker ───────────────────────────────────────────────── */}
+      <Dialog open={typePickerOpen} onOpenChange={setTypePickerOpen}>
+        <DialogContent className="w-[calc(100vw-1.5rem)] border-line bg-panel text-ink sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-ink" style={{ fontFamily: "var(--font-fraunces), serif" }}>Choose question type</DialogTitle>
+            <DialogDescription className="text-xs leading-relaxed text-sub">How should the student answer? This is fixed once the question is saved.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => pickType("fill_in_gap")}
+              className="group flex flex-col items-start gap-2 rounded-2xl border border-line bg-canvas p-4 text-left transition-colors hover:border-brand/50 hover:bg-brand/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            >
+              <span className="inline-flex size-10 items-center justify-center rounded-xl bg-brand/10 text-brand transition-colors group-hover:bg-brand group-hover:text-white"><AlignLeft className="size-5" /></span>
+              <span className="text-sm font-bold text-ink">Fill in the gap</span>
+              <span className="text-[11px] leading-relaxed text-sub">A sentence with one or more blanks. Graded on an exact, case-insensitive match.</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => pickType("options")}
+              className="group flex flex-col items-start gap-2 rounded-2xl border border-line bg-canvas p-4 text-left transition-colors hover:border-brand/50 hover:bg-brand/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            >
+              <span className="inline-flex size-10 items-center justify-center rounded-xl bg-brand/10 text-brand transition-colors group-hover:bg-brand group-hover:text-white"><ListChecks className="size-5" /></span>
+              <span className="text-sm font-bold text-ink">Multiple choice</span>
+              <span className="text-[11px] leading-relaxed text-sub">One question with two or more options. Exactly one is marked correct.</span>
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* ── editor dialog ─────────────────────────────────────────────── */}
       <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto border-line bg-panel text-ink sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-lg font-bold text-ink" style={{ fontFamily: "var(--font-fraunces), serif" }}>
-              <span className="flex size-8 items-center justify-center rounded-xl bg-brand text-white"><Sparkles className="size-4" /></span>
-              {editingId === null ? "New question" : "Edit question"}
-            </DialogTitle>
-            <DialogDescription className="text-xs leading-relaxed text-sub">Drafts have no requirements — save anytime. Publishing enforces completeness. Use the science toolbars to insert symbols at the caret.</DialogDescription>
-          </DialogHeader>
-
-          <div className="grid gap-5">
-            {/* type toggle */}
-            <div className="grid gap-2">
-              <Label className="text-xs font-semibold uppercase tracking-wide text-sub" style={{ fontFamily: "JetBrains Mono, monospace" }}>Question type</Label>
-              <div className="grid grid-cols-2 gap-2 rounded-2xl border border-line bg-canvas p-1.5">
-                {(Object.keys(TYPE_LABEL) as QuestionType[]).map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    aria-pressed={formType === t}
-                    disabled={editingId !== null}
-                    onClick={() => setFormType(t)}
-                    className={`min-h-11 rounded-xl text-sm font-semibold transition-colors ${formType === t ? "bg-brand text-white shadow" : "text-sub hover:bg-line hover:text-ink"} disabled:opacity-50`}
-                  >
-                    {TYPE_LABEL[t]}
-                  </button>
-                ))}
+        <DialogContent className="flex max-h-[92vh] w-[calc(100vw-1.5rem)] flex-col gap-0 overflow-hidden border-line bg-panel p-0 text-ink sm:max-w-3xl">
+          <DialogHeader className="shrink-0 gap-3 border-b border-line px-4 pb-3.5 pr-12 pt-4 text-left sm:px-5">
+            <div className="flex items-start gap-3">
+              <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl bg-brand font-mono text-xs font-bold text-white">
+                {editingId === null ? <Plus className="size-4" /> : `#${editingId}`}
+              </span>
+              <div className="min-w-0 flex-1">
+                <DialogTitle className="text-base font-bold leading-tight text-ink" style={{ fontFamily: "var(--font-fraunces), serif" }}>
+                  {editingId === null ? "Add a question" : `Question #${editingId}`}
+                </DialogTitle>
+                <DialogDescription className="mt-1 text-[11px] leading-relaxed text-sub">
+                  Drafts save anytime. Publishing enforces every required field.
+                </DialogDescription>
               </div>
             </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-brand/30 bg-brand/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-brand">
+                {formType === "fill_in_gap" ? <AlignLeft className="size-3" /> : <ListChecks className="size-3" />}
+                {TYPE_LABEL[formType]}
+              </span>
+              {editingId === null && (
+                <button
+                  type="button"
+                  onClick={() => setTypePickerOpen(true)}
+                  className="inline-flex min-h-7 items-center rounded-full border border-line bg-canvas px-2.5 text-[10px] font-semibold text-sub transition-colors hover:border-brand/40 hover:text-brand"
+                >
+                  Change type
+                </button>
+              )}
+            </div>
+          </DialogHeader>
 
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+          <div className="grid gap-5">
             {/* rich text + toolbar */}
             <div className="grid gap-2">
               <Label htmlFor="question-body" className="text-xs font-semibold uppercase tracking-wide text-sub" style={{ fontFamily: "JetBrains Mono, monospace" }}>Question text</Label>
@@ -785,29 +830,56 @@ export function QuestionsView() {
             </div>
 
             {formType === "fill_in_gap" ? (
-              <fieldset className="grid gap-2 rounded-2xl border border-line bg-canvas p-4">
-                <legend className="px-1 text-xs font-bold uppercase tracking-[0.1em] text-sub" style={{ fontFamily: "JetBrains Mono, monospace" }}>Accepted answer(s) — one per blank</legend>
+              <section className="grid gap-2.5">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
+                  <Label className="text-xs font-bold uppercase tracking-[0.1em] text-sub" style={{ fontFamily: "JetBrains Mono, monospace" }}>Accepted answers</Label>
+                  <span className="text-[10px] text-faint">One per blank · exact match, case-insensitive</span>
+                </div>
                 {blanks.map((b, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-lg bg-line text-xs font-bold text-sub">{i + 1}</span>
-                    <Input type="text" maxLength={255} value={b} onChange={(e) => setBlanks(blanks.map((v, j) => (j === i ? e.target.value : v)))} placeholder={`Answer ${i + 1} — e.g. ${i === 0 ? "H₂O" : "photosynthesis"}`} aria-label={`Accepted answer ${i + 1}`} className="min-h-11 rounded-xl border-line bg-panel text-ink placeholder:text-faint" />
-                    {blanks.length > 1 && <Button type="button" variant="ghost" size="sm" className="shrink-0 rounded-xl text-sub hover:bg-line hover:text-ink" onClick={() => setBlanks(blanks.filter((_, j) => j !== i))} aria-label={`Remove answer ${i + 1}`}><X className="size-4" /></Button>}
+                  <div key={i} className="flex items-center gap-2 rounded-xl border border-line bg-panel p-2 transition-colors focus-within:border-brand/50">
+                    <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-line font-mono text-sm font-bold text-sub">{i + 1}</span>
+                    <Input type="text" maxLength={255} value={b} onChange={(e) => setBlanks(blanks.map((v, j) => (j === i ? e.target.value : v)))} placeholder={`Answer for blank ${i + 1} — e.g. ${i === 0 ? "H₂O" : "photosynthesis"}`} aria-label={`Accepted answer ${i + 1}`} className="min-h-11 flex-1 rounded-lg border-line bg-canvas text-ink placeholder:text-faint" />
+                    {blanks.length > 1 && <Button type="button" variant="ghost" size="sm" className="shrink-0 rounded-lg text-sub hover:bg-ruby/10 hover:text-ruby" onClick={() => setBlanks(blanks.filter((_, j) => j !== i))} aria-label={`Remove answer ${i + 1}`}><X className="size-4" /></Button>}
                   </div>
                 ))}
-                <Button type="button" variant="outline" size="sm" className="justify-self-start mt-1 min-h-9 rounded-xl border-line bg-panel text-ink hover:bg-line" onClick={() => setBlanks([...blanks, ""])}>+ Add blank</Button>
-              </fieldset>
+                <button type="button" onClick={() => setBlanks([...blanks, ""])} className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-line bg-transparent text-xs font-semibold text-sub transition-colors hover:border-brand/40 hover:bg-brand/5 hover:text-brand">
+                  <Plus className="size-3.5" /> Add another accepted answer
+                </button>
+              </section>
             ) : (
-              <fieldset className="grid gap-2 rounded-2xl border border-line bg-canvas p-4">
-                <legend className="px-1 text-xs font-bold uppercase tracking-[0.1em] text-sub" style={{ fontFamily: "JetBrains Mono, monospace" }}>Options — radio marks the single correct one</legend>
+              <section className="grid gap-2.5">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
+                  <Label className="text-xs font-bold uppercase tracking-[0.1em] text-sub" style={{ fontFamily: "JetBrains Mono, monospace" }}>Options</Label>
+                  <span className="text-[10px] text-faint">Exactly one is correct</span>
+                </div>
                 {options.map((o, i) => (
-                  <div key={i} className={`flex items-center gap-2 rounded-xl border p-2 transition-colors ${o.correct ? "border-brand/40 bg-brand/10" : "border-line bg-panel"}`}>
-                    <input type="radio" name="correct-option" checked={o.correct} onChange={() => setOptions(options.map((v, j) => ({ ...v, correct: j === i })))} aria-label={`Mark option ${i + 1} correct`} className="size-5 shrink-0 accent-brand" />
-                    <Input type="text" maxLength={1000} value={o.text} onChange={(e) => setOptions(options.map((v, j) => (j === i ? { ...v, text: e.target.value } : v)))} placeholder={`Option ${i + 1}`} aria-label={`Option ${i + 1}`} className="min-h-11 flex-1 rounded-xl border-line bg-canvas text-ink placeholder:text-faint" />
-                    {options.length > 2 && <Button type="button" variant="ghost" size="sm" className="shrink-0 rounded-xl text-sub hover:bg-line hover:text-ink" onClick={() => setOptions(options.filter((_, j) => j !== i))} aria-label={`Remove option ${i + 1}`}><X className="size-4" /></Button>}
+                  <div key={i} className={`flex flex-col gap-2 rounded-xl border p-2 transition-colors sm:flex-row sm:items-center ${o.correct ? "border-brand/50 bg-brand/5" : "border-line bg-panel"}`}>
+                    <div className="flex min-w-0 flex-1 items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setOptions(options.map((v, j) => ({ ...v, correct: j === i })))}
+                        aria-pressed={o.correct}
+                        aria-label={`Mark option ${OPTION_LETTERS[i] ?? i + 1} correct`}
+                        className={`inline-flex size-9 shrink-0 items-center justify-center rounded-lg font-mono text-sm font-bold transition-colors ${o.correct ? "bg-brand text-white" : "bg-line text-sub hover:bg-edge hover:text-ink"}`}
+                      >
+                        {OPTION_LETTERS[i] ?? i + 1}
+                      </button>
+                      <Input type="text" maxLength={1000} value={o.text} onChange={(e) => setOptions(options.map((v, j) => (j === i ? { ...v, text: e.target.value } : v)))} placeholder={`Option ${OPTION_LETTERS[i] ?? i + 1}`} aria-label={`Option ${OPTION_LETTERS[i] ?? i + 1}`} className="min-h-11 flex-1 rounded-lg border-line bg-canvas text-ink placeholder:text-faint" />
+                    </div>
+                    <div className="flex items-center gap-1 pl-11 sm:pl-0">
+                      {o.correct ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-brand px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-white"><Check className="size-3" /> Correct</span>
+                      ) : (
+                        <button type="button" onClick={() => setOptions(options.map((v, j) => ({ ...v, correct: j === i })))} className="inline-flex min-h-9 items-center rounded-lg px-2 text-[10px] font-bold uppercase tracking-[0.08em] text-faint transition-colors hover:bg-brand/10 hover:text-brand">Select as answer</button>
+                      )}
+                      {options.length > 2 && <Button type="button" variant="ghost" size="sm" className="shrink-0 rounded-lg text-sub hover:bg-ruby/10 hover:text-ruby" onClick={() => setOptions(options.filter((_, j) => j !== i))} aria-label={`Remove option ${OPTION_LETTERS[i] ?? i + 1}`}><X className="size-4" /></Button>}
+                    </div>
                   </div>
                 ))}
-                <Button type="button" variant="outline" size="sm" className="justify-self-start mt-1 min-h-9 rounded-xl border-line bg-panel text-ink hover:bg-line" onClick={() => setOptions([...options, { text: "", correct: false }])}>+ Add option</Button>
-              </fieldset>
+                <button type="button" onClick={() => setOptions([...options, { text: "", correct: false }])} className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-line bg-transparent text-xs font-semibold text-sub transition-colors hover:border-brand/40 hover:bg-brand/5 hover:text-brand">
+                  <Plus className="size-3.5" /> Add new option
+                </button>
+              </section>
             )}
 
             <div className="grid gap-3 rounded-2xl border border-line bg-canvas p-4">
@@ -842,20 +914,30 @@ export function QuestionsView() {
               )}
             </div>
 
-            {blockers.length > 0 && (
-              <div className="rounded-xl border border-gold/30 bg-gold/10 p-3">
-                <p className="flex items-center gap-1.5 text-xs font-bold text-gold"><AlertCircle className="size-3.5" /> Publishing is blocked until:</p>
-                <ul className="mt-2 list-inside list-disc space-y-1 text-xs leading-relaxed text-gold/90">
-                  {blockers.map((r) => <li key={r}>{r}</li>)}
-                </ul>
-              </div>
-            )}
             {formError && <p role="alert" className="rounded-xl border border-ruby/30 bg-ruby/10 px-3 py-2 text-sm text-ruby">{formError}</p>}
           </div>
+          </div>
 
-          <DialogFooter className="gap-2 sm:flex-row">
-            <Button variant="outline" onClick={() => saveMutation.mutate({ status: "draft" })} disabled={saveMutation.isPending} className="min-h-11 rounded-xl border-line bg-canvas text-ink hover:bg-line sm:min-h-10">{saveMutation.isPending ? "Saving…" : "Save as draft"}</Button>
-            <Button onClick={() => saveMutation.mutate({ status: "published" })} disabled={saveMutation.isPending || blockers.length > 0} className="min-h-11 rounded-xl bg-brand text-white hover:bg-brand-hover disabled:opacity-40 sm:min-h-10"><Sparkles className="size-4" /> Publish</Button>
+          <DialogFooter className="mx-0 mb-0 shrink-0 flex-col gap-2 rounded-none border-t border-line bg-canvas/60 px-4 py-3 sm:flex-row sm:justify-between sm:px-5">
+            <div className="min-w-0 flex-1">
+              {blockers.length > 0 ? (
+                <div>
+                  <p className="flex items-center gap-1.5 text-[11px] font-bold text-gold">
+                    <AlertCircle className="size-3.5 shrink-0" />
+                    {blockers.length} thing{blockers.length === 1 ? "" : "s"} needed before publishing
+                  </p>
+                  <ul className="mt-1 max-h-20 space-y-0.5 overflow-y-auto pl-5 text-[11px] leading-relaxed text-gold/90">
+                    {blockers.map((r) => <li key={r} className="list-disc">{r}</li>)}
+                  </ul>
+                </div>
+              ) : (
+                <p className="flex items-center gap-1.5 text-[11px] font-semibold text-brand"><Check className="size-3.5 shrink-0" /> Ready to publish</p>
+              )}
+            </div>
+            <div className="flex w-full shrink-0 gap-2 sm:w-auto">
+              <Button variant="outline" onClick={() => saveMutation.mutate({ status: "draft" })} disabled={saveMutation.isPending} className="min-h-11 flex-1 rounded-xl border-line bg-panel text-ink hover:bg-line sm:min-h-10 sm:flex-none">{saveMutation.isPending ? "Saving…" : "Save as draft"}</Button>
+              <Button onClick={() => saveMutation.mutate({ status: "published" })} disabled={saveMutation.isPending || blockers.length > 0} className="min-h-11 flex-1 rounded-xl bg-brand text-white hover:bg-brand-hover disabled:opacity-40 sm:min-h-10 sm:flex-none"><Sparkles className="size-4" /> Publish</Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

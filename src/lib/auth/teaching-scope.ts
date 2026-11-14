@@ -32,7 +32,7 @@ const NOTHING: TeachingScope = {
 };
 
 export async function getTeachingScope(
-  db: ReturnType<typeof getDb>,
+  db: Pick<ReturnType<typeof getDb>, "select">,
   auth: AuthContext,
 ): Promise<TeachingScope> {
   // Only `admin` is unrestricted. Anything else — including an AuthContext whose roleName was

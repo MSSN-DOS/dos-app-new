@@ -11,6 +11,7 @@ import { getTeachingScope, isTrackAllowed } from "@/lib/auth/teaching-scope";
 import { getDb } from "@/lib/db";
 import { courses, jambSubjects, quizzes } from "@/lib/db/schema";
 import { quizCreateSchema } from "@/lib/validation/quizzes";
+import { newQuizSettings } from "@/lib/db/quiz-preferences";
 
 function validationError(err: ZodError): NextResponse {
   return NextResponse.json(
@@ -112,6 +113,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       throw new ForbiddenError("You do not teach this course or JAMB subject");
     }
 
+    const settings = await newQuizSettings(auth.userId);
     const [row] = await db
       .insert(quizzes)
       .values({
@@ -121,8 +123,10 @@ export async function POST(request: Request): Promise<NextResponse> {
         jambSubjectId: input.jambSubjectId ?? null,
         topicId: input.topicId ?? null,
         weekStart: input.weekStart ?? null,
-        timeLimitMinutes: 30,
-        passMark: 50,
+        ...settings,
+        timeLimitMinutes: null,
+        timeLimitSeconds: null,
+        passMark: 60,
         status: "draft",
         createdBy: auth.userId,
       })

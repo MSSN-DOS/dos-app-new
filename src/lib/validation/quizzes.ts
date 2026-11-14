@@ -113,3 +113,26 @@ export const quizUpdateSchema = z
   });
 
 export type QuizUpdateInput = z.infer<typeof quizUpdateSchema>;
+
+/**
+ * Admin-controlled availability override for a Course Quiz (DESIGN.md 4 decision 6).
+ * Both fields nullable: sending `{ opensAt: null, closesAt: null }` clears the override
+ * and restores the default Saturday 00:00 -> Monday 00:00 WAT window. Setting only one
+ * replaces that boundary and leaves the other on its default.
+ */
+export const quizWindowSchema = z
+  .object({
+    opensAt: z.coerce.date().nullable(),
+    closesAt: z.coerce.date().nullable(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.opensAt != null && data.closesAt != null && data.closesAt <= data.opensAt) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["closesAt"],
+        message: "The close time must be after the open time",
+      });
+    }
+  });
+
+export type QuizWindowInput = z.infer<typeof quizWindowSchema>;

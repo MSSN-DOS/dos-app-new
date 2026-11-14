@@ -20,6 +20,7 @@ vi.mock("@/lib/db", () => ({
 }));
 
 import { UnauthorizedError, ForbiddenError } from "@/lib/auth/errors";
+import { initialQuizSettings } from "@/lib/validation/quiz-settings";
 
 let db: ReturnType<typeof makeDbMock>;
 
@@ -83,12 +84,16 @@ describe("GET /api/teacher/quizzes", () => {
   });
 
   it("slices the requested page and returns pagination metadata", async () => {
-    stubSelect(db, [[
-      { id: 1, title: "First", quizType: "topic" },
-      { id: 2, title: "Second", quizType: "course" },
-      { id: 3, title: "Third", quizType: "course" },
-    ]]);
-    const res = await GET(jsonRequest("http://localhost/api/teacher/quizzes?page=2&pageSize=1"));
+    stubSelect(db, [
+      [
+        { id: 1, title: "First", quizType: "topic" },
+        { id: 2, title: "Second", quizType: "course" },
+        { id: 3, title: "Third", quizType: "course" },
+      ],
+    ]);
+    const res = await GET(
+      jsonRequest("http://localhost/api/teacher/quizzes?page=2&pageSize=1"),
+    );
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.data).toEqual([{ id: 2, title: "Second", quizType: "course" }]);
@@ -168,8 +173,9 @@ describe("POST /api/teacher/quizzes", () => {
       topicId: 7,
       jambSubjectId: null,
       weekStart: null,
-      timeLimitMinutes: 30,
-      passMark: 50,
+      timeLimitMinutes: null,
+      timeLimitSeconds: null,
+      passMark: 60,
       status: "draft",
       createdBy: 5,
     });
@@ -193,6 +199,55 @@ describe("POST /api/teacher/quizzes", () => {
       }),
     );
     expect(inserted.title).toBe("Padded title");
+  });
+
+  it("applies this user's defaults without reusing schedule dates or changing access", async () => {
+    stubSelect(db, [
+      SCOPE,
+      [
+        {
+          value: {
+            pinned: [],
+            defaults: {
+              ...initialQuizSettings,
+              shuffleQuestions: true,
+              permitFocusLoss: false,
+              showCalculator: true,
+              scheduleEnabled: true,
+              opensAt: "2026-11-20T08:00:00Z",
+              closesAt: "2026-11-20T09:00:00Z",
+            },
+          },
+        },
+      ],
+    ]);
+    const inserted: Record<string, unknown> = {};
+    db.insert.mockImplementation(() => ({
+      values: (value: Record<string, unknown>) => {
+        Object.assign(inserted, value);
+        return { returning: async () => [{ id: 12 }] };
+      },
+    }));
+    const res = await POST(
+      jsonRequest("http://localhost/api/teacher/quizzes", "POST", {
+        title: "Personal defaults",
+        quizType: "topic",
+        courseId: 2,
+        topicId: 7,
+      }),
+    );
+    expect(res.status).toBe(201);
+    expect(inserted).toMatchObject({
+      shuffleQuestions: true,
+      showCalculator: true,
+      loseFocusPolicy: "warn",
+      requireLoginToAttempt: true,
+      opensAt: null,
+      closesAt: null,
+      scheduleEnabled: true,
+      passMark: 60,
+    });
+    expect(inserted).not.toHaveProperty("visibility");
   });
 
   it("creates a course quiz with a Saturday week start", async () => {
@@ -252,9 +307,7 @@ describe("POST /api/teacher/quizzes", () => {
     expect(res.status).toBe(422);
     const body = await res.json();
     expect(body.error.details).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ field: "jambSubjectId" }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ field: "jambSubjectId" })]),
     );
   });
 
@@ -269,9 +322,7 @@ describe("POST /api/teacher/quizzes", () => {
     expect(res.status).toBe(422);
     const body = await res.json();
     expect(body.error.details).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ field: "courseId" }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ field: "courseId" })]),
     );
   });
 
@@ -286,9 +337,7 @@ describe("POST /api/teacher/quizzes", () => {
     expect(res.status).toBe(422);
     const body = await res.json();
     expect(body.error.details).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ field: "topicId" }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ field: "topicId" })]),
     );
   });
 
@@ -305,9 +354,7 @@ describe("POST /api/teacher/quizzes", () => {
     expect(res.status).toBe(422);
     const body = await res.json();
     expect(body.error.details).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ field: "weekStart" }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ field: "weekStart" })]),
     );
   });
 
@@ -322,9 +369,7 @@ describe("POST /api/teacher/quizzes", () => {
     expect(res.status).toBe(422);
     const body = await res.json();
     expect(body.error.details).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ field: "weekStart" }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ field: "weekStart" })]),
     );
   });
 
@@ -372,9 +417,7 @@ describe("POST /api/teacher/quizzes", () => {
     expect(res.status).toBe(422);
     const body = await res.json();
     expect(body.error.details).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ field: "title" }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ field: "title" })]),
     );
   });
 
@@ -389,9 +432,7 @@ describe("POST /api/teacher/quizzes", () => {
     expect(res.status).toBe(422);
     const body = await res.json();
     expect(body.error.details).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ field: "quizType" }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ field: "quizType" })]),
     );
   });
 });

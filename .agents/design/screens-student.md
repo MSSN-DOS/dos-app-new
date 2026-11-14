@@ -30,8 +30,8 @@ FRAME: Student — Dashboard
 ---
 
 ### `/quizzes/[id]/attempt`
-- **Task:** P4-3
-- **Purpose:** The actual quiz-taking flow. One question at a time, timed, lose-focus-aware.
+- **Task:** P4-3, extended in P12-8.
+- **Purpose:** Read the introduction before starting; take one question at a time with optional timing, saved progress and configured review behavior.
 
 **Wireframe**
 ```
@@ -49,7 +49,11 @@ FRAME: Quiz Attempt — "CHE 301 — Week 4"
   NOTE: Best of all attempts is kept as the recorded score.
 ```
 
-**Data / API:** `GET /api/quizzes/[id]/attempt` (start — server picks/shuffles questions if `allow_multiple_attempts`, returns quiz config + question set, starts the timer server-side too, not just client-side, so a refresh can't reset it), `POST /api/quizzes/[id]/attempt` (submit all answers at once, or consider autosave-per-answer if `PLAN.md` scope allows — MVP default is submit-on-finish only, per-answer autosave is not in `PLAN.md`, don't add it unprompted).
+**Data / API:** `GET /api/quizzes/[id]` returns the introduction (cover, description, instructions, duration, marks, attempt/window eligibility) without creating an attempt. Explicit Start/Resume calls `GET /api/quizzes/[id]/attempt`; server ordering/shuffling is stable for the attempt, passage children stay together, and resume restores saved responses and the original start time. `PUT /api/quizzes/[id]/attempt` saves progress for the approved resume setting (debounced and explicit Save progress). Saves are serialized; submission waits for outstanding saves. `POST` submits all responses after confirmation, or when the seconds-based timer expires. `GET /api/quizzes/[id]/review?attemptId=` returns only the caller's submitted attempt, with answers/explanations and score/pass-fail gated server-side.
+
+**P12 behavior:** shared rich-text renderer supports equations, images and rich options; True/False and multiple choice use a single-answer radio group, gaps use trimmed case-insensitive exact matching, passages repeat above their children, essays use a labelled textarea and manual-grading badge. Optional calculator and automatic next-question setting apply during attempts. Null duration is untimed. Focus loss permits ignore or warns for new quizzes; legacy auto-submit remains supported. Answer navigation and submission have 44px keyboard-accessible targets. Results show awaiting-grading, held, released or hidden status. Configured question marks determine percentages; incorrect objective answers optionally deduct full marks, unanswered earn zero, and percentages cannot fall below zero.
+
+**Review page (P12-8):** `/quizzes/[id]/review/[attemptId]`, linked from History, uses the same gated review component as submission. Loading, retry, awaiting grading, held, hidden, released score/pass-fail, answer/explanation and empty-review states are shared. This page lives under the existing Student/Aspirant role and onboarding guards.
 
 **States:** loading (fetching questions) · in-progress · time-expiring warning (e.g. last 60 seconds, visual only, per the quiz's `lose_focus_policy` if it's `warn`) · lose-focus triggered (behavior branches on `lose_focus_policy`: `ignore` = do nothing, `warn` = show a modal warning, `auto_submit` = submit immediately with whatever's answered) · submitting · submitted (redirect to `/history` or a lightweight "submitted, score pending release" confirmation — never show the score here even momentarily, since it may be held) · error (e.g. time ran out server-side, quiz window closed mid-attempt — Course Quiz window is Sat 00:00–Sun 23:59, handle the edge case of an attempt in progress when the window closes).
 
@@ -69,7 +73,7 @@ FRAME: History
   LIST ROW: CHE 301 — Topic: Mass Transfer | Topic Quiz | attempted Aug 18 | 88% (practice, doesn't count toward CGPA)
 ```
 
-**Data / API:** `GET /api/me/attempts?type=&courseId=`. Response omits `score` entirely for held Course Quiz attempts (not just hides it) — Topic Quiz scores are always shown since they were never held to begin with (they don't feed anything that requires the release gate).
+**Data / API:** `GET /api/me/attempts?type=&courseId=`. Response omits `score` entirely for held attempts. Topic Quizzes also preserve the Admin release gate, while remaining excluded from CGPA calculations.
 
 **States:** loading · empty ("You haven't taken any quizzes yet") · error.
 

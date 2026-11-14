@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, or, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 
@@ -44,6 +44,17 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
 
     const db = getDb();
+    // A Student signs in with either identifier they hold (Board decision 2026-11-10): the one
+    // they signed up with (`identifier`), or the second one attached later from
+    // /account/identifiers. Every other role only ever stores a value in `identifier`, so this is
+    // a superset of the previous single-column lookup rather than a behaviour change for them.
+    //
+    // Compared case-insensitively on both sides: identifiers are stored upper-case now, but people
+    // type them in whichever case, and a row seeded before normalisation (e.g. a hand-set bootstrap
+    // admin identifier) may not be upper-case at all. Upper-casing both sides handles every case
+    // without touching stored data. It costs the unique index on this one lookup — acceptable for
+    // a single row against a table this size, and the rate limiter caps attempts per identifier.
+    const lookup = data.identifier.toUpperCase();
     const [user] = await db
       .select({
         id: users.id,
@@ -54,7 +65,16 @@ export async function POST(request: Request): Promise<NextResponse> {
       })
       .from(users)
       .innerJoin(roles, eq(roles.id, users.roleId))
-      .where(eq(users.identifier, data.identifier))
+      .where(
+        or(
+          eq(sql`upper(${users.identifier})`, lookup),
+          eq(sql`upper(${users.matricNumber})`, lookup),
+          eq(sql`upper(${users.jambRegNumber})`, lookup),
+        ),
+      )
+      // Deterministic if one string ever matched two rows: the original sign-in value beats an
+      // alias. Without this the winner would depend on row order.
+      .orderBy(sql`case when upper(${users.identifier}) = ${lookup} then 0 else 1 end`)
       .limit(1);
 
     // Same generic message for "no user" and "wrong password" so we don't reveal which identifiers exist.

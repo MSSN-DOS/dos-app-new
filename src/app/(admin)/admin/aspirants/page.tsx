@@ -53,7 +53,7 @@ export default function AspirantsPage() {
         <Input
           id="aspirant-search"
           type="search"
-          placeholder="e.g. Yusuf or 12345678AB"
+          placeholder="e.g. Yusuf or 202612345678AB"
           value={search}
           onChange={(e) => {
             setSearch(e.target.value);

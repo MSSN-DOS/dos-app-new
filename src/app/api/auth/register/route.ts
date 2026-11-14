@@ -10,6 +10,7 @@ import { hashPassword } from "@/lib/auth/password";
 import { signSession } from "@/lib/auth/jwt";
 import { checkRateLimit, rateLimitKey } from "@/lib/auth/rate-limit";
 import { registerSchema } from "@/lib/validation/auth";
+import { identifierTypeFor } from "@/lib/validation/identifiers";
 
 function validationError(err: ZodError): NextResponse {
   return NextResponse.json(
@@ -65,7 +66,17 @@ export async function POST(request: Request): Promise<NextResponse> {
       );
     }
 
-    const identifierType = data.role === "student" ? "matric_number" : "jamb_reg_number";
+    // The value's own shape decides its type — a Student may sign up with either a Matric number
+    // or a JAMB number (Board decision 2026-11-10), so the chosen role can no longer pick it.
+    const identifierType = identifierTypeFor(data.identifier);
+    if (!identifierType) {
+      // Unreachable: registerSchema already rejected anything matching neither format.
+      return NextResponse.json(
+        { error: { code: "VALIDATION_ERROR", message: "Invalid identifier" } },
+        { status: 422 },
+      );
+    }
+
     const passwordHash = await hashPassword(data.password);
 
     try {
@@ -76,6 +87,10 @@ export async function POST(request: Request): Promise<NextResponse> {
           fullName: data.fullName,
           identifier: data.identifier,
           identifierType,
+          // Mirror into the matching per-type column so its unique index stops a second account
+          // claiming the same number, and so login can match either column.
+          matricNumber: identifierType === "matric_number" ? data.identifier : null,
+          jambRegNumber: identifierType === "jamb_reg_number" ? data.identifier : null,
           passwordHash,
         })
         .returning({ id: users.id, roleId: users.roleId });
