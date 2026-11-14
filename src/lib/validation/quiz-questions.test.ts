@@ -15,6 +15,60 @@ const correctPair = [
   { optionText: "5", isCorrect: false },
 ];
 
+describe("essay and passage publish rules", () => {
+  it("allows essays without an automatic answer key", () => {
+    expect(
+      quizQuestionPublishSchema.safeParse({
+        questionType: "essay",
+        bodyRichText: "Explain Bernoulli's principle",
+        marks: 5,
+      }).success,
+    ).toBe(true);
+    expect(
+      quizQuestionPublishSchema.safeParse({
+        questionType: "essay",
+        bodyRichText: "<p></p>",
+        marks: 5,
+      }).success,
+    ).toBe(false);
+  });
+  it("keeps incomplete passages in drafts and blocks publication", () => {
+    const payload = {
+      details: { title: "Quiz" },
+      passages: [{ clientKey: "p", bodyRichText: "" }],
+      questions: [
+        { questionType: "essay", bodyRichText: "Explain", passageKey: "p", marks: 2 },
+      ],
+    };
+    expect(quizDraftPayloadSchema.safeParse(payload).success).toBe(true);
+    expect(collectQuizPublishBlockers(payload)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: "passages.0.bodyRichText" }),
+      ]),
+    );
+  });
+  it("rejects missing passages and passages without sub-questions", () => {
+    const base = {
+      details: { title: "Quiz" },
+      questions: [
+        {
+          questionType: "essay",
+          bodyRichText: "Explain",
+          passageKey: "missing",
+          marks: 2,
+        },
+      ],
+      passages: [{ clientKey: "empty", bodyRichText: "Text" }],
+    };
+    expect(collectQuizPublishBlockers(base).map((b) => b.message)).toEqual(
+      expect.arrayContaining([
+        "The shared passage is missing",
+        "Add a sub-question to this passage",
+      ]),
+    );
+  });
+});
+
 function issuesOf(schema: ZodType, input: unknown): string[] {
   const result = schema.safeParse(input);
   if (result.success) return [];
@@ -24,20 +78,31 @@ function issuesOf(schema: ZodType, input: unknown): string[] {
 describe("quizQuestionDraftSchema", () => {
   it("keeps a half-built card", () => {
     expect(
-      quizQuestionDraftSchema.safeParse({ questionType: "options", bodyRichText: "" }).success,
+      quizQuestionDraftSchema.safeParse({ questionType: "options", bodyRichText: "" })
+        .success,
     ).toBe(true);
   });
 
   it("defaults marks to 1 and allows an explicit 0 while drafting", () => {
-    expect(quizQuestionDraftSchema.parse({ questionType: "options", bodyRichText: "" }).marks).toBe(1);
     expect(
-      quizQuestionDraftSchema.parse({ questionType: "options", bodyRichText: "", marks: 0 }).marks,
+      quizQuestionDraftSchema.parse({ questionType: "options", bodyRichText: "" }).marks,
+    ).toBe(1);
+    expect(
+      quizQuestionDraftSchema.parse({
+        questionType: "options",
+        bodyRichText: "",
+        marks: 0,
+      }).marks,
     ).toBe(0);
   });
 
   it("coerces a marks string from the form control", () => {
     expect(
-      quizQuestionDraftSchema.parse({ questionType: "options", bodyRichText: "", marks: "3" }).marks,
+      quizQuestionDraftSchema.parse({
+        questionType: "options",
+        bodyRichText: "",
+        marks: "3",
+      }).marks,
     ).toBe(3);
   });
 
@@ -62,16 +127,53 @@ describe("quizQuestionDraftSchema", () => {
   });
 
   it("rejects a marks value that cannot be stored", () => {
-    expect(quizQuestionDraftSchema.safeParse({ questionType: "options", bodyRichText: "", marks: -1 }).success).toBe(
-      false,
-    );
     expect(
-      quizQuestionDraftSchema.safeParse({ questionType: "options", bodyRichText: "", marks: 2.5 }).success,
+      quizQuestionDraftSchema.safeParse({
+        questionType: "options",
+        bodyRichText: "",
+        marks: -1,
+      }).success,
+    ).toBe(false);
+    expect(
+      quizQuestionDraftSchema.safeParse({
+        questionType: "options",
+        bodyRichText: "",
+        marks: 2.5,
+      }).success,
     ).toBe(false);
   });
 });
 
 describe("quizQuestionPublishSchema", () => {
+  it.each(["<p></p>", "<p><strong>&nbsp;</strong></p>", "<script>text</script>"])(
+    "allows an empty rich-text draft but blocks publishing it: %s",
+    (bodyRichText) => {
+      const payload = {
+        questionType: "options",
+        bodyRichText,
+        options: correctPair,
+        marks: 1,
+      };
+      expect(quizQuestionDraftSchema.safeParse(payload).success).toBe(true);
+      expect(quizQuestionPublishSchema.safeParse(payload).success).toBe(false);
+    },
+  );
+
+  it("accepts an equation as question content and rejects formatting-only options", () => {
+    const payload = {
+      questionType: "options",
+      bodyRichText: '<span data-type="inline-math" data-latex="x^2"></span>',
+      options: correctPair,
+      marks: 1,
+    };
+    expect(quizQuestionPublishSchema.safeParse(payload).success).toBe(true);
+    expect(
+      quizQuestionPublishSchema.safeParse({
+        ...payload,
+        options: [{ optionText: "<p></p>", isCorrect: true }, correctPair[1]],
+      }).success,
+    ).toBe(false);
+  });
   it("publishes a complete options question", () => {
     expect(
       quizQuestionPublishSchema.safeParse({
@@ -144,7 +246,9 @@ describe("quizDraftPayloadSchema", () => {
   });
 
   it("still requires a title, because quizzes.title is NOT NULL", () => {
-    expect(quizDraftPayloadSchema.safeParse({ details: { title: "" } }).success).toBe(false);
+    expect(quizDraftPayloadSchema.safeParse({ details: { title: "" } }).success).toBe(
+      false,
+    );
   });
 });
 
@@ -153,7 +257,12 @@ describe("quizPublishPayloadSchema", () => {
     details: { title: "Heat", passMark: 60 },
     questions: [
       { questionType: "options", bodyRichText: "2 + 2?", options: correctPair, marks: 1 },
-      { questionType: "fill_in_gap", bodyRichText: "[gap]°C.", blanks: [{ acceptedAnswer: "100" }], marks: 2 },
+      {
+        questionType: "fill_in_gap",
+        bodyRichText: "[gap]°C.",
+        blanks: [{ acceptedAnswer: "100" }],
+        marks: 2,
+      },
     ],
   };
 
@@ -170,13 +279,18 @@ describe("quizPublishPayloadSchema", () => {
   it("names the offending question by index", () => {
     const result = quizPublishPayloadSchema.safeParse({
       ...publishable,
-      questions: [publishable.questions[0], { questionType: "options", bodyRichText: "", marks: 1 }],
+      questions: [
+        publishable.questions[0],
+        { questionType: "options", bodyRichText: "", marks: 1 },
+      ],
     });
     expect(result.success).toBe(false);
     if (result.success) return;
-    expect(result.error.issues.some((issue) => issue.path[0] === "questions" && issue.path[1] === 1)).toBe(
-      true,
-    );
+    expect(
+      result.error.issues.some(
+        (issue) => issue.path[0] === "questions" && issue.path[1] === 1,
+      ),
+    ).toBe(true);
   });
 });
 
@@ -185,7 +299,9 @@ describe("collectQuizPublishBlockers", () => {
     expect(
       collectQuizPublishBlockers({
         details: { title: "Heat" },
-        questions: [{ questionType: "options", bodyRichText: "Q", options: correctPair, marks: 1 }],
+        questions: [
+          { questionType: "options", bodyRichText: "Q", options: correctPair, marks: 1 },
+        ],
       }),
     ).toEqual([]);
   });
@@ -195,7 +311,10 @@ describe("collectQuizPublishBlockers", () => {
       details: { title: "" },
       questions: [],
     });
-    expect(blockers).toContainEqual({ path: "details.title", message: "Give the quiz a title" });
+    expect(blockers).toContainEqual({
+      path: "details.title",
+      message: "Give the quiz a title",
+    });
     expect(blockers).toContainEqual({
       path: "questions",
       message: "Add at least one question before publishing",
@@ -210,7 +329,9 @@ describe("collectQuizPublishBlockers", () => {
 
 describe("payload types", () => {
   it("keeps the draft type assignable from a parsed draft payload", () => {
-    const parsed: QuizDraftPayloadInput = quizDraftPayloadSchema.parse({ details: { title: "Heat" } });
+    const parsed: QuizDraftPayloadInput = quizDraftPayloadSchema.parse({
+      details: { title: "Heat" },
+    });
     expect(parsed.questions).toHaveLength(0);
   });
 });

@@ -10,9 +10,13 @@ export const submitAttemptSchema = z.object({
         blankAnswers: z
           .record(z.string().regex(/^\d+$/), z.string().max(255))
           .nullish(),
+        essayAnswer: z.string().max(20000).nullish(),
       })
     )
-    .min(1),
+    .min(1)
+    .superRefine((answers, ctx) => {
+      if (new Set(answers.map((answer) => answer.questionId)).size !== answers.length) ctx.addIssue({ code: "custom", message: "Submit each question once" });
+    }),
 });
 
 export type SubmitAttemptInput = z.infer<typeof submitAttemptSchema>;

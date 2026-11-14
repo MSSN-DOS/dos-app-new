@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 
 import { useAuth } from "@/components/auth/auth-provider";
@@ -12,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -38,6 +40,7 @@ type Attempt = {
   attemptedAt: string | null;
   score?: number;
   bestScore?: number;
+  scoreStatus?: "awaiting_grading" | "held" | "hidden" | "released";
 };
 
 type HistoryResponse = {
@@ -63,8 +66,17 @@ function formatDate(value: string | null): string {
 }
 
 function AttemptRow({ attempt }: { attempt: Attempt }) {
-  const isHeld = attempt.quizType === "course" && attempt.score === undefined;
-  const context = attempt.quizType === "topic" ? (attempt.topicTitle ?? "Topic practice") : (attempt.courseCode ?? "Course Quiz");
+  const isHeld = attempt.score === undefined;
+  const pendingLabel =
+    attempt.scoreStatus === "hidden"
+      ? "Result hidden"
+      : attempt.scoreStatus === "awaiting_grading"
+        ? "Awaiting grading"
+        : "Awaiting release";
+  const context =
+    attempt.quizType === "topic"
+      ? (attempt.topicTitle ?? "Topic practice")
+      : (attempt.courseCode ?? "Course Quiz");
 
   return (
     <TableRow className="border-line hover:bg-line/40">
@@ -75,12 +87,18 @@ function AttemptRow({ attempt }: { attempt: Attempt }) {
         </p>
       </TableCell>
       <TableCell>
-        <p className="text-ink">{attempt.quizType === "course" ? "Course Quiz" : "Topic Quiz"}</p>
-        {attempt.weekStart && <p className="text-sm text-sub">Week of {attempt.weekStart}</p>}
+        <p className="text-ink">
+          {attempt.quizType === "course" ? "Course Quiz" : "Topic Quiz"}
+        </p>
+        {attempt.weekStart && (
+          <p className="text-sm text-sub">Week of {attempt.weekStart}</p>
+        )}
       </TableCell>
       <TableCell className="whitespace-normal">
         <p className="text-ink">{formatDate(attempt.attemptedAt)}</p>
-        {!isHeld && attempt.bestScore !== undefined && <p className="text-sm text-sub">Best: {attempt.bestScore}%</p>}
+        {!isHeld && attempt.bestScore !== undefined && (
+          <p className="text-sm text-sub">Best: {attempt.bestScore}%</p>
+        )}
       </TableCell>
       <TableCell className="text-right align-middle">
         <span
@@ -89,27 +107,42 @@ function AttemptRow({ attempt }: { attempt: Attempt }) {
               ? "inline-flex min-h-11 items-center rounded-md border border-edge bg-line px-3 text-sm font-medium tabular-nums text-sub"
               : "inline-flex min-h-11 items-center rounded-md bg-brand px-3 text-sm font-medium tabular-nums text-white"
           }
-          aria-label={isHeld ? "Score pending release" : `Score ${attempt.score}%`}
+          aria-label={isHeld ? pendingLabel : `Score ${attempt.score}%`}
         >
-          {isHeld ? "Awaiting release" : `${attempt.score}%`}
+          {isHeld ? pendingLabel : `${attempt.score}%`}
         </span>
+        <Button asChild variant="link" className="mt-1 min-h-11">
+          <Link href={`/quizzes/${attempt.quizId}/review/${attempt.id}`}>
+            Review attempt
+          </Link>
+        </Button>
       </TableCell>
     </TableRow>
   );
 }
 
 function AttemptCard({ attempt }: { attempt: Attempt }) {
-  const isHeld = attempt.quizType === "course" && attempt.score === undefined;
+  const isHeld = attempt.score === undefined;
+  const pendingLabel =
+    attempt.scoreStatus === "hidden"
+      ? "Result hidden"
+      : attempt.scoreStatus === "awaiting_grading"
+        ? "Awaiting grading"
+        : "Awaiting release";
   const isTopic = attempt.quizType === "topic";
-  const context = isTopic ? (attempt.topicTitle ?? "Topic practice") : (attempt.courseCode ?? "Course Quiz");
+  const context = isTopic
+    ? (attempt.topicTitle ?? "Topic practice")
+    : (attempt.courseCode ?? "Course Quiz");
   const typeLabel = isTopic ? "Topic Quiz" : "Course Quiz";
-  const scoreLabel = isHeld ? "Score pending release" : `Score ${attempt.score}%`;
+  const scoreLabel = isHeld ? pendingLabel : `Score ${attempt.score}%`;
 
   return (
     <article className="rounded-2xl border border-line bg-panel p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="break-words text-[15px] font-medium leading-snug text-ink">{attempt.title}</p>
+          <p className="break-words text-[15px] font-medium leading-snug text-ink">
+            {attempt.title}
+          </p>
           <p className="mt-1 break-words text-[13px] leading-relaxed text-sub">
             {context} · Attempt {attempt.attemptNumber}
           </p>
@@ -125,15 +158,21 @@ function AttemptCard({ attempt }: { attempt: Attempt }) {
         </span>
       </div>
 
-      {attempt.weekStart && <p className="mt-2.5 text-[13px] text-sub">Week of {attempt.weekStart}</p>}
+      {attempt.weekStart && (
+        <p className="mt-2.5 text-[13px] text-sub">Week of {attempt.weekStart}</p>
+      )}
 
       <div className="mt-3 flex items-center justify-between gap-3 border-t border-line pt-3">
         <div className="min-w-0">
-          <p className="text-[13px] font-medium text-ink">{formatDate(attempt.attemptedAt)}</p>
+          <p className="text-[13px] font-medium text-ink">
+            {formatDate(attempt.attemptedAt)}
+          </p>
           {isHeld ? (
-            <p className="mt-0.5 text-xs text-sub">Held until the Board releases it</p>
+            <p className="mt-0.5 text-base text-sub">{pendingLabel}</p>
           ) : (
-            attempt.bestScore !== undefined && <p className="mt-0.5 text-xs text-sub">Best: {attempt.bestScore}%</p>
+            attempt.bestScore !== undefined && (
+              <p className="mt-0.5 text-xs text-sub">Best: {attempt.bestScore}%</p>
+            )
           )}
         </div>
         <span
@@ -144,9 +183,14 @@ function AttemptCard({ attempt }: { attempt: Attempt }) {
           }
           aria-label={scoreLabel}
         >
-          {isHeld ? "Awaiting release" : `${attempt.score}%`}
+          {isHeld ? pendingLabel : `${attempt.score}%`}
         </span>
       </div>
+      <Button asChild variant="outline" className="mt-3 min-h-11 w-full text-base">
+        <Link href={`/quizzes/${attempt.quizId}/review/${attempt.id}`}>
+          Review attempt
+        </Link>
+      </Button>
     </article>
   );
 }
@@ -169,7 +213,10 @@ function EmptyDashed({ headline, sub }: { headline: string; sub: string }) {
           <path d="M12 7v5l3.5 2" />
         </svg>
       </div>
-      <p className="mb-[5px] text-[14.5px] text-ink" style={{ fontFamily: "var(--font-fraunces), serif" }}>
+      <p
+        className="mb-[5px] text-[14.5px] text-ink"
+        style={{ fontFamily: "var(--font-fraunces), serif" }}
+      >
         {headline}
       </p>
       <p className="mx-auto max-w-[26ch] text-[12px] leading-[1.55] text-sub">{sub}</p>
@@ -193,21 +240,28 @@ export default function HistoryPage() {
 
   const attemptsQuery = useQuery({
     queryKey: ["history", user?.id, user?.role, type, filterId, page],
-    queryFn: () => apiFetch<HistoryResponse>(`/me/attempts${queryString ? `?${queryString}` : ""}`),
+    queryFn: () =>
+      apiFetch<HistoryResponse>(`/me/attempts${queryString ? `?${queryString}` : ""}`),
   });
 
   const attempts = attemptsQuery.data?.data ?? [];
   const meta = attemptsQuery.data?.meta;
-  const filterOptions = isAspirant ? (attemptsQuery.data?.filters.jambSubjects ?? []) : (attemptsQuery.data?.filters.courses ?? []);
+  const filterOptions = isAspirant
+    ? (attemptsQuery.data?.filters.jambSubjects ?? [])
+    : (attemptsQuery.data?.filters.courses ?? []);
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6">
       <div>
-        <h1 className="text-[26px] font-medium leading-tight tracking-[-0.01em] text-ink" style={{ fontFamily: "var(--font-fraunces), serif" }}>
+        <h1
+          className="text-[26px] font-medium leading-tight tracking-[-0.01em] text-ink"
+          style={{ fontFamily: "var(--font-fraunces), serif" }}
+        >
           History
         </h1>
         <p className="mt-2 max-w-2xl break-words text-[13px] leading-relaxed text-sub">
-          Review completed practice and course attempts. Course Quiz scores stay hidden until released.
+          Review completed practice and course attempts. Course Quiz scores stay hidden
+          until released.
         </p>
       </div>
 
@@ -246,7 +300,9 @@ export default function HistoryPage() {
             <SelectValue placeholder={isAspirant ? "All JAMB subjects" : "All courses"} />
           </SelectTrigger>
           <SelectContent className="border-line bg-panel text-ink">
-            <SelectItem value="all">{isAspirant ? "All JAMB subjects" : "All courses"}</SelectItem>
+            <SelectItem value="all">
+              {isAspirant ? "All JAMB subjects" : "All courses"}
+            </SelectItem>
             {filterOptions.map((option) => (
               <SelectItem key={option.id} value={String(option.id)}>
                 {"name" in option ? option.name : option.code}
@@ -267,7 +323,9 @@ export default function HistoryPage() {
         <div role="alert" className="rounded-[18px] border border-line bg-panel p-5">
           <p className="text-sm font-medium text-ink">History couldn&apos;t be loaded.</p>
           <p className="mt-1 break-words text-sm text-sub">
-            {attemptsQuery.error instanceof ApiError ? attemptsQuery.error.message : "Check your connection and try again."}
+            {attemptsQuery.error instanceof ApiError
+              ? attemptsQuery.error.message
+              : "Check your connection and try again."}
           </p>
           <button
             type="button"
@@ -280,7 +338,10 @@ export default function HistoryPage() {
       )}
 
       {attemptsQuery.isSuccess && attempts.length === 0 && (
-        <EmptyDashed headline="No attempts match" sub="Clear filters or complete a quiz — it will appear here." />
+        <EmptyDashed
+          headline="No attempts match"
+          sub="Clear filters or complete a quiz — it will appear here."
+        />
       )}
 
       {attempts.length > 0 && (
@@ -292,20 +353,35 @@ export default function HistoryPage() {
       )}
 
       {attempts.length > 0 && (
-        <div className="hidden overflow-hidden rounded-2xl border border-line bg-panel/50 lg:block" aria-label="Quiz attempt history">
+        <div
+          className="hidden overflow-hidden rounded-2xl border border-line bg-panel/50 lg:block"
+          aria-label="Quiz attempt history"
+        >
           <Table>
             <TableHeader>
               <TableRow className="border-line hover:bg-transparent">
-                <TableHead className="text-[10px] uppercase tracking-[0.08em] text-faint" style={{ fontFamily: "JetBrains Mono, monospace" }}>
+                <TableHead
+                  className="text-[10px] uppercase tracking-[0.08em] text-faint"
+                  style={{ fontFamily: "JetBrains Mono, monospace" }}
+                >
                   Quiz
                 </TableHead>
-                <TableHead className="text-[10px] uppercase tracking-[0.08em] text-faint" style={{ fontFamily: "JetBrains Mono, monospace" }}>
+                <TableHead
+                  className="text-[10px] uppercase tracking-[0.08em] text-faint"
+                  style={{ fontFamily: "JetBrains Mono, monospace" }}
+                >
                   Type
                 </TableHead>
-                <TableHead className="text-[10px] uppercase tracking-[0.08em] text-faint" style={{ fontFamily: "JetBrains Mono, monospace" }}>
+                <TableHead
+                  className="text-[10px] uppercase tracking-[0.08em] text-faint"
+                  style={{ fontFamily: "JetBrains Mono, monospace" }}
+                >
                   Submitted
                 </TableHead>
-                <TableHead className="text-right text-[10px] uppercase tracking-[0.08em] text-faint" style={{ fontFamily: "JetBrains Mono, monospace" }}>
+                <TableHead
+                  className="text-right text-[10px] uppercase tracking-[0.08em] text-faint"
+                  style={{ fontFamily: "JetBrains Mono, monospace" }}
+                >
                   Score
                 </TableHead>
               </TableRow>

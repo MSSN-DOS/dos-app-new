@@ -9,11 +9,8 @@ vi.mock("@/lib/auth/guard", () => ({ requireAuth }));
 vi.mock("@/lib/db", () => ({ getDb: () => db }));
 vi.mock("@/lib/quizzes/access", () => ({ studentCanAccessQuiz }));
 
-import { GET, POST } from "./route";
-import {
-  ForbiddenError,
-  UnauthorizedError,
-} from "@/lib/auth/errors";
+import { GET, POST, PUT } from "./route";
+import { ForbiddenError, UnauthorizedError } from "@/lib/auth/errors";
 import {
   jsonRequest,
   makeDbMock,
@@ -35,6 +32,7 @@ beforeEach(() => {
   vi.useRealTimers();
   vi.clearAllMocks();
   db = makeDbMock();
+  db.transaction.mockImplementation(async (callback) => callback(db));
 });
 
 function stubHappyPath(overrides: Record<string, unknown> = {}) {
@@ -59,7 +57,10 @@ function stubHappyPath(overrides: Record<string, unknown> = {}) {
       },
     ], // open attempt
     [{ id: 10, questionType: "options" }], // attached questions
-    [{ id: 101, questionId: 10, isCorrect: true }], // options
+    [
+      { id: 101, questionId: 10, isCorrect: true },
+      { id: 102, questionId: 10, isCorrect: false },
+    ], // options
     [], // blanks
     [], // existing best score
   ]);
@@ -74,23 +75,30 @@ describe("GET /api/quizzes/[id]/attempt", () => {
     expect(res.status).toBe(401);
   });
 
+  it("returns 403 for an unauthorized role", async () => {
+    requireAuth.mockRejectedValue(new ForbiddenError());
+    expect((await GET(new Request(URL), PARAMS)).status).toBe(403);
+  });
+
   it("starts an attempt with server time and safe question content", async () => {
     requireAuth.mockResolvedValue({ userId: 5, roleId: 2 });
     studentCanAccessQuiz.mockResolvedValue(true);
     stubSelect(db, [
       [{ name: "student" }],
-      [{
-        id: 1,
-        title: "Algebra",
-        instructions: "Answer every question",
-        status: "published",
-        questionCount: 2,
-        timeLimitMinutes: 30,
-        allowMultipleAttempts: true,
-        loseFocusPolicy: "warn",
-        courseId: 5,
-        jambSubjectId: null,
-      }],
+      [
+        {
+          id: 1,
+          title: "Algebra",
+          instructions: "Answer every question",
+          status: "published",
+          questionCount: 2,
+          timeLimitMinutes: 30,
+          allowMultipleAttempts: true,
+          loseFocusPolicy: "warn",
+          courseId: 5,
+          jambSubjectId: null,
+        },
+      ],
       [],
       [
         { id: 10, questionType: "options", bodyRichText: "2 + 2?" },
@@ -128,18 +136,20 @@ describe("GET /api/quizzes/[id]/attempt", () => {
     const startedAt = new Date(Date.now() - 60_000);
     stubSelect(db, [
       [{ name: "student" }],
-      [{
-        id: 1,
-        title: "Algebra",
-        instructions: null,
-        status: "published",
-        questionCount: 2,
-        timeLimitMinutes: 30,
-        allowMultipleAttempts: true,
-        loseFocusPolicy: "ignore",
-        courseId: 5,
-        jambSubjectId: null,
-      }],
+      [
+        {
+          id: 1,
+          title: "Algebra",
+          instructions: null,
+          status: "published",
+          questionCount: 2,
+          timeLimitMinutes: 30,
+          allowMultipleAttempts: true,
+          loseFocusPolicy: "ignore",
+          courseId: 5,
+          jambSubjectId: null,
+        },
+      ],
       [{ id: 77, attemptNumber: 2, startedAt, submittedAt: null }],
       [
         { id: 10, questionType: "options", bodyRichText: "First" },
@@ -161,23 +171,85 @@ describe("GET /api/quizzes/[id]/attempt", () => {
     studentCanAccessQuiz.mockResolvedValue(true);
     stubSelect(db, [
       [{ name: "student" }],
-      [{
-        id: 1,
-        title: "Algebra",
-        instructions: null,
-        status: "published",
-        questionCount: 1,
-        timeLimitMinutes: 30,
-        allowMultipleAttempts: false,
-        loseFocusPolicy: "ignore",
-        courseId: 5,
-        jambSubjectId: null,
-      }],
+      [
+        {
+          id: 1,
+          title: "Algebra",
+          instructions: null,
+          status: "published",
+          questionCount: 1,
+          timeLimitMinutes: 30,
+          allowMultipleAttempts: false,
+          loseFocusPolicy: "ignore",
+          courseId: 5,
+          jambSubjectId: null,
+        },
+      ],
       [{ id: 55, attemptNumber: 1, startedAt: new Date(), submittedAt: new Date() }],
     ]);
 
     const res = await GET(new Request(URL), PARAMS);
     expect(res.status).toBe(409);
+  });
+});
+
+describe("PUT /api/quizzes/[id]/attempt", () => {
+  const quiz = {
+    id: 1,
+    status: "published",
+    quizType: "topic",
+    courseId: 5,
+    jambSubjectId: null,
+    timeLimitSeconds: null,
+  };
+  const auth = { userId: 5, roleId: 2, roleName: "student" };
+  it("requires authentication and an allowed role", async () => {
+    requireAuth.mockRejectedValue(new UnauthorizedError());
+    expect((await PUT(jsonRequest(URL, "PUT", VALID_BODY), PARAMS)).status).toBe(401);
+    requireAuth.mockRejectedValue(new ForbiddenError());
+    expect((await PUT(jsonRequest(URL, "PUT", VALID_BODY), PARAMS)).status).toBe(403);
+  });
+  it("rejects malformed snapshots with field details", async () => {
+    requireAuth.mockResolvedValue(auth);
+    const res = await PUT(jsonRequest(URL, "PUT", { answers: [] }), PARAMS);
+    expect(res.status).toBe(422);
+    expect((await res.json()).error.details).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: "answers" })]),
+    );
+  });
+  it("persists the caller's open attempt without exposing scores", async () => {
+    requireAuth.mockResolvedValue(auth);
+    studentCanAccessQuiz.mockResolvedValue(true);
+    stubSelect(db, [
+      [quiz],
+      [{ id: 77, startedAt: new Date(), submittedAt: null }],
+      [{ id: 10, questionType: "options" }],
+      [{ id: 101, questionId: 10 }],
+    ]);
+    stubUpdate(db, { id: 77 });
+    const res = await PUT(jsonRequest(URL, "PUT", VALID_BODY), PARAMS);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ data: { saved: true } });
+  });
+  it("rejects foreign options with a useful field error", async () => {
+    requireAuth.mockResolvedValue(auth);
+    studentCanAccessQuiz.mockResolvedValue(true);
+    stubSelect(db, [
+      [quiz],
+      [{ id: 77, startedAt: new Date() }],
+      [{ id: 10, questionType: "options" }],
+      [{ id: 102, questionId: 11 }],
+    ]);
+    const res = await PUT(jsonRequest(URL, "PUT", VALID_BODY), PARAMS);
+    expect(res.status).toBe(422);
+    expect((await res.json()).error.details[0].field).toBe("answers");
+    expect(db.update).not.toHaveBeenCalled();
+  });
+  it("returns a conflict when there is no open attempt", async () => {
+    requireAuth.mockResolvedValue(auth);
+    studentCanAccessQuiz.mockResolvedValue(true);
+    stubSelect(db, [[quiz], []]);
+    expect((await PUT(jsonRequest(URL, "PUT", VALID_BODY), PARAMS)).status).toBe(409);
   });
 });
 
@@ -217,10 +289,7 @@ describe("POST /api/quizzes/[id]/attempt", () => {
       ],
     ]);
 
-    const res = await POST(
-      jsonRequest(URL, "POST", { answers: [] }),
-      PARAMS
-    );
+    const res = await POST(jsonRequest(URL, "POST", { answers: [] }), PARAMS);
     expect(res.status).toBe(422);
     const body = await res.json();
     expect(body.error.code).toBe("VALIDATION_ERROR");
@@ -257,20 +326,24 @@ describe("POST /api/quizzes/[id]/attempt", () => {
     studentCanAccessQuiz.mockResolvedValue(true);
     stubSelect(db, [
       [{ name: "student" }],
-      [{
-        id: 1,
-        status: "published",
-        allowMultipleAttempts: false,
-        timeLimitMinutes: 30,
-        courseId: 5,
-        jambSubjectId: null,
-      }],
-      [{
-        id: 77,
-        attemptNumber: 1,
-        startedAt: new Date("2026-08-25T10:30:00.000Z"),
-        submittedAt: null,
-      }],
+      [
+        {
+          id: 1,
+          status: "published",
+          allowMultipleAttempts: false,
+          timeLimitMinutes: 30,
+          courseId: 5,
+          jambSubjectId: null,
+        },
+      ],
+      [
+        {
+          id: 77,
+          attemptNumber: 1,
+          startedAt: new Date("2026-08-25T10:30:00.000Z"),
+          submittedAt: null,
+        },
+      ],
       [{ id: 10, questionType: "options" }],
       [{ id: 101, questionId: 10, isCorrect: true }],
       [],
@@ -369,10 +442,10 @@ describe("POST /api/quizzes/[id]/attempt", () => {
     await POST(
       jsonRequest(URL, "POST", {
         answers: [
-          { questionId: 10, selectedOptionId: 999 }, // wrong option
+          { questionId: 10, selectedOptionId: 102 }, // wrong option belonging to this question
         ],
       }),
-      PARAMS
+      PARAMS,
     );
 
     expect(db.update).toHaveBeenCalledTimes(1);
@@ -405,7 +478,7 @@ describe("POST /api/quizzes/[id]/attempt", () => {
       jsonRequest(URL, "POST", {
         answers: [{ questionId: 20, selectedOptionId: 201 }],
       }),
-      PARAMS
+      PARAMS,
     );
     expect(res.status).toBe(201);
     const body = await res.json();
@@ -442,7 +515,7 @@ describe("POST /api/quizzes/[id]/attempt", () => {
           { questionId: 20, selectedOptionId: 201 },
         ],
       }),
-      PARAMS
+      PARAMS,
     );
     expect(res.status).toBe(201);
   });

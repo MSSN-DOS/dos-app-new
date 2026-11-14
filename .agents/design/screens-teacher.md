@@ -104,33 +104,32 @@ FRAME: New Quiz (modal, then routes to /teacher/quizzes/[id] for full config)
 ---
 
 ### `/teacher/quizzes/[id]` — Quiz builder
-- **Task:** P3-5
-- **Purpose:** Attach questions from the bank, configure everything the quiz needs before publishing.
+- **Task:** P3-5, rebuilt in P12-8 (also used at `/admin/quizzes/[id]`).
+- **Purpose:** Write quiz details and questions, configure settings, preview the student experience, and save a draft or publish.
 
 **Wireframe**
 ```
-FRAME: Quiz Builder — "Course Quiz — Week 4"
-  FIELD: Title -> [ text input ]
-  FIELD: Instructions -> [ rich text: shown to student before starting ]
-  FIELD: Question count -> [ fixed "50" and locked, if Course Quiz | free-form number input, if Topic Quiz ]
-  FIELD: Time limit (minutes) -> [ number input ]
-  FIELD: Pass mark -> [ number input, % ]
-  FIELD: Multiple attempts allowed -> [ toggle ]
-  FIELD: Lose-focus policy -> [ select: Ignore / Warn / Auto-submit ]
-  FIELD (Course Quiz only): Week (Saturday date) -> [ date picker, constrained to Saturdays ]
-
-FRAME: Attach Questions
-  FIELD: Search/filter question bank -> [ by topic, type ]
-  LIST ROW: question preview | [+ Add to quiz]
-  LIST ROW (attached): question preview | [Remove]
-  NOTE: N of {question_count} questions attached.
-
-  ACTION ROW: [Save as draft] [Publish: primary, disabled until question_count is met and all required fields are valid]
+FRAME: Quiz Builder — Draft / Published                         [Preview]
+  DETAILS: optional cover (drop/upload/preview/replace/remove)
+           required short title; rich description and instructions
+           optional duration (hours / minutes / seconds); pass mark (60%)
+  QUESTIONS: total marks [Apply]; [Add from question bank]; [Add new question]
+             collapsible numbered cards; choose type in a dialog
+             True/False | Multiple choice | Fill in gap | Passage | Essay
+             question/options/explanation rich text; correct answer; marks
+             select/bulk delete, duplicate, drag/keyboard/move-button order
+  SETTINGS: searchable collapsible groups; pin to top; save personal defaults
+            attempt rules, signed-in access, scoring/results, WAT schedule
+  ERRORS: inline messages and a list of publishing blockers
+  STICKY ACTIONS: [Save draft] [Publish]
+  PUBLISHED: read-only authoring; essay grading (teacher/Admin)
 ```
 
-**Data / API:** `GET/PATCH /api/teacher/quizzes/[id]`, `GET /api/teacher/questions?...` (for the attach-search), `POST/DELETE /api/teacher/quizzes/[id]/questions`.
+**Data / API:** `GET/PUT /api/teacher/quizzes/[id]/builder` (shared draft/publish Zod, revision conflicts), `POST/DELETE /api/teacher/quizzes/[id]/images` (signed URLs arrive in builder data), `GET/PUT /api/teacher/quiz-preferences`, `GET /api/teacher/questions?...` and question detail for bank copies, `GET/PATCH /api/teacher/quizzes/[id]/grading`. Client requests use TanStack Query and `apiFetch`.
 
-**States:** loading · saving · error · publish-blocked (attached count ≠ required count, or a required field is empty — show which) · attach-search loading/empty.
+**States:** loading/retry, empty questions with CTA, uploading/error, saving/saved/error, invalid draft fields, strict publish blockers, stale-revision conflict, preview introduction/questions/completion, published lock, essay-grading loading/empty/error/saving. Course Quizzes still require exactly 50 questions; passages count their sub-questions. Drafts tolerate unfinished questions and schedules.
+
+**Layout/accessibility:** single column on phones, details/questions plus settings column on desktop. All controls have labels, focus states and 44px targets; dialogs use shadcn focus management. Reorder has keyboard sensors and explicit move buttons. Rich text reuses Tiptap/KaTeX with full formatting, safe private images and fullscreen editing. Both themes use the existing tokens. Signed-in-only access is fixed; Public/Private controls are omitted. Results remain held until manual grading finishes and an Admin releases them. No premium, payment, social, AI-banner or add-on UI.
 
 ---
 

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { hasRichTextContent } from "@/lib/sanitize";
 
 /**
  * Small shared building blocks for the quiz-authoring schemas.
@@ -18,3 +19,7 @@ export const nullableId = z.union([z.coerce.number().int().min(1), z.null()]);
  * because raising a limit can never reject content that already exists.
  */
 export const RICH_TEXT_MAX_LENGTH = 20000;
+
+export function requiredRichTextSchema(message: string) {
+  return z.string().trim().max(RICH_TEXT_MAX_LENGTH).refine(hasRichTextContent, message);
+}

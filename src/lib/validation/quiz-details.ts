@@ -52,6 +52,7 @@ export const quizDetailsSchema = z.object({
     .max(100, "Pass mark cannot exceed 100%")
     .default(60),
   visibility: z.enum(quizVisibilityValues).default("private"),
+  coverImagePath: z.string().regex(/^quizzes\/[1-9]\d*\/[a-zA-Z0-9_-]+\.(png|jpe?g|webp)$/).max(500).nullable().default(null),
 });
 
 export type QuizDetailsInput = z.infer<typeof quizDetailsSchema>;

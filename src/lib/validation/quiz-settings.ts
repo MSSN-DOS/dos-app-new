@@ -20,8 +20,8 @@ export type ReviewPolicy = (typeof reviewPolicyValues)[number];
 
 const settingsFields = {
   /**
-   * Public quizzes are listed for every signed-in student on the quiz's track.
-   * Private quizzes are unlisted and reachable only by enrolled students.
+   * Compatibility field only. Signed-in academic scope governs access; the builder
+   * omits Public/Private controls and does not persist a visibility change.
    */
   visibility: z.enum(quizVisibilityValues).default("private"),
 
@@ -35,7 +35,7 @@ const settingsFields = {
   autoNextQuestion: z.boolean(),
 
   // Access & visibility
-  requireLoginToAttempt: z.boolean(),
+  requireLoginToAttempt: z.literal(true).default(true),
 
   // Scoring & results
   showAnswersAfter: z.enum(reviewPolicyValues),
@@ -107,3 +107,47 @@ export const quizSettingsPublishSchema = z
   });
 
 export type QuizSettingsPublishInput = z.infer<typeof quizSettingsPublishSchema>;
+
+export const quizSettingKeys = [
+  "shuffleQuestions",
+  "shuffleOptions",
+  "allowMultipleAttempts",
+  "allowResume",
+  "permitFocusLoss",
+  "autoNextQuestion",
+  "requireLoginToAttempt",
+  "showAnswersAfter",
+  "showResultAfter",
+  "showCalculator",
+  "deductMarksForWrong",
+  "scheduleEnabled",
+] as const;
+export type QuizSettingKey = (typeof quizSettingKeys)[number];
+
+export const quizPreferencesSchema = z.object({
+  defaults: quizSettingsDraftSchema.nullable().default(null),
+  pinned: z
+    .array(z.enum(quizSettingKeys))
+    .max(quizSettingKeys.length)
+    .default([])
+    .transform((keys) => [...new Set(keys)]),
+});
+export type QuizPreferences = z.infer<typeof quizPreferencesSchema>;
+
+export const initialQuizSettings: QuizSettingsDraftInput = {
+  visibility: "private",
+  shuffleQuestions: false,
+  shuffleOptions: false,
+  allowMultipleAttempts: false,
+  allowResume: true,
+  permitFocusLoss: true,
+  autoNextQuestion: false,
+  requireLoginToAttempt: true,
+  showAnswersAfter: "after_release",
+  showResultAfter: "after_release",
+  showCalculator: false,
+  deductMarksForWrong: false,
+  scheduleEnabled: false,
+  opensAt: null,
+  closesAt: null,
+};

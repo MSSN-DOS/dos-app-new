@@ -21,6 +21,7 @@ describe("quizDetailsSchema — defaults", () => {
       durationSeconds: null,
       passMark: 60,
       visibility: "private",
+      coverImagePath: null,
     });
   });
 

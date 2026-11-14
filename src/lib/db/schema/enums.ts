@@ -25,6 +25,7 @@ export const scopeTypeEnum = pgEnum("scope_type", [
 export const questionTypeEnum = pgEnum("question_type", [
   "fill_in_gap",
   "options",
+  "essay",
 ]);
 
 export const contentStatusEnum = pgEnum("status", ["draft", "published"]);

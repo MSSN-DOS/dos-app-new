@@ -14,7 +14,7 @@ describe("sanitizeRichText", () => {
 
   it("keeps the formatting the toolbar can produce", () => {
     const html =
-      '<p><strong>bold</strong> <em>it</em> <u>u</u> <s>s</s> <mark>m</mark> ' +
+      "<p><strong>bold</strong> <em>it</em> <u>u</u> <s>s</s> <mark>m</mark> " +
       "x<sub>2</sub> y<sup>3</sup></p><hr><blockquote>q</blockquote>" +
       "<ul><li>one</li></ul><ol><li>two</li></ol><pre><code>code()</code></pre>";
 
@@ -31,7 +31,9 @@ describe("sanitizeRichText", () => {
   });
 
   it("drops a style element and its contents", () => {
-    expect(sanitizeRichText("<style>body{display:none}</style><p>a</p>")).toBe("<p>a</p>");
+    expect(sanitizeRichText("<style>body{display:none}</style><p>a</p>")).toBe(
+      "<p>a</p>",
+    );
   });
 
   it("drops iframes, objects, embeds and svg", () => {
@@ -43,8 +45,30 @@ describe("sanitizeRichText", () => {
     ).toBe("<p>a</p>");
   });
 
-  it("drops img entirely — an image is not part of the allowlist yet", () => {
+  it("drops images without an uploaded object reference", () => {
     expect(sanitizeRichText('<img src="x" onerror="alert(1)">')).toBe("");
+  });
+
+  it("retains a signed quiz image and strips executable attributes", () => {
+    const html =
+      '<img src="https://example.supabase.co/storage/v1/object/sign/quiz-images/quizzes/3/image-1.png?token=abc" data-storage-path="quizzes/3/image-1.png" alt="Diagram" onerror="alert(1)" style="width:99999px">';
+    const clean = sanitizeRichText(html);
+    expect(clean).toContain('data-storage-path="quizzes/3/image-1.png"');
+    expect(clean).toContain('alt="Diagram"');
+    expect(clean).not.toContain("onerror");
+    expect(clean).not.toContain("style=");
+    expect(sanitizeRichText(clean)).toBe(clean);
+  });
+
+  it.each([
+    "javascript:alert(1)",
+    "data:image/svg+xml,evil",
+    "https://evil.test/image.png",
+    "https://example.supabase.co/storage/v1/object/sign/quiz-images/quizzes/4/other.png?token=abc",
+  ])("rejects an untrusted or mismatched image source: %s", (src) => {
+    expect(
+      sanitizeRichText(`<img src="${src}" data-storage-path="quizzes/3/image-1.png">`),
+    ).toBe("");
   });
 
   it("drops an unclosed dangerous element", () => {
@@ -52,7 +76,9 @@ describe("sanitizeRichText", () => {
   });
 
   it("discards every attribute on an allowed tag", () => {
-    expect(sanitizeRichText('<p onclick="alert(1)" class="x" id="y">a</p>')).toBe("<p>a</p>");
+    expect(sanitizeRichText('<p onclick="alert(1)" class="x" id="y">a</p>')).toBe(
+      "<p>a</p>",
+    );
     expect(sanitizeRichText('<span style="color:red">a</span>')).toBe("<span>a</span>");
   });
 
@@ -77,7 +103,8 @@ describe("sanitizeRichText", () => {
   });
 
   it("keeps an inline math node with its LaTeX payload", () => {
-    const html = '<p>x = <span data-type="inline-math" data-latex="\\frac{1}{2}"></span></p>';
+    const html =
+      '<p>x = <span data-type="inline-math" data-latex="\\frac{1}{2}"></span></p>';
     expect(sanitizeRichText(html)).toBe(html);
   });
 
@@ -87,12 +114,18 @@ describe("sanitizeRichText", () => {
   });
 
   it("strips a data-type that is not one of the two math nodes", () => {
-    expect(sanitizeRichText('<span data-type="evil" data-latex="x"></span>')).toBe("<span></span>");
-    expect(sanitizeRichText('<div data-type="inline-math" data-latex="x"></div>')).toBe("<div></div>");
+    expect(sanitizeRichText('<span data-type="evil" data-latex="x"></span>')).toBe(
+      "<span></span>",
+    );
+    expect(sanitizeRichText('<div data-type="inline-math" data-latex="x"></div>')).toBe(
+      "<div></div>",
+    );
   });
 
   it("drops a math node that carries no LaTeX payload", () => {
-    expect(sanitizeRichText('<span data-type="inline-math"></span>')).toBe("<span></span>");
+    expect(sanitizeRichText('<span data-type="inline-math"></span>')).toBe(
+      "<span></span>",
+    );
   });
 
   it("escapes a quote in the LaTeX payload so it cannot break out of the attribute", () => {
@@ -106,7 +139,8 @@ describe("sanitizeRichText", () => {
   });
 
   it("leaves an ampersand alone, because LaTeX alignment uses it", () => {
-    const html = '<div data-type="block-math" data-latex="\\begin{matrix}a & b\\end{matrix}"></div>';
+    const html =
+      '<div data-type="block-math" data-latex="\\begin{matrix}a & b\\end{matrix}"></div>';
     expect(sanitizeRichText(html)).toBe(html);
   });
 

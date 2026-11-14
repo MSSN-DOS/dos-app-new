@@ -198,10 +198,12 @@ function StudentForm() {
             placeholder="Select faculty…"
             value={facultyId}
             onChange={onFacultyChange}
-            options={(facultiesQuery.data ?? []).map((item) => ({
-              id: item.id,
-              label: item.name ?? "",
-            }))}
+            options={(facultiesQuery.data ?? [])
+              .filter((item) => item.name?.trim().toLowerCase() !== "engineering")
+              .map((item) => ({
+                id: item.id,
+                label: item.name ?? "",
+              }))}
             loading={facultiesQuery.isPending}
             countLabel="faculty"
             emptyLabel="No faculty matches that search."
@@ -234,7 +236,7 @@ function StudentForm() {
             disabled={departmentId === "" || levelsQuery.isError}
             options={(levelsQuery.data ?? []).map((item) => ({
               id: item.id,
-              label: String(item.value ?? ""),
+              label: item.value == null ? "" : `${item.value}L`,
             }))}
             loading={departmentId !== "" && levelsQuery.isPending}
             countLabel="level"

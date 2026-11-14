@@ -27,6 +27,7 @@ function validationError(err: ZodError): NextResponse {
 }
 
 class NotFoundError extends Error {}
+class PendingGradingError extends Error {}
 
 async function releaseHeldAttempts(
   db: ReturnType<typeof getDb>,
@@ -37,6 +38,7 @@ async function releaseHeldAttempts(
       id: quizAttempts.id,
       userId: quizAttempts.userId,
       weekStart: quizzes.weekStart,
+      score: quizAttempts.score,
     })
     .from(quizAttempts)
     .innerJoin(quizzes, eq(quizAttempts.quizId, quizzes.id))
@@ -52,6 +54,7 @@ async function releaseHeldAttempts(
   if (heldRows.length === 0) {
     throw new NotFoundError();
   }
+  if (heldRows.some((row) => row.score === null)) throw new PendingGradingError();
 
   const attemptIds = heldRows.map((row) => row.id);
   await db
@@ -61,7 +64,7 @@ async function releaseHeldAttempts(
 
   return {
     releasedCount: attemptIds.length,
-    weeks: [...new Set(heldRows.map((row) => row.weekStart as string))],
+    weeks: [...new Set(heldRows.flatMap((row) => row.weekStart ? [row.weekStart] : []))],
     userIds: [...new Set(heldRows.map((row) => row.userId))],
   };
 }
@@ -94,6 +97,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       data: { releasedCount, recomputed },
     });
   } catch (error) {
+    if (error instanceof PendingGradingError) return NextResponse.json({ error: { code: "CONFLICT", message: "Finish teacher essay grading before releasing these results" } }, { status: 409 });
     if (error instanceof NotFoundError) {
       return NextResponse.json(
         { error: { code: "NOT_FOUND", message: "No held attempts match this selection" } },

@@ -71,10 +71,11 @@ const ALLOWED_TAGS = new Set([
   "li",
   "span",
   "div",
+  "img",
 ]);
 
 /** Tags with no closing form. */
-const VOID_TAGS = new Set(["br", "hr"]);
+const VOID_TAGS = new Set(["br", "hr", "img"]);
 
 /**
  * The only tags allowed to carry data, and the exact `data-type` they must
@@ -108,7 +109,10 @@ function stripContentDroppingTags(html: string): string {
 }
 
 function readAttribute(raw: string, name: string): string | null {
-  const pattern = new RegExp(`\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s"'>]+))`, "i");
+  const pattern = new RegExp(
+    `\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s"'>]+))`,
+    "i",
+  );
   const match = pattern.exec(raw);
   if (!match) return null;
   return match[1] ?? match[2] ?? match[3] ?? null;
@@ -122,6 +126,37 @@ function escapeAttributeValue(value: string): string {
 }
 
 function keepAttributes(tag: string, raw: string): string {
+  if (tag === "img") {
+    const path = readAttribute(raw, "data-storage-path");
+    const src = readAttribute(raw, "src");
+    if (
+      !path ||
+      !/^quizzes\/[1-9]\d*\/[a-zA-Z0-9_-]+\.(png|jpe?g|webp)$/.test(path) ||
+      !src
+    )
+      return "";
+    // Only persisted object paths or private Supabase signed object URLs survive.
+    // No data URLs, arbitrary remote trackers, event handlers, classes or styles.
+    if (src !== path) {
+      try {
+        const url = new URL(src);
+        if (
+          url.protocol !== "https:" ||
+          !/^[a-z0-9-]+\.supabase\.co$/.test(url.hostname) ||
+          url.username ||
+          url.password ||
+          url.port ||
+          url.pathname !== `/storage/v1/object/sign/quiz-images/${path}` ||
+          !url.searchParams.get("token")
+        )
+          return "";
+      } catch {
+        return "";
+      }
+    }
+    const alt = readAttribute(raw, "alt") ?? "";
+    return ` src="${escapeAttributeValue(src)}" data-storage-path="${path}" alt="${escapeAttributeValue(alt)}"`;
+  }
   const mathType = MATH_TAGS[tag];
   if (!mathType) return "";
 
@@ -141,6 +176,10 @@ function rewriteTags(html: string): string {
       const tag = rawName.toLowerCase();
       if (!ALLOWED_TAGS.has(tag)) return "";
       if (closing) return VOID_TAGS.has(tag) ? "" : `</${tag}>`;
+      if (tag === "img") {
+        const attributes = keepAttributes(tag, rawAttributes);
+        return attributes ? `<img${attributes}>` : "";
+      }
       if (VOID_TAGS.has(tag)) return `<${tag}>`;
       return `<${tag}${keepAttributes(tag, rawAttributes)}>`;
     },
@@ -163,4 +202,21 @@ export function sanitizeRichText(html: string): string {
   }
 
   return out;
+}
+
+/** Empty editor paragraphs and formatting marks are not publishable content. */
+export function hasRichTextContent(html: string): boolean {
+  const clean = sanitizeRichText(html);
+  if (clean.includes("<img ")) return true;
+  const formulas = [
+    ...clean.matchAll(/data-type="(?:inline|block)-math" data-latex="([^"]*)"/g),
+  ];
+  if (formulas.some((match) => match[1].trim() !== "")) return true;
+  return (
+    clean
+      .replace(/<[^>]*>/g, "")
+      .replace(/&nbsp;|&#160;|&#x0*a0;/gi, " ")
+      .replace(/[\u200B-\u200D\uFEFF]/g, "")
+      .trim() !== ""
+  );
 }

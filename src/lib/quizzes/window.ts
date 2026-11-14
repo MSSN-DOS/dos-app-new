@@ -12,6 +12,7 @@
 export interface QuizWindowOverride {
   opensAt?: Date | null;
   closesAt?: Date | null;
+  scheduleEnabled?: boolean;
 }
 
 /** Resolves the effective open/close instants, applying the admin override where present. */
@@ -42,6 +43,11 @@ export function isCourseQuizWindowOpen(
     process.env.DEV_BYPASS_QUIZ_WINDOW === "true"
   ) {
     return true;
+  }
+  if (override?.scheduleEnabled) {
+    if (!override.opensAt) return false;
+    const t = now.getTime();
+    return t >= override.opensAt.getTime() && (!override.closesAt || t < override.closesAt.getTime());
   }
   if (quizType !== "course" || weekStart === null) return true;
   const { opensAt, closesAt } = resolveCourseQuizWindow(weekStart, override);

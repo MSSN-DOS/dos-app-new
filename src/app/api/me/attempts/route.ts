@@ -99,6 +99,7 @@ export async function GET(request: Request): Promise<NextResponse> {
         jambSubjectId: quizzes.jambSubjectId,
         subjectName: jambSubjects.name,
         weekStart: quizzes.weekStart,
+        showResultAfter: quizzes.showResultAfter,
       })
       .from(quizAttempts)
       .innerJoin(quizzes, eq(quizAttempts.quizId, quizzes.id))
@@ -110,7 +111,7 @@ export async function GET(request: Request): Promise<NextResponse> {
 
     const bestScores = new Map<number, number>();
     for (const row of rows) {
-      if (row.score !== null && (row.quizType === "topic" || row.releasedAt !== null)) {
+      if (row.score !== null && row.releasedAt !== null && row.showResultAfter !== "never") {
         const score = Number(row.score);
         const best = bestScores.get(row.quizId) ?? score;
         bestScores.set(row.quizId, Math.max(best, score));
@@ -141,9 +142,10 @@ export async function GET(request: Request): Promise<NextResponse> {
         subjectName: row.subjectName,
         weekStart: row.weekStart,
         attemptedAt: row.submittedAt?.toISOString() ?? null,
+        scoreStatus: row.score === null ? "awaiting_grading" : row.releasedAt === null ? "held" : row.showResultAfter === "never" ? "hidden" : "released",
       };
 
-      if (row.quizType === "course" && row.releasedAt === null) return base;
+      if (row.releasedAt === null || row.score === null || row.showResultAfter === "never") return base;
 
       return {
         ...base,

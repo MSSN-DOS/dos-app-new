@@ -7,6 +7,7 @@ import {
   text,
   timestamp,
   varchar,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { questionTypeEnum, contentStatusEnum } from "./enums";
@@ -14,11 +15,13 @@ import { courses, topics } from "./courses";
 import { jambSubjects } from "./jamb";
 import { users } from "./auth";
 import { denyPublicPolicy } from "./rls";
+import { quizzes } from "./quizzes";
 
 export const passages = pgTable(
   "passages",
   {
     id: serial("id").primaryKey(),
+    builderQuizId: integer("builder_quiz_id").references((): AnyPgColumn => quizzes.id),
     // A passage lives in the same track as its sub-questions, so ownership and
     // listing rules stay identical to the question bank's.
     courseId: integer("course_id").references(() => courses.id),
@@ -45,6 +48,8 @@ export const questions = pgTable(
   "questions",
   {
     id: serial("id").primaryKey(),
+    // Direct builder questions are private to their quiz; bank edits cannot mutate them.
+    builderQuizId: integer("builder_quiz_id").references((): AnyPgColumn => quizzes.id),
     courseId: integer("course_id").references(() => courses.id),
     jambSubjectId: integer("jamb_subject_id").references(() => jambSubjects.id),
     topicId: integer("topic_id").references(() => topics.id),

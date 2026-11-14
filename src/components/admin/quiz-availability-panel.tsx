@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ApiError, apiFetch } from "@/lib/auth/client-fetch";
+import { scheduleDateValue } from "@/lib/quizzes/settings";
 
 interface AvailabilityProps {
   quizId: number;
@@ -92,6 +93,7 @@ export function QuizAvailabilityPanel({
       setEditedOpen(null);
       setEditedClose(null);
       void queryClient.invalidateQueries({ queryKey: ["teacher", "quiz", quizId] });
+      void queryClient.invalidateQueries({ queryKey: ["quiz-builder", String(quizId)] });
       toast.success(
         result.data.opensAt || result.data.closesAt
           ? "Availability window updated"
@@ -108,8 +110,8 @@ export function QuizAvailabilityPanel({
   const handleSave = () => {
     // datetime-local values are wall-clock in the viewer's zone; toISOString() normalises.
     saveMutation.mutate({
-      opensAt: openValue ? new Date(openValue).toISOString() : null,
-      closesAt: closeValue ? new Date(closeValue).toISOString() : null,
+      opensAt: scheduleDateValue(openValue)?.toISOString() ?? null,
+      closesAt: scheduleDateValue(closeValue)?.toISOString() ?? null,
     });
   };
 

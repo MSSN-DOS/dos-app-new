@@ -47,6 +47,35 @@ Nothing product-specific yet. Get a clean, correctly-configured repo that CI pas
 - **P2-8** End-to-end pass on P1-9's onboarding flow now that real structure data exists.
 - **P2-9** Adopt TanStack Query for client server-state (decided 2026-08-24): provider in root layout, refactor levels/faculties/onboarding pages off manual fetch loops; codify the endpoint-test pattern + TanStack rule in `AGENTS.md`/`README.md`.
 
+## Phase 12 — Quiz authoring rebuild (continuation, 2026-11-13)
+
+This explicitly requested authoring work can proceed independently of the pending
+production deployment and logo tasks. P12-1–P12-3 are already recorded as complete in
+STATE.md. Work through the remaining tasks in order; do not mark one complete until
+lint, typecheck and the tests pass. Preserve custom JWT auth, teacher teaching scope,
+  the Course Quiz count of 50, and the Admin score-release gate (reconfirmed by the
+Board in this session). The current request supersedes the earlier deferral of essay
+questions and quiz images; essays require manual grading and must never be
+automatically awarded a score. Quiz image uploads are separate from Admin-only
+PDF/article resource uploads.
+
+- **P12-1** Pure marks, duration and settings helpers (complete).
+- **P12-2** Additive schema, RLS and generated migration (complete).
+- **P12-3** Shared Zod draft/publish schemas (complete; extend for approved features).
+- **P12-4** Shared Tiptap rich-text editor, KaTeX equations, full formatting toolbar,
+  optional image-upload adapter, fullscreen editing, safe rich-text rendering and tests.
+- **P12-5** Question cards and type chooser, passage sub-questions, manual essays,
+  pointer/keyboard reorder, marks Apply, duplicate/bulk delete, and empty states.
+- **P12-6** Searchable grouped settings, pinning, persisted per-user defaults and scheduling.
+  Includes the authenticated preferences endpoint and its colocated tests because
+  persistence is required to complete this task before P12-7.
+- **P12-7** Authenticated authoring APIs for the complete builder payload, question
+  marks/order, passages, manual grading, private Supabase images and preferences.
+  Every endpoint receives colocated auth, validation and conflict tests.
+- **P12-8** Wire Teacher/Admin pages, quiz details, sticky draft/publish actions with
+  inline errors and blocker summary, student preview and runtime behavior. Update
+  the page specs and verify mobile layout, keyboard access and both themes.
+
 ## Phase 3 — Question bank & quizzes (Teacher)
 
 - **P3-1** `topics` CRUD (Admin and Teacher both, per `DESIGN.md` §3) — page + API.

@@ -1,8 +1,62 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "katex/dist/katex.min.css";
 
 @custom-variant dark (&:is(.dark *));
+
+/* Author-supplied rich text uses the same palette and readable width in both themes. */
+.dos-rich-text {
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}
+.dos-rich-text p + p {
+  margin-top: 0.75rem;
+}
+.dos-rich-text ul {
+  list-style: disc;
+  padding-left: 1.5rem;
+}
+.dos-rich-text ol {
+  list-style: decimal;
+  padding-left: 1.5rem;
+}
+.dos-rich-text blockquote {
+  border-left: 3px solid hsl(var(--border));
+  padding-left: 1rem;
+}
+.dos-rich-text code,
+.dos-rich-text pre {
+  background: hsl(var(--muted));
+  border-radius: 0.25rem;
+  padding: 0.125rem 0.25rem;
+}
+.dos-rich-text pre {
+  white-space: pre-wrap;
+  padding: 0.75rem;
+}
+.dos-rich-text mark {
+  color: hsl(var(--accent-foreground));
+  background: hsl(var(--accent) / 0.3);
+}
+.dos-rich-text hr {
+  margin-block: 1rem;
+  border-top: 1px solid hsl(var(--border));
+}
+.dos-rich-text img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+}
+.dos-rich-text .katex-display {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.dos-rich-text .katex-error {
+  color: hsl(var(--destructive)) !important;
+}
 
 @theme inline {
   --color-background: hsl(var(--background));

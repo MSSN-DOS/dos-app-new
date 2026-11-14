@@ -50,7 +50,7 @@ async function setWindow(
 
   const [updated] = await db
     .update(quizzes)
-    .set({ opensAt: input.opensAt, closesAt: input.closesAt })
+    .set({ opensAt: input.opensAt, closesAt: input.closesAt, scheduleEnabled: false })
     .where(and(eq(quizzes.id, id)))
     .returning({ id: quizzes.id, opensAt: quizzes.opensAt, closesAt: quizzes.closesAt });
 

@@ -1,0 +1,21 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ForbiddenError, UnauthorizedError } from "@/lib/auth/errors";
+import { jsonRequest, makeDbMock, stubSelect, type DbMock } from "@/lib/testing/route-test";
+const requireAuth = vi.hoisted(() => vi.fn()); const getDb = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/auth/guard", () => ({ requireAuth })); vi.mock("@/lib/db", () => ({ getDb }));
+import { GET } from "./route";
+let db: DbMock; const params = { params: Promise.resolve({ id: "1" }) }; const url = "http://localhost/x?attemptId=77";
+const attempt = { id: 77, quizId: 1, userId: 5, submittedAt: new Date(), score: "80.00", releasedAt: null };
+const quiz = { id: 1, title: "Quiz", passMark: 60, showResultAfter: "after_attempt", showAnswersAfter: "never" };
+beforeEach(() => { vi.clearAllMocks(); db = makeDbMock(); getDb.mockReturnValue(db); requireAuth.mockResolvedValue({ userId: 5, roleName: "student" }); });
+describe("attempt review obeys Admin release", () => {
+  it("requires auth", async () => { requireAuth.mockRejectedValueOnce(new UnauthorizedError()); expect((await GET(jsonRequest(url), params)).status).toBe(401); });
+  it("rejects disallowed roles", async () => { requireAuth.mockRejectedValueOnce(new ForbiddenError()); expect((await GET(jsonRequest(url), params)).status).toBe(403); });
+  it.each(["topic", "course"])("never returns held scores or pass/fail for %s quizzes", async (quizType) => { stubSelect(db, [[attempt], [{ ...quiz, quizType }]]); const response = await GET(jsonRequest(url), params); expect(response.status).toBe(200); const data = (await response.json()).data; expect(data.status).toBe("held"); expect(data).not.toHaveProperty("score"); expect(data).not.toHaveProperty("passed"); expect(data.questions).toEqual([]); });
+  it("shows an awaiting-grading state for unmarked essays", async () => { stubSelect(db, [[{ ...attempt, score: null }], [quiz]]); const response = await GET(jsonRequest(url), params); expect((await response.json()).data.status).toBe("awaiting_grading"); });
+  it("returns released score and pass/fail", async () => { stubSelect(db, [[{ ...attempt, releasedAt: new Date() }], [quiz]]); expect((await (await GET(jsonRequest(url), params)).json()).data).toMatchObject({ status: "released", score: 80, passed: true }); });
+  it("hides released results when the teacher disables results", async () => { stubSelect(db, [[{ ...attempt, releasedAt: new Date() }], [{ ...quiz, showResultAfter: "never" }]]); expect((await (await GET(jsonRequest(url), params)).json()).data).not.toHaveProperty("score"); });
+  it("reveals configured answers and explanations without exposing held marks", async () => { stubSelect(db, [[attempt], [{ ...quiz, showAnswersAfter: "after_attempt" }], [{ id: 10, questionType: "options", bodyRichText: "Choose", reasonRichText: "Because" }], [{ questionId: 10, optionText: "Correct", isCorrect: true }], []]); const data = (await (await GET(jsonRequest(url), params)).json()).data; expect(data.questions[0].correctOptions).toEqual(["Correct"]); expect(data.questions[0].reasonRichText).toBe("Because"); expect(data).not.toHaveProperty("score"); });
+  it("does not return another student's attempt", async () => { stubSelect(db, [[{ ...attempt, userId: 9 }]]); expect((await GET(jsonRequest(url), params)).status).toBe(404); });
+  it("validates review ids", async () => { expect((await GET(jsonRequest("http://localhost/x?attemptId=bad"), params)).status).toBe(400); });
+});

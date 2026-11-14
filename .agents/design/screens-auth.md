@@ -130,6 +130,8 @@ so the API needs no change. Searching matches department OR faculty name, so
 
 **Data / API**
 - `GET /api/structure/faculties`, then `.../departments?facultyId=`, then `.../levels?departmentId=` (from `department_levels`) — cascading pickers, each dependent picker's options only fetched once its parent is chosen.
+- The Student faculty picker omits the legacy faculty named exactly `Engineering` (case-insensitive, trimmed). Keep `Faculty of Engineering` / `Faculty of Engineering and Technology`, which owns the complete department catalogue. Department and faculty rows are preserved; this is an onboarding display rule (Board correction, 2026-11-13).
+- Level labels are `100L` and `200L`; available IDs come from the selected department's `department_levels` links. The import links departments only to the served 100/200 levels.
 - Aspirant: `GET /api/structure/departments` (no `facultyId` → every department, each with its `facultyId`) plus `GET /api/structure/faculties` for the group labels. Both are cached under the `["structure", …]` query keys, so they are not refetched per screen.
 - `POST /api/auth/onboarding` — `{ facultyId, departmentId, levelId }` (Student) or `{ aspirationDepartmentId }` (Aspirant). On success, redirect to `/dashboard`.
 

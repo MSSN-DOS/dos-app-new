@@ -1,4 +1,4 @@
-import { and, asc, eq, ilike, notInArray } from "drizzle-orm";
+import { and, asc, eq, ilike, isNull, notInArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 
@@ -85,6 +85,7 @@ export async function GET(request: Request): Promise<NextResponse> {
 
     const ownerQ = ownershipScope(auth);
     const conds = [
+      isNull(questions.builderQuizId),
       courseId !== null ? eq(questions.courseId, Number(courseId)) : undefined,
       jambSubjectId !== null
         ? eq(questions.jambSubjectId, Number(jambSubjectId))

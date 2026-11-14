@@ -9,7 +9,6 @@ export interface DbMock {
   update: Mock;
   delete: Mock;
   transaction: Mock;
-  execute: Mock;
 }
 
 export type Row = Record<string, unknown>;
@@ -28,7 +27,6 @@ export function makeDbMock(): DbMock {
     update: vi.fn(),
     delete: vi.fn(),
     transaction: vi.fn(),
-    execute: vi.fn(),
   };
 }
 

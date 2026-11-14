@@ -84,7 +84,7 @@ export function AppSidebar({
                   (item.href !== homeHref && pathname.startsWith(item.href));
                 return (
                   <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton asChild isActive={active} tooltip={item.label}>
+                    <SidebarMenuButton asChild isActive={active} tooltip={item.label} className="min-h-11">
                       <Link href={item.href}>
                         <item.icon />
                         <span>{item.label}</span>
@@ -100,7 +100,7 @@ export function AppSidebar({
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton tooltip="Log out" onClick={handleLogout}>
+            <SidebarMenuButton tooltip="Log out" onClick={handleLogout} className="min-h-11">
               <LogOut />
               <span>Log out</span>
             </SidebarMenuButton>

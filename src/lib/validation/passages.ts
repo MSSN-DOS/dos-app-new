@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { RICH_TEXT_MAX_LENGTH, nullableId } from "./primitives";
+import { RICH_TEXT_MAX_LENGTH, nullableId, requiredRichTextSchema } from "./primitives";
 
 /**
  * Passage — validation surface.
@@ -54,11 +54,7 @@ export type PassageDraftInput = z.infer<typeof passageDraftSchema>;
 export const passagePublishSchema = z
   .object({
     ...passageFields,
-    bodyRichText: z
-      .string()
-      .trim()
-      .min(1, "Passage text is required before publishing")
-      .max(RICH_TEXT_MAX_LENGTH),
+    bodyRichText: requiredRichTextSchema("Passage text is required before publishing"),
   })
   .superRefine((data, ctx) => requireSingleTrack(data, ctx));
 

@@ -70,3 +70,8 @@ export function formatDurationSeconds(totalSeconds: number): string {
   if (seconds > 0) parts.push(`${seconds}s`);
   return parts.join(" ");
 }
+
+/** NULL is explicitly untimed; undefined only supports older serialized fixtures. */
+export function quizDurationSeconds(quiz: { timeLimitSeconds?: number | null; timeLimitMinutes?: number | null }): number | null {
+  return quiz.timeLimitSeconds === undefined ? quiz.timeLimitMinutes == null ? null : quiz.timeLimitMinutes * 60 : quiz.timeLimitSeconds;
+}

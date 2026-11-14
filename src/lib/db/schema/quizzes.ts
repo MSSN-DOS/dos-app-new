@@ -10,6 +10,7 @@ import {
   timestamp,
   varchar,
   primaryKey,
+  jsonb,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import {
@@ -31,6 +32,9 @@ export const quizzes = pgTable(
     id: serial("id").primaryKey(),
     title: varchar("title", { length: 200 }).notNull(),
     description: text("description"),
+    coverImagePath: varchar("cover_image_path", { length: 500 }),
+    builderRevision: integer("builder_revision").notNull().default(0),
+    scheduleEnabled: boolean("schedule_enabled").notNull().default(false),
     instructions: text("instructions"),
     quizType: quizTypeEnum("quiz_type").notNull(),
     courseId: integer("course_id").references(() => courses.id),
@@ -45,9 +49,9 @@ export const quizzes = pgTable(
     closesAt: timestamp("closes_at", { mode: "date" }),
     questionCount: integer("question_count").notNull().default(50),
     // Deprecated: seconds is the only granularity the builder writes now, because the
-    // duration control has hour/minute/second selects. Kept NOT NULL and populated for
-    // any reader that still does arithmetic on minutes; see DESIGN.md §10.
-    timeLimitMinutes: integer("time_limit_minutes").notNull(),
+    // duration control has hour/minute/second selects. Nullable since 0011 so optional
+    // duration is stored honestly; timed quizzes still populate rounded-up minutes.
+    timeLimitMinutes: integer("time_limit_minutes"),
     // Null means "no time limit". NULL on rows created before migration 0010 could not
     // happen — they were backfilled from time_limit_minutes * 60.
     timeLimitSeconds: integer("time_limit_seconds"),
@@ -143,6 +147,10 @@ export const quizAttempts = pgTable(
     startedAt: timestamp("started_at", { mode: "date" }).notNull().defaultNow(),
     submittedAt: timestamp("submitted_at", { mode: "date" }),
     releasedAt: timestamp("released_at", { mode: "date" }),
+    draftAnswers: jsonb("draft_answers").$type<{
+      questionId: number; selectedOptionId?: number | null;
+      blankAnswers?: Record<string, string> | null; essayAnswer?: string | null;
+    }[]>().notNull().default([]),
   },
   () => [denyPublicPolicy("quiz_attempts")]
 ).enableRLS();
@@ -160,7 +168,9 @@ export const attemptAnswers = pgTable(
     selectedOptionId: integer("selected_option_id").references(
       () => questionOptions.id
     ),
-    textAnswer: varchar("text_answer", { length: 255 }),
+    textAnswer: text("text_answer"),
+    // Only teachers assign this for essays. NULL keeps the attempt ungraded.
+    awardedMarks: integer("awarded_marks"),
     // Deliberate addition beyond the original .sql reference: multi-blank fill-in-the-gap
     // questions need one stored answer row per blank; NULL for options questions and
     // single-blank questions. See DESIGN.md §4 grading rules and STATE.md changelog.
@@ -169,3 +179,11 @@ export const attemptAnswers = pgTable(
   },
   () => [denyPublicPolicy("attempt_answers")]
 ).enableRLS();
+
+export const quizImages = pgTable("quiz_images", {
+  id: serial("id").primaryKey(),
+  quizId: integer("quiz_id").notNull().references(() => quizzes.id, { onDelete: "cascade" }),
+  objectPath: varchar("object_path", { length: 500 }).notNull().unique(),
+  createdBy: integer("created_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+}, () => [denyPublicPolicy("quiz_images")]).enableRLS();

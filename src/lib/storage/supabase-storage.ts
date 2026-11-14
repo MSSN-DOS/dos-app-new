@@ -4,6 +4,7 @@
 // app-scoped access) — downloads go through short-lived signed URLs.
 
 import { RESOURCES_BUCKET } from "./content-paths";
+import { QUIZ_IMAGES_BUCKET } from "@/lib/quizzes/images";
 
 const SIGNED_URL_EXPIRY_SECONDS = 60 * 10;
 
@@ -90,4 +91,27 @@ export async function removeResourceObject(objectPath: string): Promise<void> {
   if (!res.ok && res.status !== 404) {
     throw new Error(`Storage delete failed (${res.status})`);
   }
+}
+
+export async function uploadQuizImageObject(path: string, data: Blob): Promise<void> {
+  const bucket = await storageRequest("POST", "/bucket", JSON.stringify({ name: QUIZ_IMAGES_BUCKET, public: false, file_size_limit: 5242880, allowed_mime_types: ["image/png", "image/jpeg", "image/webp"] }), "application/json");
+  if (!bucket.ok) {
+    const existing = await storageRequest("GET", `/bucket/${QUIZ_IMAGES_BUCKET}`);
+    if (!existing.ok) throw new Error("Quiz image storage is unavailable");
+    const info: unknown = await existing.json();
+    if (!info || typeof info !== "object" || !("public" in info) || info.public !== false) throw new Error("Quiz image bucket must be private");
+  }
+  const response = await storageRequest("POST", `/object/${QUIZ_IMAGES_BUCKET}/${path}`, data, data.type);
+  if (!response.ok) throw new Error("Quiz image upload failed");
+}
+export async function createQuizImageSignedUrl(path: string): Promise<string> {
+  const response = await storageRequest("POST", `/object/sign/${QUIZ_IMAGES_BUCKET}/${path}`, JSON.stringify({ expiresIn: SIGNED_URL_EXPIRY_SECONDS }), "application/json");
+  if (!response.ok) throw new Error("Quiz image link is unavailable");
+  const value: unknown = await response.json();
+  if (!value || typeof value !== "object" || !("signedURL" in value) || typeof value.signedURL !== "string") throw new Error("Invalid quiz image link");
+  return `${storageConfig().url}/storage/v1${value.signedURL}`;
+}
+export async function removeQuizImageObject(path: string): Promise<void> {
+  const response = await storageRequest("DELETE", `/object/${QUIZ_IMAGES_BUCKET}/${path}`);
+  if (!response.ok && response.status !== 404) throw new Error("Quiz image removal failed");
 }

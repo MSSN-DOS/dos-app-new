@@ -1,6 +1,7 @@
 import { z } from "zod";
 
-import { RICH_TEXT_MAX_LENGTH } from "./primitives";
+import { RICH_TEXT_MAX_LENGTH, requiredRichTextSchema } from "./primitives";
+import { hasRichTextContent } from "@/lib/sanitize";
 
 // Questions live on exactly one track — a Course (optionally within a Topic) or a
 // JAMB subject, never both. Mirrors the DB CHECK `questions_track_check`.
@@ -58,7 +59,7 @@ function requireSingleTrack(
 // with exactly the same rules instead of a second copy (AGENTS.md §1).
 export function checkAnswerPayload(
   data: {
-    questionType: "fill_in_gap" | "options";
+    questionType: "fill_in_gap" | "options" | "essay";
     options?: { optionText: string; isCorrect: boolean }[];
     blanks?: { acceptedAnswer: string }[];
   },
@@ -76,7 +77,7 @@ export function checkAnswerPayload(
       });
       return;
     }
-    if (options.some((o) => o.optionText.trim() === "")) {
+    if (options.some((o) => !hasRichTextContent(o.optionText))) {
       ctx.addIssue({
         code: "custom",
         path: ["options"],
@@ -133,7 +134,7 @@ export type QuestionDraftInput = z.infer<typeof questionDraftSchema>;
 export const questionPublishSchema = z
   .object({
     ...questionFields,
-    bodyRichText: z.string().trim().min(1, "Question text is required before publishing").max(RICH_TEXT_MAX_LENGTH),
+    bodyRichText: requiredRichTextSchema("Question text is required before publishing"),
     options: z.array(optionInputSchema).default([]),
     blanks: z.array(blankInputSchema).default([]),
   })

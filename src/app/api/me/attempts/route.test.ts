@@ -36,7 +36,7 @@ describe("GET /api/me/attempts", () => {
     expect(res.status).toBe(403);
   });
 
-  it("omits held Course Quiz scores while returning released and Topic Quiz scores", async () => {
+  it("omits all held scores, including Topic Quizzes, while returning released scores", async () => {
     requireAuth.mockResolvedValue({ userId: 5, roleId: 3 });
     stubSelect(db, [
       [{ name: "student" }],
@@ -100,7 +100,19 @@ describe("GET /api/me/attempts", () => {
     expect(body.data[0]).not.toHaveProperty("score");
     expect(body.data[0]).not.toHaveProperty("bestScore");
     expect(body.data[1]).toMatchObject({ score: 72, bestScore: 72 });
-    expect(body.data[2]).toMatchObject({ score: 64, bestScore: 64 });
+    expect(body.data[2]).not.toHaveProperty("score");
+    expect(body.data[2]).not.toHaveProperty("bestScore");
+  });
+
+  it("omits manually pending and hidden results even after release", async () => {
+    requireAuth.mockResolvedValue({ userId: 5, roleId: 3 });
+    stubSelect(db, [[{ name: "student" }], [
+      { id: 21, quizId: 4, quizType: "topic", score: null, releasedAt: null, submittedAt: new Date(), title: "Essay" },
+      { id: 22, quizId: 5, quizType: "course", score: "90.00", releasedAt: new Date(), submittedAt: new Date(), showResultAfter: "never", title: "Hidden" },
+    ]]);
+    const res = await GET(jsonRequest("http://localhost/api/me/attempts"));
+    expect(res.status).toBe(200);
+    for (const row of (await res.json()).data) { expect(row).not.toHaveProperty("score"); expect(row).not.toHaveProperty("bestScore"); }
   });
 
   it("slices attempts and returns pagination metadata", async () => {

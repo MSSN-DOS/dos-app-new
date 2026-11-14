@@ -1,8 +1,9 @@
 import { z } from "zod";
 
-import { RICH_TEXT_MAX_LENGTH, nullableId } from "./primitives";
+import { RICH_TEXT_MAX_LENGTH, nullableId, requiredRichTextSchema } from "./primitives";
 import { quizDetailsSchema } from "./quiz-details";
 import { blankInputSchema, checkAnswerPayload, optionInputSchema } from "./questions";
+import { initialQuizSettings, quizSettingsDraftSchema, quizSettingsPublishSchema } from "./quiz-settings";
 
 /**
  * Quiz builder — question payload and publish gate.
@@ -28,7 +29,9 @@ import { blankInputSchema, checkAnswerPayload, optionInputSchema } from "./quest
 const quizQuestionFields = {
   // Present when the builder row already maps to a saved question row.
   id: nullableId.optional(),
-  questionType: z.enum(["fill_in_gap", "options"]),
+  questionType: z.enum(["fill_in_gap", "options", "essay"]),
+  clientKey: z.string().min(1).max(100).optional(),
+  passageKey: z.string().min(1).max(100).nullable().optional(),
   passageId: nullableId.optional(),
   bodyRichText: z.string().max(RICH_TEXT_MAX_LENGTH),
   // Surfaced after the attempt when the quiz reveals answers. Never an input to
@@ -52,11 +55,7 @@ export type QuizQuestionDraftInput = z.infer<typeof quizQuestionDraftSchema>;
 export const quizQuestionPublishSchema = z
   .object({
     ...quizQuestionFields,
-    bodyRichText: z
-      .string()
-      .trim()
-      .min(1, "Question text is required before publishing")
-      .max(RICH_TEXT_MAX_LENGTH),
+    bodyRichText: requiredRichTextSchema("Question text is required before publishing"),
     options: z.array(optionInputSchema).default([]),
     blanks: z.array(blankInputSchema).default([]),
     // A published question worth 0 marks can never contribute to the score, which
@@ -72,6 +71,18 @@ export const quizQuestionPublishSchema = z
 
 export type QuizQuestionPublishInput = z.infer<typeof quizQuestionPublishSchema>;
 
+const builderPassageFields = {
+  id: nullableId.optional(),
+  clientKey: z.string().min(1).max(100),
+  title: z.string().trim().max(200).default(""),
+  bodyRichText: z.string().max(RICH_TEXT_MAX_LENGTH),
+};
+export const builderPassageDraftSchema = z.object(builderPassageFields);
+export const builderPassagePublishSchema = z.object({
+  ...builderPassageFields,
+  bodyRichText: requiredRichTextSchema("Passage text is required before publishing"),
+});
+
 /**
  * Whole-quiz payloads. Draft save accepts any number of questions (including none);
  * publishing needs at least one complete question.
@@ -79,16 +90,42 @@ export type QuizQuestionPublishInput = z.infer<typeof quizQuestionPublishSchema>
 export const quizDraftPayloadSchema = z.object({
   details: quizDetailsSchema,
   questions: z.array(quizQuestionDraftSchema).default([]),
+  passages: z.array(builderPassageDraftSchema).default([]),
+  settings: quizSettingsDraftSchema.default(initialQuizSettings),
 });
 
 export type QuizDraftPayloadInput = z.infer<typeof quizDraftPayloadSchema>;
 
-export const quizPublishPayloadSchema = z.object({
-  details: quizDetailsSchema,
-  questions: z
-    .array(quizQuestionPublishSchema)
-    .min(1, "Add at least one question before publishing"),
-});
+export const quizPublishPayloadSchema = z
+  .object({
+    details: quizDetailsSchema,
+    questions: z
+      .array(quizQuestionPublishSchema)
+      .min(1, "Add at least one question before publishing"),
+    passages: z.array(builderPassagePublishSchema).default([]),
+    settings: quizSettingsPublishSchema.default(initialQuizSettings),
+  })
+  .superRefine((data, ctx) => {
+    const keys = new Set(data.passages.map((p) => p.clientKey));
+    data.questions.forEach((q, index) => {
+      if (q.passageKey && !keys.has(q.passageKey)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["questions", index, "passageKey"],
+          message: "The shared passage is missing",
+        });
+      }
+    });
+    data.passages.forEach((p, index) => {
+      if (!data.questions.some((q) => q.passageKey === p.clientKey)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["passages", index],
+          message: "Add a sub-question to this passage",
+        });
+      }
+    });
+  });
 
 export type QuizPublishPayloadInput = z.infer<typeof quizPublishPayloadSchema>;
 

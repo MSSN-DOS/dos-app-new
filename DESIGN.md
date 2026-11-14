@@ -93,7 +93,7 @@ Two types, same `quizzes` table, discriminated by `quiz_type`:
 
 Rules that apply to both:
 - Every attempt is recorded in `quiz_attempts`; only the highest `score` per `(user_id, quiz_id)` is written to `best_scores` and counts toward the official record.
-- Multiple attempts are allowed only if `allow_multiple_attempts = true` on the quiz; when true, questions are reshuffled per attempt from the question bank pool.
+- Multiple attempts are allowed only if `allow_multiple_attempts = true`. Question and answer shuffling are separately configurable, and resume restores the original attempt time and saved responses.
 - A question can't be published with missing text or a required option — enforce this in the Zod schema for the "publish" action specifically (the "save as draft" action has no such requirement).
 - Options questions are single-select only (`attempt_answers.selected_option_id` is a single FK) — the question bank's `is_correct` flag should therefore be true on exactly one `question_option` per question; enforce this at question-creation time, not just at grading time.
 
@@ -102,15 +102,23 @@ Rules that apply to both:
 - **Options:** correct iff `selected_option_id` matches the option where `is_correct = true`.
 - **Fill in the gap:** correct iff the trimmed, lowercased submitted answer matches `question_blanks.accepted_answer` (also trimmed/lowercased), regardless of `question_blanks.case_sensitive` — that column is unused under the resolved case-insensitive-always rule; keep it in the schema for future flexibility but the grading code path ignores it for MVP.
 - Multi-blank questions: every blank must be correct for the question to count as correct (no partial credit for MVP).
-- Score = `(questions answered correctly / question_count) * 100`, stored as `NUMERIC(6,2)` on `quiz_attempts.score`.
-- Grading happens synchronously on submit — no async job queue needed at this scale.
+- **Amended 2026-11-14:** configured whole question marks determine the score: `max(0, earned_marks) / total_marks * 100`, stored as `NUMERIC(6,2)`. Apply total marks distributes whole marks as evenly as possible, with remainder marks assigned to the earliest questions. Gaps remain all-or-nothing. With deductions enabled an incorrect, answered objective question loses its full marks; unanswered questions earn zero.
+- Objective grading happens synchronously on submit. Essays are manually graded by the teacher/Admin, with awards between zero and the question's marks, and are excluded from automatic deductions. Attempts containing essays have `score = NULL` until every essay is graded.
 
 ### Score release
 
-- On submit, `quiz_attempts.submitted_at` and `score` are written immediately, but the score is **not shown to the student/aspirant** until Admin releases it.
+- On submit, `quiz_attempts.submitted_at` is written immediately. Completed objective scores stay held; essays must finish manual grading before Admin release is available. The score and pass/fail are **not sent to the student/aspirant** until release, and can be hidden by the quiz's results setting. Answers and explanations follow their separate review setting.
 - Add a `released_at TIMESTAMP NULL` column to `quiz_attempts` (not in the original schema — this is a deliberate addition, see `DESIGN.md` changelog at the bottom). `NULL` = held.
 - Admin release actions: release one quiz's attempts, or bulk-release all attempts for a given `week_start`. Both just set `released_at = now()` on the matching rows.
 - Until released, the Student/Aspirant UI shows "Score pending" (see wireframe) — the raw score is not sent to the client at all while held, not just hidden in the UI.
+
+### Authoring rebuild (P12, 2026-11-14)
+
+- Teacher/Admin builder supports True/False (an options preset), single-answer multiple choice, `[gap]` fill-in-gap, shared passages with sub-questions, and manually graded essays. Course Quizzes retain exactly 50 questions. Drafts allow incomplete questions; publishing validates every question, passage, schedule and marks allocation.
+- Description, instructions, questions, options, passages and explanations share Tiptap rich text with KaTeX. Cover and inline quiz images use a private Supabase bucket through authenticated, owner-scoped endpoints; this is separate from Admin-only PDF/article resources.
+- Quiz access remains signed-in and scoped to the existing academic track. Public/Private controls are omitted and the compatibility visibility column does not grant access.
+- Teachers may enable a start time and optional end time in Africa/Lagos. An enabled schedule uses the same `opens_at`/`closes_at` columns as the Admin availability override and replaces the week-derived window; without scheduling, Course Quizzes retain their existing default/override window. Duration is optional and stored in seconds; null is untimed.
+- Per-user setting defaults and pins are stored in `user_preferences`. New quizzes apply the current user's defaults, with fresh schedule dates and a default pass mark of 60.
 
 ## 5. Performance tracking
 
@@ -218,21 +226,11 @@ Rules that apply to both:
 - `/api/teacher/topics`, `/api/teacher/questions`, `/api/teacher/quizzes`, `/api/teacher/quizzes/[id]`, `/api/teacher/results/[quizId]`
 - `/api/quizzes` (list, scoped server-side to the caller's role/structure — Student/Aspirant), `/api/quizzes/[id]/attempt` (POST to submit)
 - `/api/me` — current user + profile + CGPA/Post-UTME summary; `PATCH` attaches the second identifier (Students only, decision 3)
-- `/api/health` — **public, unauthenticated** (see below): liveness + database reachability only
 - `/api/resources`
 
 Every route under `/api/admin/*` requires `role = admin`; `/api/teacher/*` requires `role = teacher`; everything else requiring auth checks role inline via `requireAuth`. No route is guarded only by folder convention — the `requireAuth` call inside the handler is the actual enforcement, folder naming is just for humans/agents navigating the repo.
 
-**Public routes (the complete list, amended 2026-11-11).** Exactly three routes are reachable without a token: `POST /api/auth/register`, `POST /api/auth/login`, and `GET /api/health`. Everything else calls `requireAuth()` inside the handler — including `/api/auth/onboarding` and `/api/auth/change-password`, which are authenticated despite living under `/api/auth/`.
-
-`GET /api/health` exists for one operational reason: Supabase pauses Free-plan projects after 7 days without project activity, and restoring one is a manual dashboard step. The route runs a bare `select 1` so scheduled traffic counts as activity, and it deliberately reports nothing beyond that:
-
-- `200 { status: "ok", db: "ok", timestamp }` when the query succeeds.
-- `503 { status: "degraded", db: "unreachable", timestamp }` when it fails — so an uptime monitor alerts on a genuinely dead app.
-- No database version, no driver error text, no environment details. A public endpoint that explains *why* its database is unreachable is an information-disclosure bug with a friendly name.
-- `Cache-Control: no-store` and `dynamic = "force-dynamic"`: if the platform ever served a cached copy, the endpoint would stop resetting the inactivity timer and silently defeat its own purpose.
-
-It is driven by an external uptime monitor — UptimeRobot, configured in its own dashboard, not in this repo (amended 2026-11-11: Vercel Cron was the original driver and was dropped, because a `vercel.json` cron only runs on production deployments of this project and silently stops existing the moment the deploy config changes; a monitor lives outside the app, alerts when the probe fails, and needs no code). Set it to HTTP(s) on `https://<deployed-host>/api/health`, shortest available interval (free tier: 5 minutes), treating non-2xx as down so the 503 doubles as a database-outage alert. There is no rate limit or in-memory throttle on purpose: on serverless a per-instance TTL cache is unreliable security theatre, and `select 1` is cheaper than any other route in this app. It is the only intentionally unauthenticated route with database access; adding another requires the same explicit sign-off, not a copy of this pattern. Note it can only do its job once the app is deployed (P8-5) — before that there is no URL for the monitor to call.
+**Public routes (complete list, amended 2026-11-13).** Only `POST /api/auth/register` and `POST /api/auth/login` are reachable without a token. Every other API handler calls `requireAuth()`, including onboarding and password changes. The Board withdrew the database keep-alive endpoint and its scheduler; do not recreate them.
 
 ## 10. Data model
 

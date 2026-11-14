@@ -16,12 +16,25 @@ describe("renderRichText", () => {
       '<p><span data-type="inline-math" data-latex="x^2"></span></p>',
     );
     expect(out).toContain('class="katex"');
-    expect(out).not.toContain("data-type=\"inline-math\"");
+    expect(out).toContain('class="katex-mathml"');
+    expect(out).toContain('<annotation encoding="application/x-tex">x^2</annotation>');
+    expect(out).not.toContain('data-type="inline-math"');
   });
 
   it("renders a block math node in display mode", () => {
-    const out = renderRichText('<div data-type="block-math" data-latex="\\sum_{i=1}^{n} i"></div>');
+    const out = renderRichText(
+      '<div data-type="block-math" data-latex="\\sum_{i=1}^{n} i"></div>',
+    );
     expect(out).toContain("katex-display");
+  });
+
+  it("decodes serialized ampersands used by aligned equations", () => {
+    const out = renderRichText(
+      '<div data-type="block-math" data-latex="\\begin{matrix}a &amp; b\\\\c &amp; d\\end{matrix}"></div>',
+    );
+    expect(out).toContain("katex-display");
+    expect(out).toContain('encoding="application/x-tex">\\begin{matrix}a &amp; b');
+    expect(out).not.toContain("&amp;amp;");
   });
 
   it("decodes the escaped angle brackets in the payload before rendering", () => {
@@ -33,7 +46,7 @@ describe("renderRichText", () => {
   });
 
   it("sanitises before rendering, so a script never reaches the output", () => {
-    const out = renderRichText('<p>a</p><script>alert(1)</script>');
+    const out = renderRichText("<p>a</p><script>alert(1)</script>");
     expect(out).toBe("<p>a</p>");
   });
 

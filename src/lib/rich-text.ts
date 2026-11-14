@@ -22,22 +22,19 @@ import { sanitizeRichText } from "./sanitize";
 
 const INLINE_MATH_PATTERN =
   /<span data-type="inline-math" data-latex="([^"]*)"><\/span>/g;
-const BLOCK_MATH_PATTERN =
-  /<div data-type="block-math" data-latex="([^"]*)"><\/div>/g;
+const BLOCK_MATH_PATTERN = /<div data-type="block-math" data-latex="([^"]*)"><\/div>/g;
 
 /** Undo the escaping `sanitizeRichText` applied to the attribute value. */
 function decodeAttributeValue(value: string): string {
   return value
     .replace(/&quot;/g, '"')
     .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">");
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
 }
 
 function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 function renderMath(latex: string, displayMode: boolean): string {
@@ -50,9 +47,10 @@ function renderMath(latex: string, displayMode: boolean): string {
       // `trust` stays false: it is what stops \href / \url from becoming a link
       // to an arbitrary URL inside a question body.
       trust: false,
-      // Skip the MathML twin — it doubles the payload and screen readers already
-      // get the LaTeX source from the surrounding text.
-      output: "html",
+      maxSize: 20,
+      maxExpand: 1000,
+      // Keep MathML for screen readers; the visual HTML twin is aria-hidden by KaTeX.
+      output: "htmlAndMathml",
     });
   } catch {
     return `<code class="text-danger">${escapeHtml(source)}</code>`;
