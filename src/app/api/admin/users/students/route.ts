@@ -92,9 +92,9 @@ export async function GET(request: Request): Promise<NextResponse> {
       })
       .from(users)
       .innerJoin(roles, eq(users.roleId, roles.id))
-      .innerJoin(studentProfiles, eq(studentProfiles.userId, users.id))
-      .innerJoin(departments, eq(studentProfiles.departmentId, departments.id))
-      .innerJoin(levels, eq(studentProfiles.levelId, levels.id))
+      .leftJoin(studentProfiles, eq(studentProfiles.userId, users.id))
+      .leftJoin(departments, eq(studentProfiles.departmentId, departments.id))
+      .leftJoin(levels, eq(studentProfiles.levelId, levels.id))
       .where(and(...conditions))
       .orderBy(asc(users.fullName));
 

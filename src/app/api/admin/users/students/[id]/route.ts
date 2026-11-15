@@ -20,7 +20,7 @@ import {
   tourCompletions,
   users,
 } from "@/lib/db/schema";
-import { studentUpdateSchema } from "@/lib/validation/users";
+import { studentDeleteSchema, studentUpdateSchema } from "@/lib/validation/users";
 
 function validationError(err: ZodError): NextResponse {
   return NextResponse.json(
@@ -37,6 +37,12 @@ function validationError(err: ZodError): NextResponse {
     },
     { status: 422 },
   );
+}
+
+function parseStudentId(raw: string): number | undefined {
+  if (!/^[0-9]+$/.test(raw)) return;
+  const id = Number(raw);
+  if (id >= 1 && id <= 2_147_483_647) return id;
 }
 
 function badId(): NextResponse {
@@ -76,13 +82,8 @@ export async function GET(
 ): Promise<NextResponse> {
   try {
     await requireAuth(request, ["admin"]);
-    const id = Number.parseInt((await params).id, 10);
-    if (!Number.isInteger(id) || id < 1) {
-      return NextResponse.json(
-        { error: { code: "VALIDATION_ERROR", message: "Invalid id" } },
-        { status: 400 },
-      );
-    }
+    const id = parseStudentId((await params).id);
+    if (id === undefined) return badId();
 
     const db = getDb();
     const [student] = await db
@@ -97,10 +98,10 @@ export async function GET(
       })
       .from(users)
       .innerJoin(roles, eq(users.roleId, roles.id))
-      .innerJoin(studentProfiles, eq(studentProfiles.userId, users.id))
-      .innerJoin(departments, eq(studentProfiles.departmentId, departments.id))
-      .innerJoin(faculties, eq(departments.facultyId, faculties.id))
-      .innerJoin(levels, eq(studentProfiles.levelId, levels.id))
+      .leftJoin(studentProfiles, eq(studentProfiles.userId, users.id))
+      .leftJoin(departments, eq(studentProfiles.departmentId, departments.id))
+      .leftJoin(faculties, eq(departments.facultyId, faculties.id))
+      .leftJoin(levels, eq(studentProfiles.levelId, levels.id))
       .where(and(eq(users.id, id), eq(roles.name, "student")))
       .limit(1);
 
@@ -165,8 +166,8 @@ export async function PATCH(
 ): Promise<NextResponse> {
   try {
     await requireAuth(request, ["admin"]);
-    const id = Number.parseInt((await params).id, 10);
-    if (!Number.isInteger(id) || id < 1) return badId();
+    const id = parseStudentId((await params).id);
+    if (id === undefined) return badId();
 
     const data = studentUpdateSchema.parse(await request.json());
     const db = getDb();
@@ -211,12 +212,20 @@ export async function DELETE(
 ): Promise<NextResponse> {
   try {
     const actor = await requireAuth(request, ["admin"]);
-    const id = Number.parseInt((await params).id, 10);
-    if (!Number.isInteger(id) || id < 1) return badId();
+    const id = parseStudentId((await params).id);
+    if (id === undefined) return badId();
 
     const db = getDb();
     const student = await findStudent(db, id);
     if (!student) return notFound();
+
+    const confirmation = studentDeleteSchema.parse(await request.json().catch(() => null));
+    if (confirmation.identifier.toLowerCase() !== student.identifier.toLowerCase()) {
+      return NextResponse.json(
+        { error: { code: "CONFIRMATION_MISMATCH", message: "Enter the student's current identifier" } },
+        { status: 409 },
+      );
+    }
 
     await db.transaction(async (tx) => {
       // attempt_answers cascade off quiz_attempts.
@@ -231,11 +240,12 @@ export async function DELETE(
     // TODO(needs-board-decision): no audit-trail table exists yet. Record the actor so a deletion
     // is at least traceable in server logs until the Board decides on a real audit mechanism.
     console.log(
-      `[audit] student hard-deleted: actor=${actor.userId} student=${id} identifier=${student.identifier} at=${new Date().toISOString()}`,
+      `[audit] student hard-deleted: actor=${actor.userId} student=${id} at=${new Date().toISOString()}`,
     );
 
     return new NextResponse(null, { status: 204 });
   } catch (err) {
+    if (err instanceof ZodError) return validationError(err);
     return errorResponse(err);
   }
 }

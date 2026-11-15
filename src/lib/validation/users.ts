@@ -20,3 +20,7 @@ export const aspirantListQuerySchema = z.object({
 export const studentUpdateSchema = z.object({
   isActive: z.boolean(),
 });
+
+export const studentDeleteSchema = z.object({
+  identifier: z.string().trim().min(1),
+});
