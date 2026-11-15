@@ -214,13 +214,33 @@ describe("DELETE /api/admin/users/students/[id]", () => {
     stubDelete(tx, null);
     stubTransaction(db, tx);
 
-    const res = await DELETE(jsonRequest("http://localhost/x", "DELETE"), ctx("7"));
+    const res = await DELETE(
+      jsonRequest("http://localhost/x", "DELETE", { identifier: studentRef[0].identifier }),
+      ctx("7"),
+    );
 
     expect(res.status).toBe(204);
     // quiz_attempts → best_scores → cgpa_records → post_utme_scores → tour_completions → users
     expect(tx.delete).toHaveBeenCalledTimes(6);
     expect(db.transaction).toHaveBeenCalledTimes(1);
     expect(requireAuth).toHaveBeenCalledWith(expect.anything(), ["admin"]);
+  });
+
+  it("requires confirmation before deleting", async () => {
+    stubSelect(db, [studentRef]);
+    const res = await DELETE(jsonRequest("http://localhost/x", "DELETE"), ctx("7"));
+    expect(res.status).toBe(422);
+    expect(db.transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects an identifier that does not match the target student", async () => {
+    stubSelect(db, [studentRef]);
+    const res = await DELETE(
+      jsonRequest("http://localhost/x", "DELETE", { identifier: "WRONG" }),
+      ctx("7"),
+    );
+    expect(res.status).toBe(409);
+    expect(db.transaction).not.toHaveBeenCalled();
   });
 
   it("returns 404 for an unknown or non-student id and deletes nothing", async () => {
@@ -232,8 +252,8 @@ describe("DELETE /api/admin/users/students/[id]", () => {
     expect(db.transaction).not.toHaveBeenCalled();
   });
 
-  it("returns 400 for a malformed id", async () => {
-    const res = await DELETE(jsonRequest("http://localhost/x", "DELETE"), ctx("abc"));
+  it.each(["abc", "7abc", "2147483648"])("returns 400 for malformed id %s", async (id) => {
+    const res = await DELETE(jsonRequest("http://localhost/x", "DELETE"), ctx(id));
     expect(res.status).toBe(400);
   });
 

@@ -43,6 +43,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { apiFetch, ApiError } from "@/lib/auth/client-fetch";
+import { studentDeleteSchema } from "@/lib/validation/users";
 
 interface StudentRow {
   id: number;
@@ -148,8 +149,11 @@ export default function StudentsPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: number) =>
-      apiFetch<undefined>(`/admin/users/students/${id}`, { method: "DELETE" }),
+    mutationFn: async ({ id, identifier }: { id: number; identifier: string }) =>
+      apiFetch<undefined>(`/admin/users/students/${id}`, {
+        method: "DELETE",
+        body: JSON.stringify(studentDeleteSchema.parse({ identifier })),
+      }),
     onSuccess: () => {
       setActionError(null);
       setDeleting(null);
@@ -482,7 +486,7 @@ export default function StudentsPage() {
               onClick={(e) => {
                 // Keep the dialog open while the request runs — it closes from onSuccess.
                 e.preventDefault();
-                if (deleting) deleteMutation.mutate(deleting.id);
+                if (deleting) deleteMutation.mutate({ id: deleting.id, identifier: confirmText });
               }}
             >
               {deleteMutation.isPending ? "Deleting…" : "Delete permanently"}
