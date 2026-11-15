@@ -1,11 +1,28 @@
 "use client";
 
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { Eye } from "lucide-react";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { Eye, ShieldCheck, ShieldOff, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
+import { toast } from "sonner";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,7 +34,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { apiFetch, ApiError } from "@/lib/auth/client-fetch";
 
 interface StudentRow {
@@ -53,13 +77,19 @@ export default function StudentsPage() {
   const [facultyId, setFacultyId] = useState("all");
   const [departmentId, setDepartmentId] = useState("all");
   const [levelId, setLevelId] = useState("all");
+  const [status, setStatus] = useState("all");
   const [page, setPage] = useState(1);
+  const [deleting, setDeleting] = useState<StudentRow | null>(null);
+  const [confirmText, setConfirmText] = useState("");
+  const [actionError, setActionError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   const params = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE) });
   if (search.trim().length > 0) params.set("search", search.trim());
   if (facultyId !== "all") params.set("facultyId", facultyId);
   if (departmentId !== "all") params.set("departmentId", departmentId);
   if (levelId !== "all") params.set("levelId", levelId);
+  if (status !== "all") params.set("status", status);
 
   const query = useQuery({
     queryKey: ["admin", "students", params.toString()],
@@ -89,10 +119,57 @@ export default function StudentsPage() {
       ? allDepartments
       : allDepartments.filter((d) => d.facultyId === Number(facultyId));
 
-  const resetPage = <T,>(setter: (v: T) => void) => (value: T) => {
-    setter(value);
-    setPage(1);
-  };
+  const resetPage =
+    <T,>(setter: (v: T) => void) =>
+    (value: T) => {
+      setter(value);
+      setPage(1);
+    };
+
+  const toggleMutation = useMutation({
+    mutationFn: async ({ id, isActive }: { id: number; isActive: boolean }) =>
+      apiFetch<StudentRow>(`/admin/users/students/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ isActive }),
+      }),
+    onSuccess: (_student, variables) => {
+      setActionError(null);
+      void queryClient.invalidateQueries({ queryKey: ["admin", "students"] });
+      toast.success(variables.isActive ? "Student reactivated" : "Student deactivated");
+    },
+    onError: (err: unknown) => {
+      const message =
+        err instanceof ApiError
+          ? err.message
+          : "Could not update the account. Try again.";
+      setActionError(message);
+      toast.error(message);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) =>
+      apiFetch<undefined>(`/admin/users/students/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      setActionError(null);
+      setDeleting(null);
+      setConfirmText("");
+      void queryClient.invalidateQueries({ queryKey: ["admin", "students"] });
+      toast.success("Student deleted");
+    },
+    onError: (err: unknown) => {
+      const message =
+        err instanceof ApiError
+          ? err.message
+          : "Could not delete the account. Try again.";
+      setActionError(message);
+      toast.error(message);
+    },
+  });
+
+  const canConfirmDelete =
+    deleting !== null &&
+    confirmText.trim().toLowerCase() === deleting.identifier.toLowerCase();
 
   return (
     <div>
@@ -102,8 +179,8 @@ export default function StudentsPage() {
         description="Directory of enrolled students with their performance."
       />
 
-      <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="grid gap-1.5 sm:col-span-2 lg:col-span-1">
+      <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
+        <div className="grid gap-1.5 sm:col-span-2">
           <Label htmlFor="student-search">Search name or matric no.</Label>
           <Input
             id="student-search"
@@ -132,7 +209,10 @@ export default function StudentsPage() {
         </div>
         <div className="grid gap-1.5">
           <Label htmlFor="student-department">Department</Label>
-          <Select value={departmentId} onValueChange={(v) => resetPage(setDepartmentId)(v)}>
+          <Select
+            value={departmentId}
+            onValueChange={(v) => resetPage(setDepartmentId)(v)}
+          >
             <SelectTrigger id="student-department" className="min-h-11 w-full">
               <SelectValue placeholder="All departments" />
             </SelectTrigger>
@@ -162,7 +242,29 @@ export default function StudentsPage() {
             </SelectContent>
           </Select>
         </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="student-status">Status</Label>
+          <Select value={status} onValueChange={(v) => resetPage(setStatus)(v)}>
+            <SelectTrigger id="student-status" className="min-h-11 w-full">
+              <SelectValue placeholder="All statuses" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="inactive">Deactivated</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
+
+      {actionError && (
+        <div
+          role="alert"
+          className="mt-4 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive"
+        >
+          {actionError}
+        </div>
+      )}
 
       <div className="mt-6">
         {query.isPending ? (
@@ -178,7 +280,12 @@ export default function StudentsPage() {
                 ? query.error.message
                 : "Something went wrong"}
             </p>
-            <Button variant="outline" size="sm" className="mt-3 min-h-11" onClick={() => void query.refetch()}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-3 min-h-11"
+              onClick={() => void query.refetch()}
+            >
               Retry
             </Button>
           </div>
@@ -196,6 +303,7 @@ export default function StudentsPage() {
                 setFacultyId("all");
                 setDepartmentId("all");
                 setLevelId("all");
+                setStatus("all");
                 setPage(1);
               }}
             >
@@ -217,33 +325,90 @@ export default function StudentsPage() {
                 {query.data.data.map((student) => (
                   <TableRow key={student.id}>
                     <TableCell>
-                      <p className={`text-base font-medium ${student.isActive ? "" : "line-through text-muted-foreground"}`}>
+                      <p
+                        className={`text-base font-medium ${student.isActive ? "" : "text-muted-foreground"}`}
+                      >
                         {student.fullName}
                       </p>
-                      <p className="text-sm text-muted-foreground">{student.identifier}</p>
+                      <div className="mt-1 flex flex-wrap items-center gap-2">
+                        <p className="text-sm text-muted-foreground">
+                          {student.identifier}
+                        </p>
+                        {!student.isActive && (
+                          <Badge variant="secondary" className="text-xs">
+                            Deactivated
+                          </Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
-                      {student.departmentName ?? "—"} · {student.levelValue ? `${student.levelValue}L` : "—"}
+                      {student.departmentName ?? "—"} ·{" "}
+                      {student.levelValue ? `${student.levelValue}L` : "—"}
                     </TableCell>
                     <TableCell className="tabular-nums">
                       {student.currentCgpa != null
-                        ? (Number(student.currentCgpa) > 5 ? Number(student.currentCgpa) / 20 : Number(student.currentCgpa)).toFixed(2)
+                        ? (Number(student.currentCgpa) > 5
+                            ? Number(student.currentCgpa) / 20
+                            : Number(student.currentCgpa)
+                          ).toFixed(2)
                         : "—"}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button asChild variant="outline" size="sm" className="min-h-11">
-                        <Link href={`/admin/students/${student.id}`}>
-                          <Eye aria-hidden="true" />
-                          View
-                        </Link>
-                      </Button>
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        <Button asChild variant="outline" size="sm" className="min-h-11">
+                          <Link href={`/admin/students/${student.id}`}>
+                            <Eye aria-hidden="true" />
+                            View
+                          </Link>
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="min-h-11"
+                          disabled={toggleMutation.isPending}
+                          onClick={() =>
+                            toggleMutation.mutate({
+                              id: student.id,
+                              isActive: !student.isActive,
+                            })
+                          }
+                        >
+                          {student.isActive ? (
+                            <>
+                              <ShieldOff aria-hidden="true" />
+                              Deactivate
+                            </>
+                          ) : (
+                            <>
+                              <ShieldCheck aria-hidden="true" />
+                              Reactivate
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="min-h-11 text-destructive"
+                          onClick={() => {
+                            setActionError(null);
+                            setConfirmText("");
+                            setDeleting(student);
+                          }}
+                        >
+                          <Trash2 aria-hidden="true" />
+                          Delete
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
             {query.data.meta.totalPages > 1 && (
-              <nav className="flex items-center justify-between gap-3 border-t p-3" aria-label="Students pagination">
+              <nav
+                className="flex items-center justify-between gap-3 border-t p-3"
+                aria-label="Students pagination"
+              >
                 <Button
                   variant="outline"
                   className="min-h-11"
@@ -268,6 +433,63 @@ export default function StudentsPage() {
           </div>
         )}
       </div>
+
+      <AlertDialog
+        open={deleting !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleting(null);
+            setConfirmText("");
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {deleting?.fullName}?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-sm text-muted-foreground">
+                <p>
+                  This permanently removes the account, its quiz attempts, scores and CGPA
+                  history. It cannot be undone — if you only need to lock them out,
+                  deactivate instead.
+                </p>
+                <p>
+                  Rankings are calculated live, so past leaderboard standings that
+                  included this student will change retroactively.
+                </p>
+                <p>
+                  Type <span className="font-semibold">{deleting?.identifier}</span> to
+                  confirm.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="grid gap-1.5">
+            <Label htmlFor="delete-confirm">Matric number</Label>
+            <Input
+              id="delete-confirm"
+              value={confirmText}
+              autoComplete="off"
+              className="min-h-11"
+              onChange={(e) => setConfirmText(e.target.value)}
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="min-h-11">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="min-h-11 bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={!canConfirmDelete || deleteMutation.isPending}
+              onClick={(e) => {
+                // Keep the dialog open while the request runs — it closes from onSuccess.
+                e.preventDefault();
+                if (deleting) deleteMutation.mutate(deleting.id);
+              }}
+            >
+              {deleteMutation.isPending ? "Deleting…" : "Delete permanently"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
