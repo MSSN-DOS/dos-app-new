@@ -158,6 +158,15 @@ Rules that apply to both:
 6. Every `/api` route (except `register`/`login`) verifies the JWT server-side via a shared `requireAuth(request, allowedRoles: Role[])` helper in `lib/auth/guard.ts`, which throws a typed `UnauthorizedError`/`ForbiddenError` caught by a shared error handler. No route should hand-roll its own auth check.
 - Admin accounts and Teacher accounts are **not self-registered**. Admin is bootstrap-seeded (`pnpm db:seed`); Teacher accounts are created by an Admin from `/admin/teachers` (`identifier_type = 'staff_id'`, Admin sets an initial password the Teacher changes on first login — first-login-forces-password-change is a nice-to-have, not required for MVP, track it in `STATE.md` as optional).
 
+## 7a. Removing a Student account
+
+An Admin can remove a Student at any time, in one of two ways:
+
+- **Deactivate** (`PATCH /api/admin/users/students/[id]` `{ isActive: false }`) — reversible. Login already rejects inactive accounts; `requireAuth()` also re-reads the account on every request, so an existing token stops working immediately rather than at its 7-day expiry. Attempts, scores and CGPA are untouched, and reactivating restores the account exactly as it was.
+- **Hard delete** (`DELETE /api/admin/users/students/[id]`) — permanent, and only reachable after the API validates the typed identifier against the target student. One transaction removes `quiz_attempts` (their `attempt_answers` cascade), `best_scores`, `cgpa_records`, `post_utme_scores`, `tour_completions`, then the `users` row (`student_profiles` and preferences cascade).
+
+Deletion is not blocked by held/unreleased attempts: with the attempt gone, an unreleased score can never be released to anyone. It is also not blocked by CGPA or leaderboard history — rankings are computed live from `cgpa_records` in `GET /api/admin/leaderboard`, so past-week standings change retroactively when a Student is deleted. That drift is accepted; the confirm dialog says so instead of pretending otherwise. Students author no quizzes, questions, topics or content items, so no authored-content FK blocks the delete (the equivalent block exists for Teachers and is unrelated to this flow).
+
 ## 8. Active semester
 
 - `semester_settings` table (new — add to schema, not in the original `.sql`): single row, `id = 1`, columns `active_semester TEXT CHECK (IN ('harmattan','rain'))`, `mode TEXT CHECK (IN ('auto','manual'))` default `'auto'`, `manual_override TEXT NULL`.
@@ -331,4 +340,5 @@ Icons: **lucide-react only** — the one sanctioned icon library (shadcn uses it
 
 - Added `quiz_attempts.released_at` and `semester_settings` — not in `DOS-Site-Database-Schema.sql`, both needed to implement resolved decisions #10 and #11 above.
 - Post-UTME conversion formula (`raw / 2`) is a placeholder pending explicit Board confirmation — everything else in this document is resolved and final for MVP scope.
+- Added §7a (Student deactivate / hard delete, Board decision 2026-11-15) and tightened §7 step 6: `requireAuth()` now re-reads the account row, so a deactivated or deleted account is rejected on its next request instead of continuing to work until token expiry.
 - Added `quizzes.opens_at` / `quizzes.closes_at` (nullable, plus a `quizzes_window_check` CHECK constraint) — not in `DOS-Site-Database-Schema.sql`. Needed to implement the 2026-09-28 Board amendment to resolved decision #6, which made the weekly Course Quiz window Admin-overridable instead of fixed. Resolution lives in `lib/quizzes/window.ts` (`resolveCourseQuizWindow`); the API is `PATCH /api/admin/quizzes/[id]/window`, Admin-only, Course Quizzes only (Topic Quizzes have no window → 409).

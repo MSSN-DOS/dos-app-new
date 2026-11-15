@@ -123,6 +123,33 @@ PDF/article resource uploads.
 - **P8-5** Vercel deployment: env vars set, connected to Supabase project, first production deploy.
 - **P8-6** Replace placeholder Vercel-triangle logo once MSSN supplies a real one (tracked here so it isn't forgotten, not blocking launch).
 
+## Phase 13 — Admin student lifecycle: deactivate and hard delete (2026-11-15)
+
+Board decision: an Admin must be able to take a Student out of the platform at any time, regardless
+of whether they have attempts, held scores or a CGPA history. Both outcomes ship — **deactivate**
+(reversible, the default) and **hard delete** (permanent). Deleting must not be blocked by
+performance data the way Teacher deletion is blocked by authored content: a Student authors
+nothing, so their records are deleted with them.
+
+- **P13-1** Make `requireAuth()` read live account state: one `users ⋈ roles` query returning the
+  role name and `is_active`, so a deactivated or deleted account is rejected on its next request
+  instead of riding a 7-day token to expiry. Deleted/nonexistent and deactivated both answer 401,
+  not 403 — the token no longer represents a usable account. Add the missing unit test for the
+  guard.
+- **P13-2** `PATCH /api/admin/users/students/[id]` — `{ isActive }` only (mirrors the Teacher
+  toggle). Deactivation is the reversible off-switch; it does not touch attempts or scores, so
+  reactivating restores the account exactly as it was.
+- **P13-3** `DELETE /api/admin/users/students/[id]` — one transaction removing the student's
+  `quiz_attempts` (their `attempt_answers` cascade), `best_scores`, `cgpa_records`,
+  `post_utme_scores`, `tour_completions`, then the `users` row (`student_profiles` and any
+  preferences cascade). No approval queue, no state-based blocking.
+- **P13-4** Wire `/admin/students`: status filter (all / active / deactivated), status badge,
+  Deactivate/Reactivate as the normal action and Delete behind a separate danger dialog whose
+  confirm button stays disabled until the Admin types the student's identifier. The dialog states
+  that historical leaderboard rows for past weeks will change because rankings are computed live.
+- **P13-5** Endpoint tests for the two new handlers plus the status filter: 401, 403, happy paths,
+  Zod → 422 with `error.details`, 404 for an unknown or non-Student id.
+
 ---
 
 ## Explicitly out of scope for MVP (don't build these unless `PLAN.md` is updated to add them)

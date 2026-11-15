@@ -56,6 +56,7 @@ export async function GET(request: Request): Promise<NextResponse> {
       facultyId: url.searchParams.get("facultyId") ?? undefined,
       departmentId: url.searchParams.get("departmentId") ?? undefined,
       levelId: url.searchParams.get("levelId") ?? undefined,
+      status: url.searchParams.get("status") ?? undefined,
     });
     if (!query.success) return validationError(query.error);
 
@@ -63,7 +64,10 @@ export async function GET(request: Request): Promise<NextResponse> {
     const search = query.data.search;
     if (search !== undefined && search.length > 0) {
       const pattern = `%${search}%`;
-      const searchCondition = or(ilike(users.fullName, pattern), ilike(users.identifier, pattern));
+      const searchCondition = or(
+        ilike(users.fullName, pattern),
+        ilike(users.identifier, pattern),
+      );
       if (searchCondition) conditions.push(searchCondition);
     }
     if (query.data.facultyId !== undefined)
@@ -72,6 +76,9 @@ export async function GET(request: Request): Promise<NextResponse> {
       conditions.push(eq(studentProfiles.departmentId, query.data.departmentId));
     if (query.data.levelId !== undefined)
       conditions.push(eq(studentProfiles.levelId, query.data.levelId));
+    // Omitted status means both — deactivated students never vanish from the directory silently.
+    if (query.data.status !== undefined)
+      conditions.push(eq(users.isActive, query.data.status === "active"));
 
     const db = getDb();
     const rows = await db
@@ -85,9 +92,9 @@ export async function GET(request: Request): Promise<NextResponse> {
       })
       .from(users)
       .innerJoin(roles, eq(users.roleId, roles.id))
-      .innerJoin(studentProfiles, eq(studentProfiles.userId, users.id))
-      .innerJoin(departments, eq(studentProfiles.departmentId, departments.id))
-      .innerJoin(levels, eq(studentProfiles.levelId, levels.id))
+      .leftJoin(studentProfiles, eq(studentProfiles.userId, users.id))
+      .leftJoin(departments, eq(studentProfiles.departmentId, departments.id))
+      .leftJoin(levels, eq(studentProfiles.levelId, levels.id))
       .where(and(...conditions))
       .orderBy(asc(users.fullName));
 
@@ -96,16 +103,26 @@ export async function GET(request: Request): Promise<NextResponse> {
     const currentCgpa = new Map<number, string>();
     if (rows.length > 0) {
       const records = await db
-        .select({ userId: cgpaRecords.userId, weekStart: cgpaRecords.weekStart, cgpaValue: cgpaRecords.cgpaValue })
+        .select({
+          userId: cgpaRecords.userId,
+          weekStart: cgpaRecords.weekStart,
+          cgpaValue: cgpaRecords.cgpaValue,
+        })
         .from(cgpaRecords)
-        .where(inArray(cgpaRecords.userId, rows.map((r) => r.id)))
+        .where(
+          inArray(
+            cgpaRecords.userId,
+            rows.map((r) => r.id),
+          ),
+        )
         .orderBy(asc(cgpaRecords.userId), asc(cgpaRecords.weekStart));
       for (const rec of records) currentCgpa.set(rec.userId, rec.cgpaValue); // last = latest week
     }
 
     const data = rows.map((row) => {
       const raw = currentCgpa.get(row.id) ?? null;
-      const current = raw !== null && Number(raw) > 5 ? (Math.min(5, Number(raw) / 20)).toFixed(2) : raw;
+      const current =
+        raw !== null && Number(raw) > 5 ? Math.min(5, Number(raw) / 20).toFixed(2) : raw;
       return { ...row, currentCgpa: current };
     });
     return NextResponse.json(paginate(data, pagination.params));

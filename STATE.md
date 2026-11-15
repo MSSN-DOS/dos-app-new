@@ -301,6 +301,22 @@ Scope decisions taken before any code:
 
 ---
 
+## Phase 13 — Admin student lifecycle: deactivate and hard delete
+
+Board decision (2026-11-15): an Admin can take a Student out of the platform at any time — no
+state-based blocking, no approval queue. Deactivate is the reversible default; hard delete is
+permanent and lives behind a separate confirmation. Deleting a Student deletes their performance
+records with them (Students author no quizzes/topics/content, so unlike Teacher deletion there is
+nothing that legitimately blocks it). Held scores do not block deletion: an orphaned unreleased
+attempt could never be released to anyone. Past-week leaderboard rows change after a hard delete
+because rankings are computed live from `cgpa_records` — accepted, and warned about in the dialog.
+
+- [x] P13-1 — Live account state in `requireAuth()` (existence + `is_active` in the roles query) and a guard unit test
+- [x] P13-2 — `PATCH /api/admin/users/students/[id]` accepting `{ isActive }`
+- [x] P13-3 — `DELETE /api/admin/users/students/[id]` transactional hard delete in FK order
+- [x] P13-4 — `/admin/students` status filter + badge, Deactivate/Reactivate action, typed-identifier delete dialog
+- [x] P13-5 — Endpoint tests: 401, 403, happy paths, 422 `error.details`, 404; status-filter test
+
 ## Open items still needing a real answer from the Board (not blocking dev, but don't let these go silently forgotten)
 
 - [x] Confirm Post-UTME conversion formula (P5-3) — confirmed 2026-08-25: aggregate is out of 100, conversion is the identity (best_score is already a percentage = correct × 2 for the 50-question quiz)
