@@ -1,4 +1,3 @@
-import { and, asc, eq, type SQL } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 
@@ -6,11 +5,11 @@ import { errorResponse } from "@/lib/api/response";
 import { paginate, parsePagination } from "@/lib/api/pagination";
 import { ForbiddenError } from "@/lib/auth/errors";
 import { requireAuth } from "@/lib/auth/guard";
-import { ownershipScope } from "@/lib/auth/ownership";
 import { getTeachingScope, isTrackAllowed } from "@/lib/auth/teaching-scope";
 import { getDb } from "@/lib/db";
-import { courses, jambSubjects, quizzes } from "@/lib/db/schema";
-import { quizCreateSchema } from "@/lib/validation/quizzes";
+import { quizzes } from "@/lib/db/schema";
+import { listAuthoringQuizzes } from "@/lib/db/quiz-list";
+import { quizCreateSchema, quizListFiltersSchema } from "@/lib/validation/quizzes";
 import { newQuizSettings } from "@/lib/db/quiz-preferences";
 
 function validationError(err: ZodError): NextResponse {
@@ -33,7 +32,6 @@ function validationError(err: ZodError): NextResponse {
 export async function GET(request: Request): Promise<NextResponse> {
   try {
     const auth = await requireAuth(request, ["admin", "teacher"]);
-    const db = getDb();
     const params = new URL(request.url).searchParams;
     const pagination = parsePagination(params);
     if (!pagination.ok) {
@@ -48,52 +46,12 @@ export async function GET(request: Request): Promise<NextResponse> {
         { status: 422 },
       );
     }
-    const typeParam = params.get("type");
-    const courseIdParam = params.get("courseId");
-
-    const conds: SQL[] = [];
-    if (typeParam === "topic" || typeParam === "course") {
-      conds.push(eq(quizzes.quizType, typeParam));
-    }
-    if (courseIdParam && /^\d+$/.test(courseIdParam)) {
-      conds.push(eq(quizzes.courseId, Number(courseIdParam)));
-    }
-    const owner = ownershipScope(auth);
-    if (owner !== null) conds.push(eq(quizzes.createdBy, owner));
-
-    const base = db
-      .select({
-        id: quizzes.id,
-        title: quizzes.title,
-        quizType: quizzes.quizType,
-        courseId: quizzes.courseId,
-        jambSubjectId: quizzes.jambSubjectId,
-        topicId: quizzes.topicId,
-        weekStart: quizzes.weekStart,
-        questionCount: quizzes.questionCount,
-        timeLimitMinutes: quizzes.timeLimitMinutes,
-        passMark: quizzes.passMark,
-        allowMultipleAttempts: quizzes.allowMultipleAttempts,
-        loseFocusPolicy: quizzes.loseFocusPolicy,
-        instructions: quizzes.instructions,
-        description: quizzes.description,
-        status: quizzes.status,
-        courseCode: courses.code,
-        subjectName: jambSubjects.name,
-        createdBy: quizzes.createdBy,
-        createdAt: quizzes.createdAt,
-      })
-      .from(quizzes)
-      .leftJoin(courses, eq(quizzes.courseId, courses.id))
-      .leftJoin(jambSubjects, eq(quizzes.jambSubjectId, jambSubjects.id));
-
-    const rows =
-      conds.length > 0
-        ? await base.where(and(...conds)).orderBy(asc(quizzes.id))
-        : await base.orderBy(asc(quizzes.id));
+    const filters = quizListFiltersSchema.parse(Object.fromEntries(params));
+    const rows = await listAuthoringQuizzes(auth, filters);
 
     return NextResponse.json(paginate(rows, pagination.params));
   } catch (err) {
+    if (err instanceof ZodError) return validationError(err);
     return errorResponse(err);
   }
 }

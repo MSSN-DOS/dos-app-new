@@ -79,6 +79,20 @@ PDF/article resource uploads.
   verify draft/publish persistence, private Storage, defaults, attempts, weighted
   grading, manual essays and Admin release. Fix failures with regression tests.
   Use isolated synthetic records and exact-ID cleanup. Do not deploy production.
+- **P12-10** Mobile-first quiz authoring UI (scope expanded by the Board, 2026-11-16).
+  Preserve the verified shadcn switch correction with separate 44px clickable labels.
+  Apply the supplied Quizboot.html layout to the Teacher/Admin quiz list and builder:
+  compact rows, search/filter chips, Questions/Settings/Results tabs, a summary panel
+  and compact question cards. Make the shared Add Question chooser a scrollable phone
+  sheet and centered desktop dialog. Reuse the five supported types, private images,
+  grading/release rules, DOS theme tokens and existing APIs. No auto-save claim,
+  unpublish, multi-answer/numeric types or print/PDF functionality is added.
+  Correct the existing Teacher header's tablet overflow with compact, accessible
+  navigation labels; keep the current shell and routes.
+  Restore known-clean tooling configs and quarantine detected auto-run artifacts as
+  a prerequisite for safe verification. Test meaningful interactions first, then run
+  lint/typecheck and the full suite once; verify mobile/tablet/desktop and both themes.
+  This explicitly requested follow-up is independent of deployment and logo tasks.
 
 ## Phase 14 — Question-bank types and private images (2026-11-15)
 

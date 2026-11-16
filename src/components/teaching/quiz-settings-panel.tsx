@@ -69,13 +69,15 @@ export function QuizSettingsPanel({
               {setting.description}
             </p>
           </div>
-          <div className="flex min-h-11 items-center">
+          <Label
+            htmlFor={id}
+            className="flex size-11 shrink-0 cursor-pointer items-center justify-center has-[:disabled]:cursor-not-allowed"
+          >
             <Switch
               id={id}
               checked={checked}
               disabled={setting.key === "requireLoginToAttempt"}
               aria-describedby={`${id}-description`}
-              className="min-h-11 min-w-14 data-[state=checked]:bg-brand"
               onCheckedChange={(enabled) => {
                 if (
                   setting.key === "showAnswersAfter" ||
@@ -98,7 +100,7 @@ export function QuizSettingsPanel({
                 else onChange({ ...value, [setting.key]: enabled });
               }}
             />
-          </div>
+          </Label>
           <Button
             type="button"
             variant="ghost"

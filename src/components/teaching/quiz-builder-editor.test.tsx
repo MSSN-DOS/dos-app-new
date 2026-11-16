@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { quizBuilderDocumentSchema } from "@/lib/validation/quiz-builder";
@@ -85,6 +85,43 @@ beforeEach(() => {
   );
 });
 describe("quiz authoring integration", () => {
+  it("preserves edits across tabs and saves a question chosen from the shared dialog", async () => {
+    mount(true);
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Settings" }));
+    fireEvent.change(screen.getByLabelText("Title (required)"), {
+      target: { value: "Updated engineering quiz" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Scoring & results" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Show result after attempt" }));
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Questions" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add new question" }));
+    fireEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Essay",
+      }),
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Settings" }));
+    expect(screen.getByLabelText("Title (required)")).toHaveValue(
+      "Updated engineering quiz",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+    await waitFor(() =>
+      expect(apiFetch.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(true),
+    );
+    const call = apiFetch.mock.calls.find(([, init]) => init?.method === "PUT");
+    expect(JSON.parse(call?.[1].body ?? "{}")).toMatchObject({
+      action: "draft",
+      payload: {
+        details: { title: "Updated engineering quiz" },
+        settings: { showResultAfter: "never" },
+        questions: [{ questionType: "essay" }, { questionType: "essay" }],
+      },
+    });
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Save draft" })).toBeEnabled(),
+    );
+  }, 30000);
   it("saves incomplete drafts with the revision while publishing remains blocked", async () => {
     mount();
     expect(screen.getByRole("button", { name: "Publish" })).toBeDisabled();
@@ -99,7 +136,9 @@ describe("quiz authoring integration", () => {
       revision: 3,
       payload: { questions: [] },
     });
-    await waitFor(() => expect(screen.getByRole("button", { name: "Save draft" })).toBeEnabled());
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Save draft" })).toBeEnabled(),
+    );
   }, 30000);
   it("publishes a complete essay without inventing an automatic answer", async () => {
     mount(true);
@@ -113,7 +152,9 @@ describe("quiz authoring integration", () => {
       action: "publish",
       payload: { questions: [{ questionType: "essay", marks: 5, options: [] }] },
     });
-    await waitFor(() => expect(screen.getByRole("button", { name: "Publish" })).toBeEnabled());
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Publish" })).toBeEnabled(),
+    );
   }, 30000);
   it("previews the student introduction and the manually graded question", async () => {
     mount(true);

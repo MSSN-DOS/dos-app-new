@@ -330,6 +330,32 @@ Scope decisions taken before any code:
     eligible Board course; it does not invent a session or change that schema.
     TODO(needs-board-decision): reconcile academic-session schema separately.
 
+- [x] P12-10 — Mobile-first quiz list, builder and Add Question dialog
+  - Quizboot reference applied with DOS tokens: compact quiz rows, working search,
+    Course/Topic/Drafts filters and pagination, and responsive New Quiz creation.
+    Shared Zod filters and Drizzle list helpers preserve Teacher ownership and escape
+    literal search characters. Subject/topic loading and retry states remain usable.
+  - Questions/Settings/Results tabs preserve the draft payload. Questions includes
+    count/marks/exact-duration summaries and compact collapsible cards; Settings holds
+    details and grouped controls; Results reuses released-only performance and manual
+    essay grading. Sticky save actions stay above phone navigation.
+  - Reused the generated shadcn Switch with 44px clickable Labels. The shared five-type
+    chooser and bank picker use phone sheets and centered larger dialogs. Chooser
+    header stays fixed, choices scroll without clipped descriptions, and Essay retains
+    its manual-grading badge. Teacher header links are compact below 960px to fix
+    existing tablet overflow; accessible names and the current shell are retained.
+  - Native Edge verification: 32 list/create/chooser/settings checks at 320/390/768/1280px
+    in both actual themes passed, with screenshots inspected. No horizontal overflow,
+    dialogs inside the viewport, 44px targets, focus/Escape/restoration, all five types,
+    passage children, tab state, draft payloads, search/draft filters and held results
+    passed using synthetic intercepted APIs without database writes.
+  - `pnpm test --pool=threads --maxWorkers=4`: 100 files / 1,122 tests passed
+    (500.83s total; assertions 74.37s). Final typecheck and lint passed; lint retains
+    only the existing client-fetch navigation warning. No new dependencies or migration.
+  - Security prerequisite committed separately as 0627fb8: restored clean tooling
+    configs/secret ignores from bde784d and preserved detected auto-run artifacts in a
+    temporary quarantine directory. The repository/pre-commit guard passes.
+
 ## Phase 13 — Admin student lifecycle: deactivate and hard delete
 
 Board decision (2026-11-15): an Admin can take a Student out of the platform at any time — no

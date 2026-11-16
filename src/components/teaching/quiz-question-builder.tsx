@@ -151,8 +151,10 @@ function QuestionCard({
   canMoveDown,
   errors,
   uploadImage,
+  collapsedInitially,
 }: {
   question: BuilderQuestion;
+  collapsedInitially: boolean;
   number: number;
   handle: ReactNode;
   selected: boolean;
@@ -166,7 +168,7 @@ function QuestionCard({
   errors: QuizPublishBlocker[];
   uploadImage?: QuizImageUploader;
 }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(!collapsedInitially);
   const q = question;
   const prefix = `question-${q.clientKey}`;
   const update = (patch: Partial<BuilderQuestion>) => onChange({ ...q, ...patch });
@@ -183,27 +185,54 @@ function QuestionCard({
     <Collapsible
       open={open}
       onOpenChange={setOpen}
-      className="overflow-hidden rounded-2xl border border-line bg-panel"
+      id={prefix}
+      className={
+        "overflow-hidden rounded-xl border bg-panel " +
+        (open ? "border-brand/40" : "border-line")
+      }
     >
-      <div className="flex flex-wrap items-center gap-1 border-b border-line p-2 sm:p-3">
-        {handle}
-        <label className="flex min-h-11 min-w-11 cursor-pointer items-center justify-center">
-          <Checkbox
-            checked={selected}
-            onCheckedChange={onSelect}
-            aria-label={`Select question ${number}`}
-          />
-        </label>
-        <span className="text-base font-semibold text-ink">{number}.</span>
-        <Badge variant="secondary" className="text-sub">
-          {typeLabel}
-        </Badge>
-        {q.questionType === "essay" && (
-          <Badge variant="outline" className="border-line text-sub">
-            Manually graded
-          </Badge>
-        )}
-        <div className="ml-auto flex flex-wrap items-center">
+      <div className="space-y-1 border-b border-line p-2 sm:p-3">
+        <div className="flex min-w-0 items-start gap-1">
+          {handle}
+          <label className="flex size-11 shrink-0 cursor-pointer items-center justify-center">
+            <Checkbox
+              checked={selected}
+              onCheckedChange={onSelect}
+              aria-label={"Select question " + number}
+            />
+          </label>
+          <CollapsibleTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              className="h-auto min-h-11 min-w-0 flex-1 items-start justify-between gap-2 whitespace-normal px-2 py-2 text-left text-ink"
+              aria-label={(open ? "Collapse" : "Expand") + " question " + number}
+            >
+              <span className="min-w-0 space-y-1">
+                <span className="flex flex-wrap items-center gap-2">
+                  <span className="text-base font-semibold">{number}.</span>
+                  <Badge variant="secondary" className="text-sub">
+                    {typeLabel}
+                  </Badge>
+                  <span className="text-base font-normal text-sub">{q.marks} marks</span>
+                </span>
+                <span className="block line-clamp-2 break-words text-base font-medium">
+                  {q.bodyRichText
+                    .replace(/<[^>]*>/g, " ")
+                    .replace(/&nbsp;/g, " ")
+                    .trim() || "Untitled question"}
+                </span>
+              </span>
+              <ChevronDown
+                className={
+                  "mt-1 size-5 shrink-0 transition-transform " +
+                  (open ? "rotate-180" : "")
+                }
+              />
+            </Button>
+          </CollapsibleTrigger>
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-1">
           <Button
             type="button"
             variant="ghost"
@@ -242,18 +271,6 @@ function QuestionCard({
           >
             <Trash2 className="size-4" />
           </Button>
-          <CollapsibleTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              className={actionClass}
-              aria-label={`${open ? "Collapse" : "Expand"} question ${number}`}
-            >
-              <ChevronDown
-                className={`size-5 transition-transform ${open ? "rotate-180" : ""}`}
-              />
-            </Button>
-          </CollapsibleTrigger>
         </div>
       </div>
       <CollapsibleContent className="space-y-4 p-3 sm:p-5">
@@ -450,8 +467,10 @@ export function QuizQuestionBuilder({
   onChange,
   errors = [],
   uploadImage,
+  collapseSavedQuestions = false,
 }: {
   questions: BuilderQuestion[];
+  collapseSavedQuestions?: boolean;
   passages: BuilderPassage[];
   onChange: (questions: BuilderQuestion[], passages: BuilderPassage[]) => void;
   errors?: QuizPublishBlocker[];
@@ -525,6 +544,7 @@ export function QuizQuestionBuilder({
   ) => (
     <QuestionCard
       question={q}
+      collapsedInitially={collapseSavedQuestions && q.id !== undefined}
       number={flat.findIndex((s) => s.clientKey === q.clientKey) + 1}
       handle={handle}
       selected={selected.includes(q.clientKey)}

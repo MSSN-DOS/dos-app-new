@@ -12,21 +12,22 @@ export function TeacherTopTabs({ items }: { items: AppNavItemConfig[] }) {
     <nav aria-label="Primary" className="hidden items-center gap-1 md:flex">
       {items.map((item) => {
         const active =
-          pathname === item.href || (item.href !== "/teacher" && pathname.startsWith(item.href));
+          pathname === item.href ||
+          (item.href !== "/teacher" && pathname.startsWith(item.href));
         return (
           <Link
             key={item.href}
             href={item.href}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "inline-flex min-h-[44px] items-center gap-1.5 rounded-xl px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-canvas",
+              "inline-flex min-h-[44px] min-w-11 items-center justify-center gap-1.5 rounded-xl px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-canvas",
               active
                 ? "bg-wash text-ink ring-1 ring-edge/70"
-                : "text-sub hover:bg-wash hover:text-ink"
+                : "text-sub hover:bg-wash hover:text-ink",
             )}
           >
             <item.icon className="size-4 shrink-0" aria-hidden="true" />
-            {item.label}
+            <span className="sr-only min-[960px]:not-sr-only">{item.label}</span>
           </Link>
         );
       })}
@@ -44,7 +45,8 @@ export function TeacherBottomNav({ items }: { items: AppNavItemConfig[] }) {
     >
       {items.map((item) => {
         const active =
-          pathname === item.href || (item.href !== "/teacher" && pathname.startsWith(item.href));
+          pathname === item.href ||
+          (item.href !== "/teacher" && pathname.startsWith(item.href));
         return (
           <Link
             key={item.href}
@@ -52,7 +54,7 @@ export function TeacherBottomNav({ items }: { items: AppNavItemConfig[] }) {
             aria-current={active ? "page" : undefined}
             className={cn(
               "relative flex min-h-[44px] flex-1 flex-col items-center justify-center gap-1 rounded-xl px-0.5 py-2.5 text-xs font-medium leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-inset",
-              active ? "text-brand" : "text-faint hover:text-sub"
+              active ? "text-brand" : "text-faint hover:text-sub",
             )}
           >
             {active ? (
