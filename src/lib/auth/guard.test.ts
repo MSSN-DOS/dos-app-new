@@ -65,7 +65,7 @@ describe("requireAuth", () => {
 
   it("returns the live role for an active, permitted account", async () => {
     verifySession.mockResolvedValueOnce(payload);
-    stubSelect(db, [[{ roleName: "admin", isActive: true }]]);
+    stubSelect(db, [[{ roleId: 2, roleName: "admin", isActive: true }]]);
     await expect(requireAuth(bearer(), ["admin"])).resolves.toEqual({
       ...payload,
       roleName: "admin",
@@ -74,9 +74,10 @@ describe("requireAuth", () => {
 
   it("still re-reads the account and returns its role when no roles are required", async () => {
     verifySession.mockResolvedValueOnce(payload);
-    stubSelect(db, [[{ roleName: "aspirant", isActive: true }]]);
+    stubSelect(db, [[{ roleId: 4, roleName: "aspirant", isActive: true }]]);
     await expect(requireAuth(bearer())).resolves.toEqual({
       ...payload,
+      roleId: 4,
       roleName: "aspirant",
     });
     expect(db.select).toHaveBeenCalledTimes(1);

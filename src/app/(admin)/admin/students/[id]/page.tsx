@@ -17,9 +17,9 @@ interface StudentDetail {
     fullName: string;
     identifier: string;
     isActive: boolean;
-    departmentName: string;
-    facultyName: string;
-    levelValue: number;
+    departmentName: string | null;
+    facultyName: string | null;
+    levelValue: number | null;
   };
   currentCgpa: string | null;
   quizzesTaken: number;
@@ -98,8 +98,12 @@ export default function StudentDetailPage() {
 
       <h1 className="mt-3 break-words text-2xl font-bold">{student.fullName}</h1>
       <p className="mt-1 text-sm text-muted-foreground">
-        {student.identifier} · {student.departmentName}, {student.facultyName} ·{" "}
-        {student.levelValue}L{student.isActive ? "" : " · Inactive"}
+        {[
+          student.identifier,
+          [student.departmentName, student.facultyName].filter(Boolean).join(", "),
+          student.levelValue ? `${student.levelValue}L` : null,
+          student.isActive ? null : "Inactive",
+        ].filter(Boolean).join(" · ")}
       </p>
 
       <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">

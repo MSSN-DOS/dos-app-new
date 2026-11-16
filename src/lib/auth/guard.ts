@@ -46,7 +46,7 @@ export async function requireAuth(
   // account) and an inactive one are both 401, not 403 — the token no longer names a usable
   // account, so "you may not do this" would misrepresent the problem.
   const [account] = await getDb()
-    .select({ roleName: roles.name, isActive: users.isActive })
+    .select({ roleId: users.roleId, roleName: roles.name, isActive: users.isActive })
     .from(users)
     .innerJoin(roles, eq(users.roleId, roles.id))
     .where(eq(users.id, payload.userId))
@@ -62,5 +62,5 @@ export async function requireAuth(
     throw new ForbiddenError("You do not have permission to access this resource");
   }
 
-  return { ...payload, roleName };
+  return { userId: payload.userId, roleId: account.roleId, roleName };
 }
