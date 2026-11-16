@@ -66,6 +66,8 @@
     sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --font-heading: var(--font-sans);
+  /* Serif display face used for the brand mark (page loader, auth mastheads). */
+  --font-brand: var(--font-fraunces), Georgia, "Times New Roman", serif;
   --color-sidebar-ring: hsl(var(--sidebar-ring));
   --color-sidebar-border: hsl(var(--sidebar-border));
   --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
@@ -148,6 +150,8 @@
   --dos-brand-glow: #5b7fff08;
   --dos-gold-glow: #e8a35506;
   --dos-aura: #5b7fff12;
+  /* Shimmer sweep used by skeletons and the page loader (light: ink-tinted) */
+  --dos-shimmer: #10182812;
 }
 
 /* DOS palette — DARK */
@@ -171,6 +175,8 @@
   --dos-brand-glow: #5b7fff14;
   --dos-gold-glow: #e8a35512;
   --dos-aura: #5b7fff40;
+  /* Shimmer sweep used by skeletons and the page loader (dark: paper-tinted) */
+  --dos-shimmer: #ffffff12;
 }
 
 /* Design tokens — DESIGN.md §11. HSL triplets per shadcn convention. */
@@ -317,5 +323,206 @@
   }
   [data-slot="card"] {
     contain: layout paint;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Loading motion (DESIGN.md §12 "Motion").
+   Three states, all driven by §12 tokens only:
+     1. .dos-page-loader — the book loader shown while a route or an auth gate
+        resolves. Book halves are --primary, the bobbing spark is --accent
+        (the "ink" accent already used for highlights), leaves are --card.
+     2. .dos-shimmer — left-to-right sweep used by the shared Skeleton.
+     3. .dos-spinner — inline busy state inside a disabled button.
+   Unlayered on purpose: these are not Tailwind utilities and must not be
+   reordered by the utility layer. Reduced-motion keeps each final state.
+--------------------------------------------------------------------------- */
+
+.dos-page-loader {
+  background:
+    radial-gradient(520px 300px at 50% 38%, hsl(var(--primary) / 0.12), transparent 70%),
+    hsl(var(--background));
+}
+
+/* --- state 1: book loader --- */
+.dos-book {
+  position: relative;
+  width: 176px;
+  height: 112px;
+  perspective: 700px;
+}
+.dos-book::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -14px;
+  width: 150px;
+  height: 14px;
+  transform: translateX(-50%);
+  background: radial-gradient(closest-side, hsl(var(--foreground) / 0.28), transparent);
+  filter: blur(2px);
+}
+.dos-book-half {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 86px;
+  height: 112px;
+  border-radius: 10px 0 0 10px;
+  background-color: hsl(var(--primary));
+  box-shadow: inset -6px 0 10px hsl(var(--foreground) / 0.18);
+}
+.dos-book-half[data-side="right"] {
+  left: 90px;
+  border-radius: 0 10px 10px 0;
+  box-shadow: inset 6px 0 10px hsl(var(--foreground) / 0.18);
+}
+.dos-book-leaf {
+  position: absolute;
+  top: 6px;
+  left: 90px;
+  width: 80px;
+  height: 100px;
+  transform-origin: left center;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0 6px 6px 0;
+  background-color: hsl(var(--card));
+  background-image: repeating-linear-gradient(
+    hsl(var(--card)) 0 11px,
+    hsl(var(--border)) 11px 12px
+  );
+  backface-visibility: hidden;
+  animation: dos-flip 2.4s cubic-bezier(0.6, 0.05, 0.3, 1) infinite;
+}
+.dos-book-leaf[data-leaf="2"] {
+  animation-delay: 0.28s;
+}
+.dos-book-leaf[data-leaf="3"] {
+  animation-delay: 0.56s;
+}
+@keyframes dos-flip {
+  0%,
+  14% {
+    transform: rotateY(0deg);
+    opacity: 1;
+  }
+  56% {
+    transform: rotateY(-180deg);
+    opacity: 1;
+  }
+  74%,
+  100% {
+    transform: rotateY(-180deg);
+    opacity: 0;
+  }
+}
+.dos-book-spark {
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  border-radius: 9999px;
+  background-color: hsl(var(--accent));
+  box-shadow: 0 0 14px hsl(var(--accent));
+  animation: dos-bob 1.2s ease-in-out infinite;
+}
+@keyframes dos-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-7px);
+  }
+}
+.dos-progress {
+  width: min(260px, 70vw);
+  height: 4px;
+  overflow: hidden;
+  border-radius: 9999px;
+  background-color: hsl(var(--muted));
+}
+.dos-progress > span {
+  display: block;
+  width: 38%;
+  height: 100%;
+  border-radius: 9999px;
+  background-color: hsl(var(--primary));
+  animation: dos-slide 1.4s ease-in-out infinite;
+}
+@keyframes dos-slide {
+  0% {
+    transform: translateX(-110%);
+  }
+  100% {
+    transform: translateX(280%);
+  }
+}
+
+/* --- state 2: skeleton shimmer --- */
+.dos-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.dos-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, var(--dos-shimmer), transparent);
+  animation: dos-sweep 1.5s ease-in-out infinite;
+}
+@keyframes dos-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* --- state 3: busy button spinner --- */
+.dos-spinner {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 9999px;
+  animation: dos-rot 0.7s linear infinite;
+}
+@keyframes dos-rot {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dos-book-leaf,
+  .dos-book-spark,
+  .dos-progress > span,
+  .dos-shimmer::after,
+  .dos-spinner {
+    animation: none;
+  }
+  .dos-book-leaf {
+    opacity: 1;
+    transform: rotateY(0deg);
+  }
+  /* One leaf stays turned so the book still reads as a book, not a flat card. */
+  .dos-book-leaf[data-leaf="3"] {
+    transform: rotateY(-180deg);
+  }
+  .dos-book-spark {
+    transform: none;
+  }
+  .dos-progress > span {
+    width: 60%;
+    transform: none;
+  }
+  .dos-shimmer::after {
+    display: none;
   }
 }

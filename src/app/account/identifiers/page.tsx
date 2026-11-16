@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, ShieldCheck } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -10,6 +10,7 @@ import { RequireRole } from "@/components/auth/require-role";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Spinner } from "@/components/ui/spinner";
 import { apiFetch, ApiError } from "@/lib/auth/client-fetch";
 
 type MeResponse = {
@@ -156,7 +157,7 @@ export default function LoginDetailsPage() {
                   className="h-11 w-full justify-center gap-2"
                 >
                   {adding.isPending ? (
-                    <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                    <Spinner />
                   ) : (
                     <ShieldCheck className="size-4" aria-hidden="true" />
                   )}

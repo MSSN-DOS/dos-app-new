@@ -3,7 +3,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
 
 import { useAuth } from "@/components/auth/auth-provider";
 import { roleDashboardPath } from "@/components/auth/redirect-if-authenticated";
@@ -15,6 +14,7 @@ import {
   type StructureOption,
 } from "@/components/structure/structure-picker";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 
 interface Option {
   id: number;
@@ -33,10 +33,7 @@ function SubmitButton({ submitting, label }: { submitting: boolean; label: strin
     >
       {submitting ? (
         <>
-          <Loader2
-            className="animate-spin motion-reduce:animate-none"
-            aria-hidden="true"
-          />
+          <Spinner />
           Saving…
         </>
       ) : (

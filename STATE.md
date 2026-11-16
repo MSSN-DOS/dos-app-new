@@ -317,6 +317,38 @@ because rankings are computed live from `cgpa_records` — accepted, and warned 
 - [x] P13-4 — `/admin/students` status filter + badge, Deactivate/Reactivate action, typed-identifier delete dialog
 - [x] P13-5 — Endpoint tests: 401, 403, happy paths, 422 `error.details`, 404; status-filter test
 
+## Phase 15 — Loading states
+
+Board request (2026-11-15): port the three loading states from the supplied reference file (`DOS Site Loader.html`) — the page loader, the skeleton shimmer and the busy-button spinner — and nothing else. Motion is not a new design direction: it fills the gaps where the app previously showed nothing or a bare pulse.
+
+- [x] P15-1 — Motion foundation in `globals.css`
+  - `--dos-shimmer` added to both `:root` and `.dark` (the skeleton sweep is the one colour a token didn't already cover); `--font-brand` maps the brand wordmark to the already-loaded Fraunces face, matching the reference's serif `.brand`.
+  - Keyframes `dos-flip`, `dos-bob`, `dos-slide`, `dos-sweep`, `dos-rot` plus unlayered `.dos-page-loader` / `.dos-book*` / `.dos-progress` / `.dos-shimmer` / `.dos-spinner` classes. Unlayered on purpose: the repo-wide `@layer base` reduced-motion rule would otherwise beat a layered fallback.
+  - Reference bug fixed rather than copied: `.leaf:nth-child(3|4)` never matched (children 3 and 4 are the two `.half` elements), so all three leaves flipped in unison. Leaves are staged by `data-leaf="1|2|3"` instead.
+  - `prefers-reduced-motion: reduce` keeps the layout: third leaf pre-flipped, progress bar held at 60%, shimmer and spinner stilled. No frozen empty bar that reads as "stuck".
+  - The `.dos-page-loader` radial wash is a scoped exception to the "one signature surface" rule in DESIGN.md §12 — it is part of the supplied reference, it is token-derived, and it exists only inside the loader.
+
+- [x] P15-2 — `PageLoader` in `components/shell/`
+  - Brand + optional role pill, 176×112 book with two halves and three staged leaves, bobbing accent spark, sliding progress bar, status line cycling every 1800 ms inside `role="status" aria-live="polite"`.
+  - `fullScreen` for gates (`min-h-dvh`), shorter block for route segments (`min-h-[60dvh]`), so a segment loader doesn't push the shell's chrome around.
+  - `statusMessageAt()` is exported and pure (trunc, modulo, negative and empty-list safe) so the rotation is unit-tested instead of being asserted through a 1.8 s timer.
+  - Copy stays honest: the messages are generic because the loader cannot know what is actually loading.
+
+- [x] P15-3 — Route loaders and auth gates
+  - `loading.tsx` for the root, `/admin`, `/teacher` and the student/aspirant group; `RequireRole` and `NotFoundShell` render `PageLoader` instead of their old placeholder text.
+  - `FullPageLoading` in `auth-card.tsx` had zero importers and was deleted rather than reimplemented — two loaders would drift apart.
+
+- [x] P15-4 — Shared `Skeleton` upgraded to `.dos-shimmer`
+  - One primitive change covers all existing skeleton callers; no per-page skeleton components were added.
+
+- [x] P15-5 — `Spinner` atom in `components/ui/` and busy-button swaps
+  - shadcn ships no spinner primitive, so this is the sanctioned hand-rolled case. The ring is `currentColor` with a transparent top border, so one class reads correctly on primary, outline and ghost buttons without variants.
+  - Swapped the ad-hoc lucide `Loader2` in login, register, onboarding, password and identifiers. `rich-text-editor.tsx` keeps its icon: it is another session's uncommitted file and does not belong in this change.
+
+- [x] P15-6 — Tests and documentation
+  - `page-loader.test.tsx` covers the rotation helper (order, wrap, negative/fractional ticks, empty array) and the rendered loader (polite live region, 1800 ms advance, role pill, `fullScreen` height, custom messages).
+  - `DESIGN.md` §12 gained a motion subsection recording the three states, the token mapping and the reduced-motion contract.
+
 ## Open items still needing a real answer from the Board (not blocking dev, but don't let these go silently forgotten)
 
 - [x] Confirm Post-UTME conversion formula (P5-3) — confirmed 2026-08-25: aggregate is out of 100, conversion is the identity (best_score is already a percentage = correct × 2 for the 50-question quiz)

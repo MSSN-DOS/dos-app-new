@@ -4,6 +4,7 @@ import { useEffect, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
 import { useAuth } from "@/components/auth/auth-provider";
+import { PageLoader } from "@/components/shell/page-loader";
 import type { RoleName } from "@/lib/auth/client-fetch";
 
 // Client-side route protection for role-scoped page shells. The JWT lives in localStorage
@@ -33,11 +34,7 @@ export function RequireRole({
   }, [ready, isAuthenticated, router]);
 
   if (!ready) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      </div>
-    );
+    return <PageLoader fullScreen role={allowed.length === 1 ? allowed[0] : undefined} />;
   }
 
   if (!isAuthenticated) {

@@ -314,7 +314,7 @@ Primary: blue. Accent: orange. Full scale, both themes — don't hand-pick singl
 
 These are HSL triplets for shadcn/ui's CSS-variable convention — drop them straight into `globals.css` under `:root` / `.dark`, don't reformat to hex. Logo: Vercel's default triangle mark as a placeholder until MSSN supplies a real logo — track replacing it in `STATE.md`, don't build any custom logo component around it in the meantime.
 
-Typography: system font stack (`font-sans` default from Tailwind/shadcn) — no custom webfont for MVP, one less thing to load/license. Personality comes from weight and tracking, not the face:
+Typography: `Plus Jakarta Sans` is the body face (`layout.tsx` sets it on `body`), with the system stack as fallback; `font-mono` stays the system mono stack. Personality comes from weight and tracking, not from face-swapping. One exception: the brand wordmark uses Fraunces via `--font-brand` — it is the one serif in the product, and it is deliberately the *only* place a display face appears (docs headers stay Jakarta).
 
 - **Display** (page heroes, `h1`): `text-4xl md:text-5xl font-bold tracking-tight`, leading-tight.
 - **Card/section titles**: `text-xl font-semibold tracking-tight` (auth cards) / `text-base font-semibold` (inline cards).
@@ -336,9 +336,19 @@ Icons: **lucide-react only** — the one sanctioned icon library (shadcn uses it
 
 **Mobile-first is mandatory** (audience is overwhelmingly on phones — Nigerian students/aspirants). Author every screen at the narrow viewport first and enhance upward: Tailwind breakpoints are used mobile-first (`base`/`sm`/`md`/`lg`), never a desktop-default `md:*` that collapses badly below it. Non-negotiables: interactive targets ≥44×44px, body text ≥16px (the auth card body copy uses `text-base`), no horizontal scroll at any width, and responsive nav is the shadcn `sidebar` primitive (off-canvas Sheet on mobile via `SidebarTrigger`, fixed rail on desktop) — not a custom toggle. Touch/responsive behavior is verified (resize + device emulation), not assumed.
 
+**Loading and motion** (Phase 15, 2026-11-15): the app has exactly three loading states, ported from the Board's reference file (`DOS Site Loader.html`, kept out of the repo). Nothing else animates for decoration.
+
+- **Page loader** (`components/shell/page-loader.tsx` + the `.dos-*` classes in `globals.css`): brand wordmark in `--font-brand` (the already-loaded Fraunces face, matching the reference's serif brand), optional role pill, 176×112 book whose halves are `--primary` and whose spark is `--accent`, sliding progress bar, and a status line cycling every 1800 ms inside a `role="status" aria-live="polite"` region. Used by the `loading.tsx` route segments and by the client auth gates (`RequireRole`, `NotFoundShell`). `fullScreen` owns the viewport; a route segment renders at `min-h-[60dvh]` so it doesn't shove the shell's chrome around.
+- **Skeleton**: the shared `Skeleton` primitive carries `.dos-shimmer` (left-to-right sweep tinted by `--dos-shimmer`), so no page defines its own shimmer.
+- **Busy button**: `components/ui/spinner.tsx` (`Spinner`, a ring drawn in `currentColor`) replaces the ad-hoc lucide `Loader2` busy icons; the label stays, the button is disabled.
+- **Tokens**: `--dos-shimmer` exists in both `:root` and `.dark`; every other colour in these states is an existing token from above. No raw hex, no gradient text.
+- **Reduced motion**: `prefers-reduced-motion: reduce` stills all three states (third leaf pre-flipped, bar held at 60%, sweep and ring stopped) while keeping the layout identical — a loader frozen at 0% reads as a hang, not as calm. The loader rules are deliberately unlayered so they beat the global `@layer base` duration reset; if you re-layer them, the fallback silently stops working.
+- **Scoped exception**: `.dos-page-loader`'s radial wash is the only gradient background outside the khatam lattice. It comes from the supplied reference and exists only inside the loader — don't copy it onto any other surface.
+
 ## 13. Changelog against original docs
 
 - Added `quiz_attempts.released_at` and `semester_settings` — not in `DOS-Site-Database-Schema.sql`, both needed to implement resolved decisions #10 and #11 above.
 - Post-UTME conversion formula (`raw / 2`) is a placeholder pending explicit Board confirmation — everything else in this document is resolved and final for MVP scope.
 - Added §7a (Student deactivate / hard delete, Board decision 2026-11-15) and tightened §7 step 6: `requireAuth()` now re-reads the account row, so a deactivated or deleted account is rejected on its next request instead of continuing to work until token expiry.
+- Added the §12 "Loading and motion" subsection (Phase 15, 2026-11-15): three loading states only — page loader, skeleton shimmer, busy-button spinner — with `--dos-shimmer` as the single new token, `--font-brand` (Fraunces) for the wordmark, and a `prefers-reduced-motion` fallback that keeps layout while stopping motion. Records the loader's radial wash as the one scoped exception to the "no competing gradients" identity rule.
 - Added `quizzes.opens_at` / `quizzes.closes_at` (nullable, plus a `quizzes_window_check` CHECK constraint) — not in `DOS-Site-Database-Schema.sql`. Needed to implement the 2026-09-28 Board amendment to resolved decision #6, which made the weekly Course Quiz window Admin-overridable instead of fixed. Resolution lives in `lib/quizzes/window.ts` (`resolveCourseQuizWindow`); the API is `PATCH /api/admin/quizzes/[id]/window`, Admin-only, Course Quizzes only (Topic Quizzes have no window → 409).

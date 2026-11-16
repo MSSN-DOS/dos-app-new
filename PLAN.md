@@ -152,6 +152,33 @@ nothing, so their records are deleted with them.
 
 ---
 
+## Phase 15 — Loading states (2026-11-15)
+
+Board supplied a reference file (`DOS Site Loader.html`) showing three loading states — a page
+loader (turning book, bobbing spark, sliding progress bar, cycling status line), a left-to-right
+shimmer skeleton, and a busy button with an inline spinner. This phase ports exactly those three
+states; it does not invent new motion beyond what the reference shows. All colour resolves to
+`DESIGN.md` §12 tokens and every animation is switched off under `prefers-reduced-motion: reduce`.
+
+- **P15-1** Motion foundation in `globals.css`: `--dos-shimmer` token in `:root` and `.dark`, the
+  `--font-brand` family, keyframes (`dos-flip`, `dos-bob`, `dos-slide`, `dos-sweep`, `dos-rot`) and
+  the unlayered `.dos-*` classes, with an explicit reduced-motion override (third leaf pre-flipped,
+  progress bar held at 60%, shimmer sweep hidden).
+- **P15-2** `PageLoader` in `components/shell/` — brand + optional role pill, book, progress bar and
+  status line cycling every 1800 ms inside a `role="status" aria-live="polite"` region, with
+  `fullScreen` for gates and a shorter block height for route segments.
+- **P15-3** Route-transition `loading.tsx` files for the root, Admin, Teacher and Student/Aspirant
+  segments, and replace the client-side auth-gate placeholders (`RequireRole`, `NotFoundShell`) with
+  `PageLoader`. Delete the unused `FullPageLoading` export rather than keeping two loaders.
+- **P15-4** Switch the shared `Skeleton` primitive to the shimmer sweep so every existing skeleton
+  caller gets it without per-page work.
+- **P15-5** `Spinner` atom in `components/ui/` and swap the ad-hoc lucide `Loader2` busy icons on the
+  submit buttons (login, register, onboarding, password, identifiers) for it.
+- **P15-6** Unit tests for the pure status-message rotation and the loader render (live region, tick
+  advance, role pill, `fullScreen` height), plus `DESIGN.md` §12 motion notes.
+
+---
+
 ## Explicitly out of scope for MVP (don't build these unless `PLAN.md` is updated to add them)
 
 - Email/SMS notifications
