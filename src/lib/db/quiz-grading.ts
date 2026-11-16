@@ -32,6 +32,8 @@ export async function quizGradingQuestions(
     .select({
       id: questions.id,
       questionType: questions.questionType,
+      numericAnswer: questions.numericAnswer,
+      numericTolerance: questions.numericTolerance,
       marks: quizQuestions.marks,
     })
     .from(quizQuestions)
@@ -163,6 +165,8 @@ export async function gradeQuizEssays(
       return {
         questionId: q.id,
         selectedOptionId: rows[0]?.selectedOptionId ?? null,
+        selectedOptionIds: rows[0]?.selectedOptionIds ?? null,
+        numericAnswer: q.questionType === "numeric" ? rows[0]?.textAnswer : null,
         essayAnswer: q.questionType === "essay" ? rows[0]?.textAnswer : null,
         blankAnswers: Object.fromEntries(
           rows

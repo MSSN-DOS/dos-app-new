@@ -49,7 +49,12 @@ function Harness({ passage = false }: { passage?: boolean }) {
 describe("quiz builder editing interactions", () => {
   it("provides a keyboard-accessible reorder alternative", () => {
     render(<Harness />);
-    fireEvent.click(screen.getByRole("button", { name: "Move question 1 down" }));
+    fireEvent.click(screen.getByRole("button", { name: /^More/ }));
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Change position" }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    fireEvent.click(screen.getByRole("menuitem", { name: "Move down" }));
     expect(screen.getByTestId("order")).toHaveTextContent("b,a");
   });
   it("applies marks and confirms bulk deletion before changing the quiz", () => {

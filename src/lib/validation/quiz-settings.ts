@@ -29,6 +29,7 @@ const settingsFields = {
   shuffleQuestions: z.boolean(),
   shuffleOptions: z.boolean(),
   allowMultipleAttempts: z.boolean(),
+  maxAttempts: z.number().int().min(2).max(100).nullable().default(null),
   allowResume: z.boolean(),
   /** Teacher-facing toggle; persisted as `lose_focus_policy` (see `focusLossPolicyFor`). */
   permitFocusLoss: z.boolean(),
@@ -139,6 +140,7 @@ export const initialQuizSettings: QuizSettingsDraftInput = {
   shuffleQuestions: false,
   shuffleOptions: false,
   allowMultipleAttempts: false,
+  maxAttempts: null,
   allowResume: true,
   permitFocusLoss: true,
   autoNextQuestion: false,

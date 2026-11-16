@@ -2,8 +2,18 @@ import { z } from "zod";
 
 import { RICH_TEXT_MAX_LENGTH, nullableId, requiredRichTextSchema } from "./primitives";
 import { quizDetailsSchema } from "./quiz-details";
-import { blankInputSchema, checkAnswerPayload, optionInputSchema } from "./questions";
-import { initialQuizSettings, quizSettingsDraftSchema, quizSettingsPublishSchema } from "./quiz-settings";
+import {
+  blankInputSchema,
+  checkAnswerPayload,
+  numericQuestionFields,
+  optionInputSchema,
+  questionTypeSchema,
+} from "./questions";
+import {
+  initialQuizSettings,
+  quizSettingsDraftSchema,
+  quizSettingsPublishSchema,
+} from "./quiz-settings";
 
 /**
  * Quiz builder — question payload and publish gate.
@@ -29,7 +39,8 @@ import { initialQuizSettings, quizSettingsDraftSchema, quizSettingsPublishSchema
 const quizQuestionFields = {
   // Present when the builder row already maps to a saved question row.
   id: nullableId.optional(),
-  questionType: z.enum(["fill_in_gap", "options", "essay"]),
+  questionType: questionTypeSchema,
+  ...numericQuestionFields,
   clientKey: z.string().min(1).max(100).optional(),
   passageKey: z.string().min(1).max(100).nullable().optional(),
   passageId: nullableId.optional(),
@@ -83,16 +94,29 @@ export const builderPassagePublishSchema = z.object({
   bodyRichText: requiredRichTextSchema("Passage text is required before publishing"),
 });
 
-function uniqueBuilderRows(rows: { id?: number | null; clientKey?: string }[], ctx: z.RefinementCtx): void {
+function uniqueBuilderRows(
+  rows: { id?: number | null; clientKey?: string }[],
+  ctx: z.RefinementCtx,
+): void {
   const ids = new Set<number>();
   const keys = new Set<string>();
   rows.forEach((row, index) => {
     if (row.id != null) {
-      if (ids.has(row.id)) ctx.addIssue({ code: "custom", path: [index, "id"], message: "Each saved builder row can appear only once" });
+      if (ids.has(row.id))
+        ctx.addIssue({
+          code: "custom",
+          path: [index, "id"],
+          message: "Each saved builder row can appear only once",
+        });
       ids.add(row.id);
     }
     if (row.clientKey) {
-      if (keys.has(row.clientKey)) ctx.addIssue({ code: "custom", path: [index, "clientKey"], message: "Each builder card needs a unique key" });
+      if (keys.has(row.clientKey))
+        ctx.addIssue({
+          code: "custom",
+          path: [index, "clientKey"],
+          message: "Each builder card needs a unique key",
+        });
       keys.add(row.clientKey);
     }
   });
@@ -116,8 +140,12 @@ export const quizPublishPayloadSchema = z
     details: quizDetailsSchema,
     questions: z
       .array(quizQuestionPublishSchema)
-      .min(1, "Add at least one question before publishing").superRefine(uniqueBuilderRows),
-    passages: z.array(builderPassagePublishSchema).superRefine(uniqueBuilderRows).default([]),
+      .min(1, "Add at least one question before publishing")
+      .superRefine(uniqueBuilderRows),
+    passages: z
+      .array(builderPassagePublishSchema)
+      .superRefine(uniqueBuilderRows)
+      .default([]),
     settings: quizSettingsPublishSchema.default(initialQuizSettings),
   })
   .superRefine((data, ctx) => {

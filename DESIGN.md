@@ -137,6 +137,44 @@ limited to 5 MB and checked against their file signatures. Referenced images
 cannot be deleted. `questions.bank_revision` and RLS-protected `question_images`
 are additive schema deltas shipped in generated migration 0012.
 
+### Quizboot completion amendment (P12-11, 2026-11-16)
+
+The supplied `QUIZBOOT_SPEC.md` updates the authoring layout: editable header title,
+Questions/Settings/Results tabs, one expanded question card, a shared toolbar for
+the focused rich field, a floating Add question dropdown, and More/Advanced panels.
+Keep the standalone bank and its existing functionality. New quiz creation still
+requires DOS academic scope; imported bank questions remain independent copies.
+
+- Multi-answer is a distinct type. Its selected option IDs must equal the correct
+  set exactly; extra or missing selections earn no marks. Ordinary Multiple choice
+  and True/False remain single-select.
+- Numeric questions store a finite value, nonnegative absolute tolerance, and an
+  optional unit label. Inclusive tolerance grading performs no unit conversion.
+- Inline gap boxes serialize to `[gap]` plus separate accepted answers. Every gap
+  uses trimmed, case-insensitive exact matching; pipe-separated alternatives are
+  deliberately excluded by the confirmed Board answer.
+- Questions may shuffle their own options independently of the global setting.
+  Resume restores the deterministic order of the original attempt. Attempts may be
+  single, limited (2–100), or unlimited; the server enforces the limit.
+- Draft autosave uses authenticated builder writes and revision conflicts. It
+  preserves edits typed during a request and reconciles persistence IDs by client
+  key. Failed saves retain local edits and offer explicit retry.
+- Unpublish hides new access while allowing started attempts to finish. The first
+  attempt permanently locks questions and settings, even after attempts are deleted.
+  Republish restores access to the same content. No editable quiz versions are added.
+- Tiptap and KaTeX remain the shared editor/rendering stack, with mhchem reactions,
+  editable science templates, plain-text paste, and resized private Storage images.
+- Charts use actual released attempts only: score distribution, durations, and
+  question outcomes. Admin release remains mandatory; no instant score release.
+- Teachers/Admins can preview paginated A4 papers, optionally include a marking
+  scheme on fresh pages, print, and download a multipage PDF. Oversized blocks scale
+  together rather than splitting. Papers use paper-specific light tokens in both
+  themes. PDF is a raster export; its text is not selectable.
+
+Generated migrations 0013 and 0014 add the two types, numeric fields, per-question
+shuffle, selected option sets, maximum attempts and persistent lifecycle metadata.
+They are additive and retain the existing RLS policies.
+
 ## 5. Performance tracking
 
 ### CGPA (Students)

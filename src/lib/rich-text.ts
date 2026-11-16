@@ -1,4 +1,5 @@
 import katex from "katex";
+import "katex/contrib/mhchem";
 
 import { sanitizeRichText } from "./sanitize";
 
@@ -21,7 +22,7 @@ import { sanitizeRichText } from "./sanitize";
  */
 
 const INLINE_MATH_PATTERN =
-  /<span data-type="inline-math" data-latex="([^"]*)"><\/span>/g;
+  /<span data-type="inline-math" data-latex="([^"]*)"(?: data-science-template="[^"]*" data-science-values="[^"]*")?><\/span>/g;
 const BLOCK_MATH_PATTERN = /<div data-type="block-math" data-latex="([^"]*)"><\/div>/g;
 
 /** Undo the escaping `sanitizeRichText` applied to the attribute value. */

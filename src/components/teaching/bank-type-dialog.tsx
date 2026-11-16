@@ -20,15 +20,30 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { BankQuestionKind } from "@/lib/validation/question-bank";
+import type { QuestionPreset } from "@/lib/quizzes/builder";
+type ChoiceKind = BankQuestionKind | QuestionPreset;
 
-export const BANK_TYPE_LABELS: Record<BankQuestionKind, string> = {
+export const BANK_TYPE_LABELS: Record<ChoiceKind, string> = {
   true_false: "True or False",
   options: "Multiple choice",
   fill_in_gap: "Fill in the gap",
   passage: "Passage",
   essay: "Essay",
+  multi_answer: "Multi-answer",
+  numeric: "Numeric",
 };
-const choices: { kind: BankQuestionKind; icon: LucideIcon; description: string }[] = [
+const choices: { kind: ChoiceKind; icon: LucideIcon; description: string }[] = [
+  {
+    kind: "multi_answer",
+    icon: ListChecks,
+    description:
+      "Select every correct option. All correct choices are required to earn marks.",
+  },
+  {
+    kind: "numeric",
+    icon: Pencil,
+    description: "A numeric response with optional units and an absolute tolerance.",
+  },
   {
     kind: "true_false",
     icon: ToggleLeft,
@@ -61,11 +76,15 @@ export function BankTypeDialog({
   onOpenChange,
   onChoose,
   allowPassage = true,
+  extended = false,
+  onChooseExtended,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onChoose: (kind: BankQuestionKind) => void;
+  onChooseExtended?: (kind: QuestionPreset) => void;
   allowPassage?: boolean;
+  extended?: boolean;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -94,6 +113,10 @@ export function BankTypeDialog({
         <div className="grid min-h-0 auto-rows-max gap-2 overflow-y-auto overscroll-contain px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:grid-cols-2 sm:gap-3 sm:p-6">
           {choices
             .filter((choice) => allowPassage || choice.kind !== "passage")
+            .filter(
+              (choice) =>
+                extended || (choice.kind !== "multi_answer" && choice.kind !== "numeric"),
+            )
             .map(({ kind, icon: Icon, description }) => (
               <Button
                 key={kind}
@@ -103,7 +126,9 @@ export function BankTypeDialog({
                 className={`group h-auto min-h-24 items-start justify-start gap-3 whitespace-normal rounded-xl border-line bg-canvas p-3 text-left text-ink hover:border-brand hover:bg-brand/5 focus-visible:ring-brand sm:min-h-36 sm:p-4 ${kind === "essay" ? "sm:col-span-2 sm:min-h-24" : ""}`}
                 onClick={() => {
                   onOpenChange(false);
-                  onChoose(kind);
+                  if (kind === "multi_answer" || kind === "numeric")
+                    onChooseExtended?.(kind);
+                  else onChoose(kind);
                 }}
               >
                 <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand">

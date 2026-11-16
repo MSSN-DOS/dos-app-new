@@ -47,6 +47,8 @@
   display: block;
   max-width: 100%;
   height: auto;
+  max-height: 200px;
+  object-fit: contain;
   border-radius: 0.5rem;
 }
 .dos-rich-text .katex-display {
@@ -182,6 +184,8 @@
 /* Design tokens — DESIGN.md §11. HSL triplets per shadcn convention. */
 :root {
   --background: 0 0% 100%;
+  --paper-background: 0 0% 100%;
+  --paper-foreground: 222 20% 12%;
   --foreground: 222 20% 12%;
 
   --primary: 217 91% 45%; /* blue */
@@ -229,6 +233,8 @@
 
 .dark {
   --background: 222 25% 9%;
+  --paper-background: 0 0% 100%;
+  --paper-foreground: 222 20% 12%;
   --foreground: 210 20% 96%;
 
   --primary: 217 91% 60%;
@@ -269,6 +275,112 @@
   --sidebar-accent-foreground: 220 36% 95%;
   --sidebar-border: 218 29% 17%;
   --sidebar-ring: 227 100% 68%;
+}
+
+.quiz-paper-output {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  width: 794px;
+  pointer-events: none;
+}
+.quiz-paper-measure {
+  position: fixed;
+  left: -20000px;
+  top: 0;
+  width: 688px;
+}
+.quiz-paper-measure .quiz-paper-content {
+  padding: 0;
+}
+.quiz-paper-page-wrap {
+  position: relative;
+  margin-inline: auto;
+}
+.quiz-a4-page,
+.quiz-paper-measure {
+  color: hsl(var(--paper-foreground));
+  background: hsl(var(--paper-background));
+  font-family: Georgia, "Times New Roman", serif;
+}
+.quiz-a4-page {
+  position: relative;
+  width: 794px;
+  height: 1122px;
+  padding: 53px 53px 72px;
+  overflow: hidden;
+}
+.quiz-paper-block {
+  padding-bottom: 24px;
+}
+.quiz-paper-page-footer {
+  position: absolute;
+  bottom: 26px;
+  left: 53px;
+  right: 53px;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 12px;
+  border-top: 1px solid hsl(var(--border));
+  padding-top: 8px;
+}
+.quiz-a4-page .quiz-paper-question {
+  break-inside: avoid;
+}
+.quiz-a4-page img,
+.quiz-paper-measure img {
+  max-height: 220px;
+  object-fit: contain;
+}
+@media print {
+  @page {
+    size: A4;
+    margin: 0;
+  }
+  body > *:not([data-quiz-paper]) {
+    display: none !important;
+  }
+  body,
+  .quiz-paper-output {
+    background: hsl(var(--paper-background));
+    color: hsl(var(--paper-foreground));
+  }
+  .quiz-paper-output {
+    position: static;
+    width: auto;
+  }
+  .quiz-paper-measure {
+    display: none;
+  }
+  .quiz-paper-page-wrap {
+    width: 794px !important;
+    height: 1122px !important;
+    break-after: page;
+    margin: 0;
+  }
+  .quiz-paper-page-wrap:last-child {
+    break-after: auto;
+  }
+  .quiz-a4-page {
+    transform: none !important;
+  }
+  .quiz-paper-content {
+    padding: 0;
+  }
+  .quiz-paper-question {
+    break-inside: avoid;
+  }
+  .quiz-paper-key {
+    break-before: page;
+  }
+  .quiz-paper-content img {
+    max-height: 70mm;
+    object-fit: contain;
+  }
+  .quiz-paper-content .katex-display {
+    overflow: visible;
+  }
 }
 
 @layer base {

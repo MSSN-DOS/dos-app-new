@@ -139,6 +139,17 @@ are course-scoped. No visibility, payment, social or upgrade controls are added.
 ---
 
 ### `/teacher/quizzes/[id]` — Quiz builder
+- **P12-11 expansion:** Add question is a floating shadcn dropdown containing the
+  five existing authoring types plus Multi-answer, Numeric, Question bank and Bulk
+  paste. All entries must lead to functional editors/actions. New quiz keeps the
+  responsive create sheet and DOS's required academic fields. Drafts autosave with
+  real status and no lost edits; title is editable in the header. Add question-level
+  shuffle, limited attempts, math/chemistry palettes, released-data charts and
+  durations, and a teacher-only question-paper view with Print/PDF and answer key.
+  Unpublish hides new access, lets started attempts finish, and permanently locks
+  attempted questions/settings. Republish restores access to the same content.
+  The updated spec uses one active-field toolbar, inline gap answer boxes, editable
+  science slots, More/Advanced panels, and paginated A4 papers with direct PDF download.
 - **Task:** P3-5, rebuilt in P12-8 (also used at `/admin/quizzes/[id]`).
 - **Purpose:** Write quiz details and questions, configure settings, preview the student experience, and save a draft or publish.
 

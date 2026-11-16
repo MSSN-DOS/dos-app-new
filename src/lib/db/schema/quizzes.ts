@@ -11,6 +11,7 @@ import {
   varchar,
   primaryKey,
   jsonb,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import {
@@ -34,6 +35,9 @@ export const quizzes = pgTable(
     description: text("description"),
     coverImagePath: varchar("cover_image_path", { length: 500 }),
     builderRevision: integer("builder_revision").notNull().default(0),
+    unpublishedAt: timestamp("unpublished_at", { mode: "date" }),
+    attemptsStarted: boolean("attempts_started").notNull().default(false),
+    maxAttempts: integer("max_attempts"),
     scheduleEnabled: boolean("schedule_enabled").notNull().default(false),
     instructions: text("instructions"),
     quizType: quizTypeEnum("quiz_type").notNull(),
@@ -56,9 +60,7 @@ export const quizzes = pgTable(
     // happen — they were backfilled from time_limit_minutes * 60.
     timeLimitSeconds: integer("time_limit_seconds"),
     passMark: integer("pass_mark").notNull(),
-    allowMultipleAttempts: boolean("allow_multiple_attempts")
-      .notNull()
-      .default(false),
+    allowMultipleAttempts: boolean("allow_multiple_attempts").notNull().default(false),
 
     // --- Authoring settings (P12) -------------------------------------------------
     visibility: quizVisibilityEnum("visibility").notNull().default("private"),
@@ -69,9 +71,7 @@ export const quizzes = pgTable(
     autoNextQuestion: boolean("auto_next_question").notNull().default(false),
     // Defaults to true: the app has no anonymous attempt path anywhere, so a quiz that
     // claims to be attemptable signed-out would be a lie rather than a setting.
-    requireLoginToAttempt: boolean("require_login_to_attempt")
-      .notNull()
-      .default(true),
+    requireLoginToAttempt: boolean("require_login_to_attempt").notNull().default(true),
     showAnswersAfter: reviewPolicyEnum("show_answers_after")
       .notNull()
       .default("after_release"),
@@ -79,13 +79,9 @@ export const quizzes = pgTable(
       .notNull()
       .default("after_release"),
     showCalculator: boolean("show_calculator").notNull().default(false),
-    deductMarksForWrong: boolean("deduct_marks_for_wrong")
-      .notNull()
-      .default(false),
+    deductMarksForWrong: boolean("deduct_marks_for_wrong").notNull().default(false),
 
-    loseFocusPolicy: loseFocusPolicyEnum("lose_focus_policy")
-      .notNull()
-      .default("ignore"),
+    loseFocusPolicy: loseFocusPolicyEnum("lose_focus_policy").notNull().default("ignore"),
     status: contentStatusEnum("status").notNull().default("draft"),
     createdBy: integer("created_by")
       .notNull()
@@ -95,18 +91,19 @@ export const quizzes = pgTable(
   () => [
     check(
       "quizzes_track_check",
-      sql`(course_id IS NOT NULL AND jamb_subject_id IS NULL) OR (course_id IS NULL AND jamb_subject_id IS NOT NULL)`
+      sql`(course_id IS NOT NULL AND jamb_subject_id IS NULL) OR (course_id IS NULL AND jamb_subject_id IS NOT NULL)`,
     ),
     check(
       "quizzes_type_check",
-      sql`(quiz_type = 'topic' AND topic_id IS NOT NULL AND week_start IS NULL) OR (quiz_type = 'course' AND topic_id IS NULL AND week_start IS NOT NULL)`
+      sql`(quiz_type = 'topic' AND topic_id IS NOT NULL AND week_start IS NULL) OR (quiz_type = 'course' AND topic_id IS NULL AND week_start IS NOT NULL)`,
     ),
     check(
       "quizzes_window_check",
-      sql`opens_at IS NULL OR closes_at IS NULL OR closes_at > opens_at`
+      sql`opens_at IS NULL OR closes_at IS NULL OR closes_at > opens_at`,
     ),
     denyPublicPolicy("quizzes"),
-  ]
+    check("quizzes_max_attempts_check", sql`max_attempts IS NULL OR max_attempts >= 2`),
+  ],
 ).enableRLS();
 
 export const quizQuestions = pgTable(
@@ -129,7 +126,7 @@ export const quizQuestions = pgTable(
     primaryKey({ columns: [table.quizId, table.questionId] }),
     check("quiz_questions_marks_check", sql`marks >= 0`),
     denyPublicPolicy("quiz_questions"),
-  ]
+  ],
 ).enableRLS();
 
 export const quizAttempts = pgTable(
@@ -147,12 +144,28 @@ export const quizAttempts = pgTable(
     startedAt: timestamp("started_at", { mode: "date" }).notNull().defaultNow(),
     submittedAt: timestamp("submitted_at", { mode: "date" }),
     releasedAt: timestamp("released_at", { mode: "date" }),
-    draftAnswers: jsonb("draft_answers").$type<{
-      questionId: number; selectedOptionId?: number | null;
-      blankAnswers?: Record<string, string> | null; essayAnswer?: string | null;
-    }[]>().notNull().default([]),
+    draftAnswers: jsonb("draft_answers")
+      .$type<
+        {
+          questionId: number;
+          selectedOptionId?: number | null;
+          selectedOptionIds?: number[] | null;
+          numericAnswer?: string | null;
+          blankAnswers?: Record<string, string> | null;
+          essayAnswer?: string | null;
+        }[]
+      >()
+      .notNull()
+      .default([]),
   },
-  () => [denyPublicPolicy("quiz_attempts")]
+  (table) => [
+    denyPublicPolicy("quiz_attempts"),
+    uniqueIndex("quiz_attempts_user_number_unique").on(
+      table.quizId,
+      table.userId,
+      table.attemptNumber,
+    ),
+  ],
 ).enableRLS();
 
 export const attemptAnswers = pgTable(
@@ -165,9 +178,8 @@ export const attemptAnswers = pgTable(
     questionId: integer("question_id")
       .notNull()
       .references(() => questions.id),
-    selectedOptionId: integer("selected_option_id").references(
-      () => questionOptions.id
-    ),
+    selectedOptionId: integer("selected_option_id").references(() => questionOptions.id),
+    selectedOptionIds: jsonb("selected_option_ids").$type<number[]>(),
     textAnswer: text("text_answer"),
     // Only teachers assign this for essays. NULL keeps the attempt ungraded.
     awardedMarks: integer("awarded_marks"),
@@ -177,13 +189,21 @@ export const attemptAnswers = pgTable(
     blankIndex: integer("blank_index"),
     isCorrect: boolean("is_correct"),
   },
-  () => [denyPublicPolicy("attempt_answers")]
+  () => [denyPublicPolicy("attempt_answers")],
 ).enableRLS();
 
-export const quizImages = pgTable("quiz_images", {
-  id: serial("id").primaryKey(),
-  quizId: integer("quiz_id").notNull().references(() => quizzes.id, { onDelete: "cascade" }),
-  objectPath: varchar("object_path", { length: 500 }).notNull().unique(),
-  createdBy: integer("created_by").notNull().references(() => users.id),
-  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
-}, () => [denyPublicPolicy("quiz_images")]).enableRLS();
+export const quizImages = pgTable(
+  "quiz_images",
+  {
+    id: serial("id").primaryKey(),
+    quizId: integer("quiz_id")
+      .notNull()
+      .references(() => quizzes.id, { onDelete: "cascade" }),
+    objectPath: varchar("object_path", { length: 500 }).notNull().unique(),
+    createdBy: integer("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  () => [denyPublicPolicy("quiz_images")],
+).enableRLS();

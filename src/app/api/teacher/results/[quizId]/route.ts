@@ -5,13 +5,9 @@ import { errorResponse } from "@/lib/api/response";
 import { requireAuth } from "@/lib/auth/guard";
 import { forbiddenUnlessOwned } from "@/lib/auth/ownership";
 import { getDb } from "@/lib/db";
-import {
-  courses,
-  jambSubjects,
-  quizAttempts,
-  quizzes,
-  users,
-} from "@/lib/db/schema";
+import { courses, jambSubjects, quizAttempts, quizzes, users } from "@/lib/db/schema";
+import { quizQuestionAnalysis } from "@/lib/db/quiz-results";
+import { attemptDurationSeconds, quizScoreDistribution } from "@/lib/quizzes/results";
 
 function parseId(raw: string): number | null {
   const id = Number(raw);
@@ -98,6 +94,8 @@ export async function GET(
         fullName: users.fullName,
         identifier: users.identifier,
         score: quizAttempts.score,
+        startedAt: quizAttempts.startedAt,
+        submittedAt: quizAttempts.submittedAt,
       })
       .from(quizAttempts)
       .innerJoin(users, eq(quizAttempts.userId, users.id))
@@ -198,12 +196,24 @@ export async function GET(
         // Both rate stats are over released attempts only — a held score is not known here.
         avgScore:
           releasedScores.length > 0
-            ? round2(releasedScores.reduce((sum, s) => sum + s, 0) / releasedScores.length)
+            ? round2(
+                releasedScores.reduce((sum, s) => sum + s, 0) / releasedScores.length,
+              )
             : null,
         passRate:
           releasedScores.length > 0
             ? round2((passedCount / releasedScores.length) * 100)
             : null,
+      },
+      analytics: {
+        distribution: quizScoreDistribution(releasedScores),
+        durations: releasedRows
+          .map((row, index) => ({
+            label: `Attempt ${index + 1}`,
+            seconds: attemptDurationSeconds(row.startedAt, row.submittedAt),
+          }))
+          .filter((row) => row.seconds !== null),
+        questions: await quizQuestionAnalysis(db, id),
       },
       data,
     });

@@ -5,6 +5,7 @@ import { errorResponse } from "@/lib/api/response";
 import { requireAuth } from "@/lib/auth/guard";
 import { forbiddenUnlessOwned } from "@/lib/auth/ownership";
 import { getDb } from "@/lib/db";
+import { quizHasAttempts } from "@/lib/db/quiz-builder";
 import { quizzes, quizQuestions } from "@/lib/db/schema";
 
 function parseId(raw: string): number | null {
@@ -50,7 +51,7 @@ export async function DELETE(
       );
     }
 
-    if (quiz.status === "published") {
+    if (quiz.status === "published" || (await quizHasAttempts(db, quiz))) {
       return NextResponse.json(
         {
           error: {
@@ -65,10 +66,7 @@ export async function DELETE(
     const deleted = await db
       .delete(quizQuestions)
       .where(
-        and(
-          eq(quizQuestions.quizId, quizId),
-          eq(quizQuestions.questionId, questionId),
-        ),
+        and(eq(quizQuestions.quizId, quizId), eq(quizQuestions.questionId, questionId)),
       )
       .returning();
 

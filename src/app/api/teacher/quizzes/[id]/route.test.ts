@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { GET, PATCH } from "./route";
+import { ForbiddenError, UnauthorizedError } from "@/lib/auth/errors";
 import {
-  ForbiddenError,
-  UnauthorizedError,
-} from "@/lib/auth/errors";
-import { jsonRequest, makeDbMock, stubSelect, stubUpdate } from "@/lib/testing/route-test";
+  jsonRequest,
+  makeDbMock,
+  stubSelect,
+  stubUpdate,
+} from "@/lib/testing/route-test";
 
 const { requireAuthMock, getDbMock } = vi.hoisted(() => ({
   requireAuthMock: vi.fn(),
@@ -100,19 +102,16 @@ describe("PATCH /api/teacher/quizzes/[id]", () => {
   };
 
   it("updates config and returns the row", async () => {
-    stubSelect(db, [[{ id: 1, quizType: "course" }]]);
+    stubSelect(db, [[{ status: "draft", id: 1, quizType: "course" }], []]);
     stubUpdate(db, { id: 1, ...coursePayload, status: "draft" });
-    const res = await PATCH(
-      jsonRequest(URL_ID, "PATCH", coursePayload),
-      PARAMS,
-    );
+    const res = await PATCH(jsonRequest(URL_ID, "PATCH", coursePayload), PARAMS);
     expect(res.status).toBe(200);
     const body = (await res.json()) as { timeLimitMinutes: number };
     expect(body.timeLimitMinutes).toBe(45);
   });
 
   it("422s when a course quiz changes questionCount away from 50", async () => {
-    stubSelect(db, [[{ id: 1, quizType: "course" }]]);
+    stubSelect(db, [[{ status: "draft", id: 1, quizType: "course" }], []]);
     const res = await PATCH(
       jsonRequest(URL_ID, "PATCH", { ...coursePayload, questionCount: 10 }),
       PARAMS,
@@ -125,7 +124,7 @@ describe("PATCH /api/teacher/quizzes/[id]", () => {
   });
 
   it("422s when a topic quiz sends a weekStart", async () => {
-    stubSelect(db, [[{ id: 1, quizType: "topic" }]]);
+    stubSelect(db, [[{ status: "draft", id: 1, quizType: "topic" }], []]);
     const payload = {
       title: "T",
       questionCount: 10,
@@ -144,13 +143,10 @@ describe("PATCH /api/teacher/quizzes/[id]", () => {
   });
 
   it("422s when a course quiz omits weekStart", async () => {
-    stubSelect(db, [[{ id: 1, quizType: "course" }]]);
+    stubSelect(db, [[{ status: "draft", id: 1, quizType: "course" }], []]);
     const noWeek: Record<string, unknown> = { ...coursePayload };
     delete noWeek.weekStart;
-    const res = await PATCH(
-      jsonRequest(URL_ID, "PATCH", noWeek),
-      PARAMS,
-    );
+    const res = await PATCH(jsonRequest(URL_ID, "PATCH", noWeek), PARAMS);
     expect(res.status).toBe(422);
     const body = (await res.json()) as {
       error: { details: { field: string; message: string }[] };
@@ -160,10 +156,7 @@ describe("PATCH /api/teacher/quizzes/[id]", () => {
 
   it("404s when the quiz does not exist", async () => {
     stubSelect(db, [[]]);
-    const res = await PATCH(
-      jsonRequest(URL_ID, "PATCH", coursePayload),
-      PARAMS,
-    );
+    const res = await PATCH(jsonRequest(URL_ID, "PATCH", coursePayload), PARAMS);
     expect(res.status).toBe(404);
   });
 

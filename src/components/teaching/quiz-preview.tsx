@@ -55,6 +55,7 @@ function PreviewContent({
           totalMarks: rows.reduce((sum, q) => sum + q.marks, 0),
           coverImageUrl: coverUrl,
           allowMultipleAttempts: payload.settings.allowMultipleAttempts,
+          maxAttempts: payload.settings.maxAttempts,
           allowResume: payload.settings.allowResume,
           deductMarksForWrong: payload.settings.deductMarksForWrong,
           hasOpenAttempt: false,
@@ -65,6 +66,12 @@ function PreviewContent({
       />
     );
   const q = rows[index];
+  if (!q)
+    return (
+      <p role="status" className="text-base text-sub">
+        Add questions to preview this quiz.
+      </p>
+    );
   const passage = payload.passages.find((p) => p.clientKey === q.passageKey);
   return (
     <div className="space-y-4">
@@ -79,6 +86,7 @@ function PreviewContent({
         question={{
           id: index + 1,
           questionType: q.questionType,
+          numericUnit: q.numericUnit,
           bodyRichText: q.bodyRichText,
           marks: q.marks,
           options: (q.options ?? []).map((o, i) => ({

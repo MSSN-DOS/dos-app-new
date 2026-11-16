@@ -7,6 +7,7 @@ import { useParams } from "next/navigation";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError, apiFetch } from "@/lib/auth/client-fetch";
+import { QuizResultCharts, type QuizResultAnalytics } from "./quiz-result-charts";
 
 type ResultRow = {
   userId: number;
@@ -19,6 +20,7 @@ type ResultRow = {
 };
 
 type ResultsDetail = {
+  analytics?: QuizResultAnalytics;
   quiz: {
     id: number;
     title: string;
@@ -193,6 +195,9 @@ export function ResultsDetailView({
         </p>
       ) : null}
 
+      {detailQuery.data.analytics && (
+        <QuizResultCharts analytics={detailQuery.data.analytics} />
+      )}
       <section aria-label="Per-person results" className="space-y-3">
         <h2 className="text-base font-semibold text-ink">Who sat it</h2>
 

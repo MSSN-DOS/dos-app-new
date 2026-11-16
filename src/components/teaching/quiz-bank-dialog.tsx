@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { apiFetch } from "@/lib/auth/client-fetch";
 import type { BuilderPassage, BuilderQuestion } from "@/lib/quizzes/builder";
 import { bankCopyResultSchema } from "@/lib/validation/question-bank";
@@ -31,6 +32,23 @@ export function QuizBankDialog({
   onAdd: (questions: BuilderQuestion[], passages: BuilderPassage[]) => void;
 }) {
   const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<number[]>([]);
+  const [adding, setAdding] = useState(false);
+  const addSelected = async () => {
+    setAdding(true);
+    try {
+      // Each successful copy is appended once; failed selections remain available to retry.
+      for (const id of selected) {
+        await mutation.mutateAsync(id);
+        setSelected((ids) => ids.filter((value) => value !== id));
+      }
+      onOpenChange(false);
+    } catch {
+      /* The mutation error is displayed below. */
+    } finally {
+      setAdding(false);
+    }
+  };
   const query = useQuery({
     queryKey: ["quiz-bank", courseId, jambSubjectId, search],
     enabled: open,
@@ -117,6 +135,18 @@ export function QuizBankDialog({
                 key={q.id}
                 className="flex items-center gap-3 rounded-xl border border-line p-3"
               >
+                <label className="flex size-11 shrink-0 cursor-pointer items-center justify-center">
+                  <Checkbox
+                    aria-label={`Select bank question ${q.id}`}
+                    checked={selected.includes(q.id)}
+                    disabled={adding || mutation.isPending}
+                    onCheckedChange={(checked) =>
+                      setSelected((ids) =>
+                        checked ? [...ids, q.id] : ids.filter((id) => id !== q.id),
+                      )
+                    }
+                  />
+                </label>
                 <p className="min-w-0 flex-1 break-words text-base">
                   {q.bodyRichText.replace(/<[^>]*>/g, " ").slice(0, 200)}
                 </p>
@@ -124,7 +154,7 @@ export function QuizBankDialog({
                   type="button"
                   variant="outline"
                   className="min-h-11 min-w-11 text-base"
-                  disabled={mutation.isPending}
+                  disabled={mutation.isPending || adding}
                   onClick={() => mutation.mutate(q.id)}
                 >
                   Add
@@ -133,6 +163,19 @@ export function QuizBankDialog({
             ))}
           </ul>
         )}
+        <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-2 border-t border-line bg-panel pt-3">
+          <p role="status" className="text-base text-sub">
+            {selected.length} selected
+          </p>
+          <Button
+            type="button"
+            className="min-h-11 text-base"
+            disabled={!selected.length || mutation.isPending || adding}
+            onClick={() => void addSelected()}
+          >
+            {adding ? "Adding…" : "Add selected questions"}
+          </Button>
+        </div>
         {mutation.isError && (
           <p role="alert" className="text-base text-ruby">
             {mutation.error.message}

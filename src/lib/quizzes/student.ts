@@ -14,10 +14,13 @@ export interface QuizIntroductionData {
   hasOpenAttempt: boolean;
   canStart: boolean;
   windowOpen: boolean;
+  maxAttempts?: number | null;
+  completedAttempts?: number;
 }
 export interface StudentQuizQuestion {
   id: number;
-  questionType: "options" | "fill_in_gap" | "essay";
+  questionType: "options" | "fill_in_gap" | "essay" | "multi_answer" | "numeric";
+  numericUnit?: string;
   bodyRichText: string;
   marks: number;
   options: { id: number; optionText: string }[];
@@ -51,5 +54,8 @@ export interface StudentQuizReview {
     questionType: StudentQuizQuestion["questionType"];
     correctOptions: string[];
     acceptedAnswers: string[];
+    numericAnswer?: number | null;
+    numericTolerance?: number;
+    numericUnit?: string;
   }[];
 }

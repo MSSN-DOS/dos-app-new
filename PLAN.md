@@ -94,6 +94,26 @@ PDF/article resource uploads.
   lint/typecheck and the full suite once; verify mobile/tablet/desktop and both themes.
   This explicitly requested follow-up is independent of deployment and logo tasks.
 
+- **P12-11** Complete the reference's authoring features (Board expansion, 2026-11-16).
+  This explicit follow-up may proceed independently of deployment/logo tasks.
+  Add Multi-answer and Numeric questions end to end, exact-set objective grading,
+  finite numeric answers with absolute tolerance and display units, question-level
+  option shuffling, limited/unlimited attempts, the floating Add question dropdown,
+  bank multi-selection and validated bulk paste, reliable draft autosave and editable
+  header title, math/chemistry palettes, released-data result charts, question-paper
+  Print/PDF with optional answer key, and Unpublish. Keep the five previous authoring
+  types, private images, DOS tokens, phone-first layouts and Admin score release.
+  The latest Board answers supersede earlier exclusions and single-select-only rules
+  for the new Multi-answer type; ordinary Multiple choice stays single-select.
+  Use additive generated migrations, shared Zod, existing JWT/Drizzle/TanStack APIs,
+  colocated endpoint tests and meaningful grading/autosave/export tests. Track the
+  detailed work in QUIZ-UI-TODO.md. Unpublish with recorded attempts requires the
+  confirmed lifecycle: hide new access, finish started attempts, permanently lock
+  attempted content. The later QUIZBOOT_SPEC.md corrects the UI: simplify settings,
+  progressive More/Advanced panels, single expanded card, inline gaps, structured
+  science templates, resized pasted images, and paginated A4 preview/direct PDF.
+  Keep DOS tokens/accessibility and previously confirmed release/history rules.
+
 ## Phase 14 — Question-bank types and private images (2026-11-15)
 
 The Board explicitly requests the reference type modal in the question bank only,

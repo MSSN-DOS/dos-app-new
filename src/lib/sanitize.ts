@@ -28,6 +28,12 @@
  * growing this file.
  */
 
+import {
+  scienceTemplates,
+  scienceTemplateValues,
+  templateLatex,
+} from "./quizzes/science-templates";
+
 /** Elements whose contents are dropped entirely, not just un-tagged. */
 const CONTENT_DROPPING_TAGS = [
   "script",
@@ -131,7 +137,9 @@ function keepAttributes(tag: string, raw: string): string {
     const src = readAttribute(raw, "src");
     if (
       !path ||
-      !/^(quizzes|question-bank)\/[1-9]\d*\/[a-zA-Z0-9_-]+\.(png|jpe?g|webp)$/.test(path) ||
+      !/^(quizzes|question-bank)\/[1-9]\d*\/[a-zA-Z0-9_-]+\.(png|jpe?g|webp)$/.test(
+        path,
+      ) ||
       !src
     )
       return "";
@@ -165,6 +173,13 @@ function keepAttributes(tag: string, raw: string): string {
 
   const latex = readAttribute(raw, "data-latex");
   if (latex === null) return "";
+
+  const templateId = readAttribute(raw, "data-science-template");
+  const template = scienceTemplates.find((item) => item.id === templateId);
+  const values = scienceTemplateValues(readAttribute(raw, "data-science-values") ?? "");
+  if (tag === "span" && template && values && values.length === template.slots.length) {
+    return ` data-type="${mathType}" data-latex="${escapeAttributeValue(templateLatex(template.id, values))}" data-science-template="${template.id}" data-science-values="${escapeAttributeValue(JSON.stringify(values).replaceAll("&", "&amp;"))}"`;
+  }
 
   return ` data-type="${mathType}" data-latex="${escapeAttributeValue(latex)}"`;
 }

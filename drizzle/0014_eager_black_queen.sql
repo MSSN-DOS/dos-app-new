@@ -1,0 +1,2 @@
+ALTER TABLE "quizzes" ADD COLUMN "attempts_started" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "quiz_attempts_user_number_unique" ON "quiz_attempts" USING btree ("quiz_id","user_id","attempt_number");

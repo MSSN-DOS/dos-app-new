@@ -52,6 +52,10 @@ function mount(complete = false) {
         questions: [
           {
             clientKey: "q1",
+            numericAnswer: null,
+            numericTolerance: 0,
+            numericUnit: "",
+            shuffleOptions: false,
             questionType: "essay" as const,
             bodyRichText: "Explain the experiment",
             marks: 5,
@@ -78,21 +82,79 @@ function mount(complete = false) {
 }
 beforeEach(() => {
   vi.clearAllMocks();
-  apiFetch.mockImplementation(async (url: string) =>
-    url.endsWith("quiz-preferences")
-      ? { data: { defaults: null, pinned: [] } }
-      : { data: { saved: true } },
+  HTMLElement.prototype.scrollIntoView = vi.fn();
+  apiFetch.mockImplementation(
+    async (url: string, init?: { method?: string; body?: string }) =>
+      url.endsWith("quiz-preferences")
+        ? { data: { defaults: null, pinned: [] } }
+        : init?.method === "PUT"
+          ? {
+              data: {
+                revision: 4,
+                status:
+                  JSON.parse(init.body ?? "{}").action === "publish"
+                    ? "published"
+                    : "draft",
+                questionIds: [],
+                passageIds: {},
+              },
+            }
+          : { data: { saved: true } },
   );
 });
 describe("quiz authoring integration", () => {
+  it("autosaves edits made during an in-flight save using the next revision", async () => {
+    let finishFirst: ((value: unknown) => void) | undefined;
+    let writes = 0;
+    apiFetch.mockImplementation(
+      (url: string, init?: { method?: string; body?: string }) => {
+        if (init?.method !== "PUT")
+          return Promise.resolve({ data: { defaults: null, pinned: [] } });
+        writes += 1;
+        if (writes === 1)
+          return new Promise((resolve) => {
+            finishFirst = resolve;
+          });
+        return Promise.resolve({
+          data: { revision: 5, status: "draft", questionIds: [41], passageIds: {} },
+        });
+      },
+    );
+    mount(true);
+    fireEvent.change(screen.getByLabelText("Quiz header title"), {
+      target: { value: "First title" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+    await waitFor(() => expect(finishFirst).toBeDefined());
+    fireEvent.change(screen.getByLabelText("Quiz header title"), {
+      target: { value: "Latest title" },
+    });
+    finishFirst?.({
+      data: { revision: 4, status: "draft", questionIds: [41], passageIds: {} },
+    });
+    await waitFor(() => expect(writes).toBe(2), { timeout: 10000 });
+    const calls = apiFetch.mock.calls.filter(([, init]) => init?.method === "PUT");
+    expect(JSON.parse(calls[0][1].body)).toMatchObject({
+      revision: 3,
+      payload: { details: { title: "First title" } },
+    });
+    expect(JSON.parse(calls[1][1].body)).toMatchObject({
+      revision: 4,
+      payload: { details: { title: "Latest title" }, questions: [{ id: 41 }] },
+    });
+    expect(screen.getByLabelText("Quiz header title")).toHaveValue("Latest title");
+    await waitFor(() =>
+      expect(screen.getAllByText("All changes saved").length).toBeGreaterThan(0),
+    );
+  }, 30000);
   it("preserves edits across tabs and saves a question chosen from the shared dialog", async () => {
     mount(true);
     fireEvent.mouseDown(screen.getByRole("tab", { name: "Settings" }));
-    fireEvent.change(screen.getByLabelText("Title (required)"), {
+    fireEvent.change(screen.getByLabelText("Quiz header title"), {
       target: { value: "Updated engineering quiz" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Scoring & results" }));
-    fireEvent.click(screen.getByRole("switch", { name: "Show result after attempt" }));
+    fireEvent.click(screen.getByRole("combobox", { name: "Show results" }));
+    fireEvent.click(screen.getByRole("option", { name: "Hidden" }));
     fireEvent.mouseDown(screen.getByRole("tab", { name: "Questions" }));
     fireEvent.click(screen.getByRole("button", { name: "Add new question" }));
     fireEvent.click(
@@ -102,7 +164,7 @@ describe("quiz authoring integration", () => {
     );
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     fireEvent.mouseDown(screen.getByRole("tab", { name: "Settings" }));
-    expect(screen.getByLabelText("Title (required)")).toHaveValue(
+    expect(screen.getByLabelText("Quiz header title")).toHaveValue(
       "Updated engineering quiz",
     );
     fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
@@ -124,7 +186,7 @@ describe("quiz authoring integration", () => {
   }, 30000);
   it("saves incomplete drafts with the revision while publishing remains blocked", async () => {
     mount();
-    expect(screen.getByRole("button", { name: "Publish" })).toBeDisabled();
+    expect(screen.getAllByRole("button", { name: "Publish" })[0]).toBeDisabled();
     expect(screen.getByText(/What blocks publishing/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
     await waitFor(() =>
@@ -142,8 +204,8 @@ describe("quiz authoring integration", () => {
   }, 30000);
   it("publishes a complete essay without inventing an automatic answer", async () => {
     mount(true);
-    expect(screen.getByRole("button", { name: "Publish" })).toBeEnabled();
-    fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+    expect(screen.getAllByRole("button", { name: "Publish" })[0]).toBeEnabled();
+    fireEvent.click(screen.getAllByRole("button", { name: "Publish" })[0]);
     await waitFor(() =>
       expect(apiFetch.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(true),
     );
@@ -153,7 +215,7 @@ describe("quiz authoring integration", () => {
       payload: { questions: [{ questionType: "essay", marks: 5, options: [] }] },
     });
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Publish" })).toBeEnabled(),
+      expect(screen.getByRole("button", { name: "Unpublish" })).toBeEnabled(),
     );
   }, 30000);
   it("previews the student introduction and the manually graded question", async () => {

@@ -2,6 +2,7 @@
 
 import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
 import katex from "katex";
+import "katex/contrib/mhchem";
 import {
   Bold,
   Italic,
@@ -40,6 +41,13 @@ import { renderRichText } from "@/lib/rich-text";
 import { hasRichTextContent, sanitizeRichText } from "@/lib/sanitize";
 import { cn } from "@/lib/utils";
 import { richTextExtensions } from "./rich-text-extensions";
+import { sciencePalettes } from "@/lib/quizzes/science-palettes";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { InlineGap, gapEditorHtml, gapStorageHtml } from "./inline-gap";
+import { resizeQuizImage } from "@/lib/quizzes/resize-image";
+import { scienceTemplates, templateLatex } from "@/lib/quizzes/science-templates";
+import { ScienceTemplateNode } from "./science-template-node";
+import { RichTextTools, useRichTextToolbar } from "./rich-text-toolbar";
 
 export type QuizImageUploader = (file: File) => Promise<{ url: string; path: string }>;
 
@@ -47,10 +55,12 @@ export interface RichTextEditorProps {
   id: string;
   label: string;
   value: string;
-  onChange: (value: string) => void;
+  onChange: (value: string, gapAnswers?: string[]) => void;
+  gapAnswers?: string[];
   placeholder?: string;
   clickToEdit?: boolean;
   uploadImage?: QuizImageUploader;
+  readOnly?: boolean;
 }
 
 /** One editor for quiz details, questions, options, explanations and passages. */
@@ -62,11 +72,21 @@ export function RichTextEditor({
   placeholder = "Click to edit",
   clickToEdit = true,
   uploadImage,
+  gapAnswers,
+  readOnly = false,
 }: RichTextEditorProps) {
+  const toolbar = useRichTextToolbar();
   const [editing, setEditing] = useState(!clickToEdit);
   const [fullscreen, setFullscreen] = useState(false);
   const [mathOpen, setMathOpen] = useState(false);
+  const [mathPanel, setMathPanel] = useState(false);
   const [formula, setFormula] = useState("");
+  const [formulaMode, setFormulaMode] = useState<"latex" | "chemistry">("latex");
+  const formulaSource =
+    formulaMode === "chemistry" && !formula.trim().startsWith("\\ce{")
+      ? `\\ce{${formula}}`
+      : formula;
+  const [palette, setPalette] = useState<keyof typeof sciencePalettes>("math");
   const [mathTarget, setMathTarget] = useState<{
     kind: "inline" | "block";
     position: number;
@@ -76,19 +96,26 @@ export function RichTextEditor({
   const [uploading, setUploading] = useState(false);
   const imageInput = useRef<HTMLInputElement>(null);
   const extensions = useMemo(
-    () =>
-      richTextExtensions((kind, latex, position) => {
+    () => [
+      ...richTextExtensions((kind, latex, position) => {
         setFormula(latex);
+        setFormulaMode("latex");
         setMathTarget({ kind, position });
         setBlockMath(kind === "block");
         setMathOpen(true);
       }),
+      InlineGap,
+      ScienceTemplateNode,
+    ],
     [],
   );
   const editor = useEditor({
     extensions,
     immediatelyRender: false,
-    content: sanitizeRichText(value),
+    editable: !readOnly,
+    content: gapAnswers
+      ? gapEditorHtml(sanitizeRichText(value), gapAnswers)
+      : sanitizeRichText(value),
     editorProps: {
       attributes: {
         id,
@@ -97,9 +124,43 @@ export function RichTextEditor({
         "aria-multiline": "true",
         class: "dos-rich-text min-h-32 p-3 text-base focus:outline-none",
       },
-      transformPastedHTML: sanitizeRichText,
+      handlePaste: (_view, event) => {
+        const item = Array.from(event.clipboardData?.items ?? []).find((entry) =>
+          entry.type.startsWith("image/"),
+        );
+        const file = item?.getAsFile();
+        if (file && uploadImage) {
+          event.preventDefault();
+          void insertImage(file);
+          return true;
+        }
+        const text = event.clipboardData?.getData("text/plain");
+        if (text) {
+          event.preventDefault();
+          editor
+            ?.chain()
+            .insertContent(
+              text
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;"),
+            )
+            .run();
+          return true;
+        }
+        return false;
+      },
     },
-    onUpdate: ({ editor: updated }) => onChange(sanitizeRichText(updated.getHTML())),
+    onUpdate: ({ editor: updated }) => {
+      const answers: string[] = [];
+      updated.state.doc.descendants((node) => {
+        if (node.type.name === "inlineGap") answers.push(String(node.attrs.answer ?? ""));
+      });
+      onChange(
+        gapStorageHtml(sanitizeRichText(updated.getHTML())),
+        gapAnswers ? answers : undefined,
+      );
+    },
   });
   const active = useEditorState({
     editor,
@@ -122,14 +183,25 @@ export function RichTextEditor({
   });
   // External resets/load/save updates are document changes, not server-state fetches.
   useEffect(() => {
-    if (editor && sanitizeRichText(editor.getHTML()) !== sanitizeRichText(value))
-      editor.commands.setContent(sanitizeRichText(value), { emitUpdate: false });
-  }, [editor, value]);
+    editor?.setEditable(!readOnly);
+  }, [editor, readOnly]);
+  useEffect(() => {
+    if (
+      editor &&
+      gapStorageHtml(sanitizeRichText(editor.getHTML())) !== sanitizeRichText(value)
+    )
+      editor.commands.setContent(
+        gapAnswers
+          ? gapEditorHtml(sanitizeRichText(value), gapAnswers)
+          : sanitizeRichText(value),
+        { emitUpdate: false },
+      );
+  }, [editor, value, gapAnswers]);
 
   function insertMath() {
     if (!editor || !formula.trim()) return;
     try {
-      katex.renderToString(formula, {
+      katex.renderToString(formulaSource, {
         throwOnError: true,
         trust: false,
         maxSize: 20,
@@ -139,17 +211,17 @@ export function RichTextEditor({
         editor
           .chain()
           .focus()
-          .updateInlineMath({ pos: mathTarget.position, latex: formula })
+          .updateInlineMath({ pos: mathTarget.position, latex: formulaSource })
           .run();
       else if (mathTarget?.kind === "block")
         editor
           .chain()
           .focus()
-          .updateBlockMath({ pos: mathTarget.position, latex: formula })
+          .updateBlockMath({ pos: mathTarget.position, latex: formulaSource })
           .run();
       else if (blockMath)
-        editor.chain().focus().insertBlockMath({ latex: formula }).run();
-      else editor.chain().focus().insertInlineMath({ latex: formula }).run();
+        editor.chain().focus().insertBlockMath({ latex: formulaSource }).run();
+      else editor.chain().focus().insertInlineMath({ latex: formulaSource }).run();
       setError(null);
       setMathOpen(false);
     } catch {
@@ -162,7 +234,7 @@ export function RichTextEditor({
     setUploading(true);
     setError(null);
     try {
-      const image = await uploadImage(file);
+      const image = await uploadImage(await resizeQuizImage(file));
       editor
         .chain()
         .focus()
@@ -296,52 +368,207 @@ export function RichTextEditor({
         expanded && "flex min-h-0 flex-1 flex-col",
       )}
     >
-      <div
-        role="group"
-        aria-label={`${label} formatting`}
-        className="flex flex-wrap gap-1 border-b bg-muted p-1"
-      >
-        {actions.map(({ label: actionLabel, icon: Icon, mark, run }) => (
-          <Button
-            key={actionLabel}
-            type="button"
-            variant="ghost"
-            className="size-11 shrink-0 p-0"
-            aria-label={actionLabel}
-            title={actionLabel}
-            aria-pressed={mark ? active?.[mark] : undefined}
-            disabled={!editor}
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={run}
+      <RichTextTools editorId={id} fullscreen={expanded}>
+        {!readOnly && (
+          <div
+            role="group"
+            aria-label={`${label} formatting`}
+            className="flex flex-wrap gap-1 border-b bg-muted p-1"
           >
-            <Icon className="size-4" aria-hidden="true" />
-          </Button>
-        ))}
-        <Button
-          type="button"
-          variant="ghost"
-          className="size-11 p-0"
-          aria-label="Insert image"
-          title="Insert image"
-          disabled={!uploadImage || uploading || !editor}
-          onClick={() => imageInput.current?.click()}
-        >
-          {uploading ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <ImagePlus className="size-4" />
-          )}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          className="size-11 p-0"
-          aria-label={expanded ? "Exit fullscreen" : "Edit in fullscreen"}
-          onClick={() => setFullscreen(!expanded)}
-        >
-          {expanded ? <Minimize className="size-4" /> : <Maximize className="size-4" />}
-        </Button>
-      </div>
+            {actions.map(({ label: actionLabel, icon: Icon, mark, run }) => (
+              <Button
+                key={actionLabel}
+                type="button"
+                variant="ghost"
+                className="size-11 shrink-0 p-0"
+                aria-label={actionLabel}
+                title={actionLabel}
+                aria-pressed={mark ? active?.[mark] : undefined}
+                disabled={!editor}
+                onMouseDown={(event) => event.preventDefault()}
+                onPointerDown={(event) => {
+                  if (actionLabel !== "Insert equation") event.preventDefault();
+                }}
+                onClick={run}
+              >
+                <Icon className="size-4" aria-hidden="true" />
+              </Button>
+            ))}
+            {gapAnswers && (
+              <Button
+                type="button"
+                variant="ghost"
+                className="size-11 p-0 text-base"
+                aria-label="Insert gap"
+                title="Insert gap"
+                onMouseDown={(event) => event.preventDefault()}
+                onPointerDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  editor
+                    ?.chain()
+                    .focus()
+                    .insertContent({ type: "inlineGap", attrs: { answer: "" } })
+                    .run();
+                  requestAnimationFrame(() => {
+                    const inputs = document
+                      .getElementById(id)
+                      ?.querySelectorAll<HTMLInputElement>(
+                        'input[aria-label="Accepted gap answer"]',
+                      );
+                    inputs?.[inputs.length - 1]?.focus();
+                  });
+                }}
+              >
+                [ ]
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="ghost"
+              className="min-h-11 px-3 text-base"
+              aria-label="Science templates"
+              aria-expanded={mathPanel}
+              onMouseDown={(event) => event.preventDefault()}
+              onPointerDown={(event) => event.preventDefault()}
+              onClick={() => setMathPanel(!mathPanel)}
+            >
+              Math / science
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              className="size-11 p-0"
+              aria-label="Insert image"
+              title="Insert image"
+              disabled={!uploadImage || uploading || !editor}
+              onClick={() => imageInput.current?.click()}
+            >
+              {uploading ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <ImagePlus className="size-4" />
+              )}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              className="size-11 p-0"
+              aria-label={expanded ? "Exit fullscreen" : "Edit in fullscreen"}
+              onClick={() => setFullscreen(!expanded)}
+            >
+              {expanded ? (
+                <Minimize className="size-4" />
+              ) : (
+                <Maximize className="size-4" />
+              )}
+            </Button>
+          </div>
+        )}
+        {mathPanel && !readOnly && (
+          <div className="min-w-0 space-y-3 border-b bg-canvas p-2">
+            <Tabs
+              value={palette}
+              onValueChange={(value) => {
+                if (
+                  value === "math" ||
+                  value === "physics" ||
+                  value === "chemistry" ||
+                  value === "symbols"
+                )
+                  setPalette(value);
+              }}
+            >
+              <TabsList
+                aria-label="Template subject"
+                className="grid h-auto w-full grid-cols-2 sm:grid-cols-4"
+              >
+                {(["math", "physics", "chemistry", "symbols"] as const).map((key) => (
+                  <TabsTrigger
+                    value={key}
+                    key={key}
+                    className="min-h-11 text-base capitalize"
+                  >
+                    {key}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {scienceTemplates
+                .filter((template) => template.group === palette)
+                .map((template) => (
+                  <Button
+                    key={template.id}
+                    type="button"
+                    variant="outline"
+                    aria-label={`Insert ${template.label} template`}
+                    title={template.label}
+                    className="h-auto min-h-11 min-w-0 overflow-hidden p-2"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onPointerDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                      const before = editor?.state.selection.from ?? 0;
+                      editor
+                        ?.chain()
+                        .focus()
+                        .insertContent({
+                          type: "scienceTemplate",
+                          attrs: {
+                            templateId: template.id,
+                            values: template.slots.map(() => ""),
+                          },
+                        })
+                        .run();
+                      requestAnimationFrame(() => {
+                        const node = editor?.view.nodeDOM(before);
+                        if (node instanceof HTMLElement)
+                          node
+                            .querySelector<HTMLInputElement>("[data-science-slot]")
+                            ?.focus();
+                      });
+                    }}
+                  >
+                    <span
+                      className="max-w-full overflow-x-auto"
+                      aria-hidden="true"
+                      dangerouslySetInnerHTML={{
+                        __html: katex.renderToString(
+                          templateLatex(
+                            template.id,
+                            template.slots.map(() => "x"),
+                          ),
+                          {
+                            trust: false,
+                            throwOnError: false,
+                            maxExpand: 1000,
+                            maxSize: 20,
+                          },
+                        ),
+                      }}
+                    />
+                  </Button>
+                ))}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {sciencePalettes[palette].map((item) => (
+                <Button
+                  key={item.label}
+                  variant="outline"
+                  type="button"
+                  className="min-h-11 text-base"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onPointerDown={(event) => event.preventDefault()}
+                  onClick={() =>
+                    editor?.chain().focus().insertInlineMath({ latex: item.latex }).run()
+                  }
+                >
+                  {item.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
+      </RichTextTools>
       <input
         ref={imageInput}
         type="file"
@@ -378,7 +605,13 @@ export function RichTextEditor({
   );
   const hasContent = hasRichTextContent(value);
   return (
-    <div className="min-w-0 space-y-2">
+    <div
+      className="min-w-0 space-y-2"
+      onFocusCapture={() => {
+        // Activating a preview on pointer-down moves the toolbar before its click lands.
+        if (editing || fullscreen) toolbar?.activate(id);
+      }}
+    >
       <Label htmlFor={editing ? id : `${id}-edit`}>{label}</Label>
       {!fullscreen &&
         (editing ? (
@@ -390,7 +623,10 @@ export function RichTextEditor({
             variant="outline"
             className="h-auto min-h-24 w-full justify-start whitespace-normal p-3 text-left text-base"
             aria-label={`Edit ${label}`}
-            onClick={() => setEditing(true)}
+            onClick={() => {
+              if (!readOnly) setEditing(true);
+              if (!readOnly) toolbar?.activate(id);
+            }}
           >
             {hasContent ? (
               <span
@@ -417,14 +653,82 @@ export function RichTextEditor({
         </DialogContent>
       </Dialog>
       <Dialog open={mathOpen} onOpenChange={setMathOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[95dvh] w-[calc(100%-1rem)] overflow-y-auto border-line bg-panel text-ink sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>{mathTarget ? "Edit equation" : "Insert equation"}</DialogTitle>
             <DialogDescription>
               Enter LaTeX, for example \frac&#123;1&#125;&#123;2&#125; or E = mc^2.
             </DialogDescription>
           </DialogHeader>
-          <Label htmlFor={`${id}-latex`}>LaTeX equation</Label>
+          <Tabs
+            value={formulaMode}
+            onValueChange={(mode) => {
+              if (mode === "latex" || mode === "chemistry") setFormulaMode(mode);
+            }}
+          >
+            <TabsList
+              className="grid h-auto w-full grid-cols-2"
+              aria-label="Formula input mode"
+            >
+              <TabsTrigger value="latex" className="min-h-11 text-base">
+                LaTeX
+              </TabsTrigger>
+              <TabsTrigger value="chemistry" className="min-h-11 text-base">
+                Chemistry shorthand
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <Label htmlFor={`${id}-latex`}>
+            {formulaMode === "chemistry"
+              ? "Chemical formula or reaction"
+              : "LaTeX equation"}
+          </Label>
+          <Tabs
+            value={palette}
+            onValueChange={(value) => {
+              if (
+                value === "math" ||
+                value === "physics" ||
+                value === "chemistry" ||
+                value === "symbols"
+              )
+                setPalette(value);
+            }}
+          >
+            <TabsList
+              aria-label="Science formula palettes"
+              className="grid h-auto w-full grid-cols-2 sm:grid-cols-4 sm:gap-1"
+            >
+              {(["math", "physics", "chemistry", "symbols"] as const).map((key) => (
+                <TabsTrigger
+                  key={key}
+                  value={key}
+                  className="min-h-11 text-base capitalize"
+                >
+                  {key}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {sciencePalettes[palette].map((example) => (
+              <Button
+                key={example.label}
+                type="button"
+                variant="outline"
+                className="h-auto min-h-11 whitespace-normal text-base"
+                onClick={() => {
+                  setFormula(example.latex);
+                  setFormulaMode(
+                    example.latex.startsWith("\\ce{") ? "chemistry" : "latex",
+                  );
+                  setError(null);
+                }}
+              >
+                {example.label}
+              </Button>
+            ))}
+          </div>
           <Textarea
             id={`${id}-latex`}
             value={formula}
@@ -435,6 +739,34 @@ export function RichTextEditor({
               setError(null);
             }}
           />
+          <div className="space-y-2">
+            <p className="text-base font-semibold">Formula preview</p>
+            <div
+              className="dos-rich-text min-w-0 overflow-x-auto rounded-xl border border-line bg-canvas p-3 text-base"
+              aria-live="polite"
+              dangerouslySetInnerHTML={{
+                __html: (() => {
+                  try {
+                    return formula
+                      ? katex.renderToString(formulaSource, {
+                          throwOnError: false,
+                          trust: false,
+                          maxExpand: 1000,
+                          maxSize: 20,
+                        })
+                      : "Enter an equation or choose an example.";
+                  } catch {
+                    return "Check the formula syntax.";
+                  }
+                })(),
+              }}
+            />
+            <p className="text-base text-sub">
+              {formulaMode === "chemistry"
+                ? "Example: N2 + 3H2 <=>[Fe][450°C] 2NH3"
+                : "Use LaTeX for mathematics or select Chemistry shorthand for reactions."}
+            </p>
+          </div>
           {!mathTarget && (
             <div className="flex gap-2">
               <Button

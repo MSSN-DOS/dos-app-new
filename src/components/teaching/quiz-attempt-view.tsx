@@ -29,7 +29,11 @@ import {
 } from "@/lib/validation/attempts";
 import { QuizIntroduction, QuizQuestionView, QuizRichText } from "./quiz-student-view";
 import { QuizCalculator } from "./quiz-calculator";
-import { QUIZ_IMAGE_REFRESH_MS, quizImagePaths, refreshQuizRichText } from "@/lib/quizzes/images";
+import {
+  QUIZ_IMAGE_REFRESH_MS,
+  quizImagePaths,
+  refreshQuizRichText,
+} from "@/lib/quizzes/images";
 import { useQuizImageLinks } from "./use-quiz-image-links";
 
 type Submission = {
@@ -133,6 +137,11 @@ export function QuizReview({ quizId, attemptId }: { quizId: string; attemptId: n
                   Gap {j + 1}: {value}
                 </p>
               ))}
+              {q.questionType === "numeric" && (
+                <p className="text-base text-ink">
+                  Answer: {q.numericAnswer} {q.numericUnit} (±{q.numericTolerance})
+                </p>
+              )}
               {q.questionType === "essay" && (
                 <p className="text-base text-sub">Manually graded by your teacher.</p>
               )}
@@ -173,7 +182,17 @@ function AttemptSession({
   const savedSnapshot = useRef(JSON.stringify(answers));
   const [dirty, setDirty] = useState(false);
   const queryClient = useQueryClient();
-  const imageLinks = useQuizImageLinks(quizId, false, attempt.questions.some((q) => [q.bodyRichText, q.passage?.bodyRichText ?? "", ...q.options.map((o) => o.optionText)].some((html) => quizImagePaths(html).length > 0)));
+  const imageLinks = useQuizImageLinks(
+    quizId,
+    false,
+    attempt.questions.some((q) =>
+      [
+        q.bodyRichText,
+        q.passage?.bodyRichText ?? "",
+        ...q.options.map((o) => o.optionText),
+      ].some((html) => quizImagePaths(html).length > 0),
+    ),
+  );
   const payload = (values: AnswerMap): SubmitAttemptInput =>
     submitAttemptSchema.parse({
       answers: attempt.questions.map((q) => values[q.id] ?? { questionId: q.id }),
@@ -225,20 +244,34 @@ function AttemptSession({
   const remaining =
     expiresAt === null ? null : Math.max(0, Math.ceil((expiresAt - now) / 1000));
   const originalQuestion = attempt.questions[index];
-  const question = originalQuestion && { ...originalQuestion,
+  const question = originalQuestion && {
+    ...originalQuestion,
     bodyRichText: refreshQuizRichText(originalQuestion.bodyRichText, imageLinks),
-    options: originalQuestion.options.map((o) => ({ ...o, optionText: refreshQuizRichText(o.optionText, imageLinks) })),
-    passage: originalQuestion.passage && { ...originalQuestion.passage, bodyRichText: refreshQuizRichText(originalQuestion.passage.bodyRichText, imageLinks) },
+    options: originalQuestion.options.map((o) => ({
+      ...o,
+      optionText: refreshQuizRichText(o.optionText, imageLinks),
+    })),
+    passage: originalQuestion.passage && {
+      ...originalQuestion.passage,
+      bodyRichText: refreshQuizRichText(
+        originalQuestion.passage.bodyRichText,
+        imageLinks,
+      ),
+    },
   };
   const answeredCount = attempt.questions.filter((q) => {
     const a = answers[q.id];
     return q.questionType === "options"
       ? a?.selectedOptionId != null
-      : q.questionType === "essay"
-        ? Boolean(a?.essayAnswer?.trim())
-        : q.blankIndexes.every((blank) =>
-            Boolean(a?.blankAnswers?.[String(blank)]?.trim()),
-          );
+      : q.questionType === "multi_answer"
+        ? Boolean(a?.selectedOptionIds?.length)
+        : q.questionType === "numeric"
+          ? Boolean(a?.numericAnswer?.trim())
+          : q.questionType === "essay"
+            ? Boolean(a?.essayAnswer?.trim())
+            : q.blankIndexes.every((blank) =>
+                Boolean(a?.blankAnswers?.[String(blank)]?.trim()),
+              );
   }).length;
 
   useEffect(() => {

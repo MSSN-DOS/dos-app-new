@@ -7,7 +7,8 @@ describe("quiz image renewal", () => {
   const html = `<p>Unsaved explanation</p><img src="${oldUrl}" data-storage-path="${path}" alt="Diagram">`;
   it("renews links while preserving unsaved content and storage paths", () => {
     const fresh = refreshQuizRichText(html, new Map([[path, newUrl]]));
-    expect(fresh).toContain(newUrl); expect(fresh).toContain("Unsaved explanation");
+    expect(fresh).toContain(newUrl);
+    expect(fresh).toContain("Unsaved explanation");
     expect(persistQuizRichText(fresh)).toBe(persistQuizRichText(html));
   });
   it("keeps current previews while renewal is pending", () => {

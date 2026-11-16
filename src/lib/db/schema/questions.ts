@@ -1,6 +1,7 @@
 import {
-  pgTable,
   boolean,
+  doublePrecision,
+  pgTable,
   check,
   integer,
   serial,
@@ -38,10 +39,10 @@ export const passages = pgTable(
   () => [
     check(
       "passages_track_check",
-      sql`(course_id IS NOT NULL AND jamb_subject_id IS NULL) OR (course_id IS NULL AND jamb_subject_id IS NOT NULL)`
+      sql`(course_id IS NOT NULL AND jamb_subject_id IS NULL) OR (course_id IS NULL AND jamb_subject_id IS NOT NULL)`,
     ),
     denyPublicPolicy("passages"),
-  ]
+  ],
 ).enableRLS();
 
 export const questions = pgTable(
@@ -54,6 +55,10 @@ export const questions = pgTable(
     jambSubjectId: integer("jamb_subject_id").references(() => jambSubjects.id),
     topicId: integer("topic_id").references(() => topics.id),
     questionType: questionTypeEnum("question_type").notNull(),
+    numericAnswer: doublePrecision("numeric_answer"),
+    numericTolerance: doublePrecision("numeric_tolerance").notNull().default(0),
+    numericUnit: varchar("numeric_unit", { length: 60 }).notNull().default(""),
+    shuffleOptions: boolean("shuffle_options").notNull().default(false),
     bankRevision: integer("bank_revision").notNull().default(0),
     bodyRichText: text("body_rich_text").notNull(),
     // Optional explanation shown after the attempt when the quiz reveals answers.
@@ -73,10 +78,11 @@ export const questions = pgTable(
   () => [
     check(
       "questions_track_check",
-      sql`(course_id IS NOT NULL AND jamb_subject_id IS NULL) OR (course_id IS NULL AND jamb_subject_id IS NOT NULL)`
+      sql`(course_id IS NOT NULL AND jamb_subject_id IS NULL) OR (course_id IS NULL AND jamb_subject_id IS NOT NULL)`,
     ),
     denyPublicPolicy("questions"),
-  ]
+    check("questions_numeric_tolerance_check", sql`numeric_tolerance >= 0`),
+  ],
 ).enableRLS();
 
 export const questionOptions = pgTable(
@@ -90,7 +96,7 @@ export const questionOptions = pgTable(
     isCorrect: boolean("is_correct").notNull().default(false),
     sortOrder: integer("sort_order").notNull().default(0),
   },
-  () => [denyPublicPolicy("question_options")]
+  () => [denyPublicPolicy("question_options")],
 ).enableRLS();
 
 export const questionBlanks = pgTable(
@@ -104,14 +110,20 @@ export const questionBlanks = pgTable(
     acceptedAnswer: varchar("accepted_answer", { length: 255 }).notNull(),
     caseSensitive: boolean("case_sensitive").notNull().default(false),
   },
-  () => [denyPublicPolicy("question_blanks")]
+  () => [denyPublicPolicy("question_blanks")],
 ).enableRLS();
 
 // Bank images belong to the author and may be reused within their bank. Quiz
 // imports copy the object so later bank edits/removal cannot change a quiz.
-export const questionImages = pgTable("question_images", {
-  id: serial("id").primaryKey(),
-  objectPath: varchar("object_path", { length: 500 }).notNull().unique(),
-  createdBy: integer("created_by").notNull().references(() => users.id),
-  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
-}, () => [denyPublicPolicy("question_images")]).enableRLS();
+export const questionImages = pgTable(
+  "question_images",
+  {
+    id: serial("id").primaryKey(),
+    objectPath: varchar("object_path", { length: 500 }).notNull().unique(),
+    createdBy: integer("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  () => [denyPublicPolicy("question_images")],
+).enableRLS();

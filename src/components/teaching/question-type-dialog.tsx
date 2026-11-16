@@ -20,6 +20,8 @@ export function QuestionTypeDialog({
       onOpenChange={onOpenChange}
       onChoose={onChoose}
       allowPassage={allowPassage}
+      extended
+      onChooseExtended={onChoose}
     />
   );
 }

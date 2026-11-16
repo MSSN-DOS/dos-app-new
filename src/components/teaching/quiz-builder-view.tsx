@@ -37,11 +37,5 @@ export function QuizBuilderView({ basePath }: { basePath: string }) {
         </Button>
       </div>
     );
-  return (
-    <QuizBuilderEditor
-      key={`${id}-${query.data.revision}`}
-      document={query.data}
-      basePath={basePath}
-    />
-  );
+  return <QuizBuilderEditor key={id} document={query.data} basePath={basePath} />;
 }

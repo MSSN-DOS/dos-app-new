@@ -356,6 +356,25 @@ Scope decisions taken before any code:
     configs/secret ignores from bde784d and preserved detected auto-run artifacts in a
     temporary quarantine directory. The repository/pre-commit guard passes.
 
+- [x] P12-11 — Complete Quizboot authoring features, authorized 2026-11-16
+  - Board confirmed Multi-answer and Numeric questions, autosave, editable header
+    title, per-question shuffle, limited attempts, science palettes, real result charts,
+    Print/PDF and Unpublish. This supersedes earlier reference exclusions.
+  - Shared schemas/data model first, then persistence/runtime/grading, UI and tests.
+    Detailed progress: QUIZ-UI-TODO.md. Scores remain held until Admin release.
+  - Board confirmed Unpublish: hide new access, allow started attempts to finish,
+    and permanently lock attempted content. Republish restores access. No quiz versions.
+  - Board confirmed exact-match gaps without alternatives, independent bank copies,
+    and Admin-only score release. Spec corrections preserve DOS tokens and accessibility.
+  - Completed shared active-field toolbar, inline gaps, science slots, released-data
+    charts, A4 pagination and direct PDF. Generated migrations 0013/0014 applied to dev.
+  - Verified: full suite 108 files / 1,186 tests; final focused grading/lifecycle,
+    science/autosave/export tests; lint (one existing navigation warning) and typecheck.
+    Real dev API/Storage checks passed, including exact-set/tolerance grading, limits,
+    Unpublish/Republish and cleanup. Browser verified New quiz creation, focused-option
+    toolbar, autosave, mouse/touch reorder, 320/390/768/1280px in both themes and an
+    actual four-page PDF download. PDF is rasterized; production was not modified.
+
 ## Phase 13 — Admin student lifecycle: deactivate and hard delete
 
 Board decision (2026-11-15): an Admin can take a Student out of the platform at any time — no

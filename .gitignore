@@ -6,4 +6,5 @@ node_modules/
 *.tsbuildinfo
 .DS_Store
 .freebuff/
+.tmp/
 .vscode/

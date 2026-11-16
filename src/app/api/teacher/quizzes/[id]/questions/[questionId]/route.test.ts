@@ -1,10 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DELETE } from "./route";
-import {
-  ForbiddenError,
-  UnauthorizedError,
-} from "@/lib/auth/errors";
+import { ForbiddenError, UnauthorizedError } from "@/lib/auth/errors";
 import {
   jsonRequest,
   makeDbMock,
@@ -37,7 +34,7 @@ const QPARAMS = { params: Promise.resolve({ id: "1", questionId: "7" }) };
 
 describe("DELETE /api/teacher/quizzes/[id]/questions/[questionId]", () => {
   it("detaches and returns 204", async () => {
-    stubSelect(db, [[{ id: 1 }]]);
+    stubSelect(db, [[{ status: "draft", id: 1 }], []]);
     stubDelete(db, { quizId: 1, questionId: 7 });
     const res = await DELETE(
       jsonRequest("http://localhost/api/teacher/quizzes/1/questions/7", "DELETE"),
@@ -47,7 +44,7 @@ describe("DELETE /api/teacher/quizzes/[id]/questions/[questionId]", () => {
   });
 
   it("404s when the link is missing", async () => {
-    stubSelect(db, [[{ id: 1 }]]);
+    stubSelect(db, [[{ status: "draft", id: 1 }], []]);
     stubDelete(db, null);
     const res = await DELETE(
       jsonRequest("http://localhost/api/teacher/quizzes/1/questions/7", "DELETE"),
