@@ -131,7 +131,7 @@ function keepAttributes(tag: string, raw: string): string {
     const src = readAttribute(raw, "src");
     if (
       !path ||
-      !/^quizzes\/[1-9]\d*\/[a-zA-Z0-9_-]+\.(png|jpe?g|webp)$/.test(path) ||
+      !/^(quizzes|question-bank)\/[1-9]\d*\/[a-zA-Z0-9_-]+\.(png|jpe?g|webp)$/.test(path) ||
       !src
     )
       return "";

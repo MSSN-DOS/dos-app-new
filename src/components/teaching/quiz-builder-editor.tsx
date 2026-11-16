@@ -39,6 +39,8 @@ import { QuizPreview } from "./quiz-preview";
 import { QuizEssayGrading } from "./quiz-essay-grading";
 import { QuizBankDialog } from "./quiz-bank-dialog";
 import { QuizAvailabilityPanel } from "@/components/admin/quiz-availability-panel";
+import { useQuizImageLinks } from "./use-quiz-image-links";
+import { refreshQuizRichText, quizImagePaths } from "@/lib/quizzes/images";
 
 function errorIssues(error: unknown): QuizPublishBlocker[] {
   if (error instanceof ZodError)
@@ -76,6 +78,9 @@ export function QuizBuilderEditor({
   const client = useQueryClient();
   const preferences = useQuizPreferences();
   const [payload, setPayload] = useState<QuizDraftPayloadInput>(document);
+  const imageLinks = useQuizImageLinks(String(document.id), true, Boolean(payload.details.coverImagePath) || [payload.details.description ?? "", payload.details.instructions ?? "", ...payload.passages.map((p) => p.bodyRichText), ...payload.questions.flatMap((q) => [q.bodyRichText, q.reasonRichText ?? "", ...(q.options ?? []).map((o) => o.optionText)])].some((html) => quizImagePaths(html).length > 0));
+  const refreshRich = (html: string) => refreshQuizRichText(html, imageLinks);
+  const visiblePassages = payload.passages.map((p) => ({ ...p, bodyRichText: refreshRich(p.bodyRichText) }));
   const [coverUrl, setCoverUrl] = useState(document.coverImageUrl);
   const [preview, setPreview] = useState(false);
   const [bank, setBank] = useState(false);
@@ -170,7 +175,10 @@ export function QuizBuilderEditor({
   const questions = payload.questions.map((q, i): BuilderQuestion => ({
     ...q,
     clientKey: q.clientKey ?? `question-${i}`,
+    bodyRichText: refreshRich(q.bodyRichText), reasonRichText: refreshRich(q.reasonRichText ?? ""),
+    options: q.options?.map((o) => ({ ...o, optionText: refreshRich(o.optionText) })),
   }));
+  const activeCoverUrl = payload.details.coverImagePath ? imageLinks.get(payload.details.coverImagePath) ?? coverUrl : null;
   return (
     <div className="mx-auto max-w-7xl space-y-6 pb-6">
       <header className="flex flex-wrap items-start justify-between gap-3">
@@ -217,9 +225,9 @@ export function QuizBuilderEditor({
                   if (file && !published) void addCover(file);
                 }}
               >
-                {coverUrl ? (
+                {activeCoverUrl ? (
                   <Image
-                    src={coverUrl}
+                    src={activeCoverUrl}
                     alt="Quiz cover preview"
                     width={1200}
                     height={600}
@@ -297,7 +305,7 @@ export function QuizBuilderEditor({
             <RichTextEditor
               id="quiz-description"
               label="Description (optional)"
-              value={payload.details.description ?? ""}
+              value={refreshRich(payload.details.description ?? "")}
               onChange={(description) => updateDetails({ description })}
               uploadImage={uploadImage}
             />
@@ -306,7 +314,7 @@ export function QuizBuilderEditor({
               id="quiz-instructions"
               label="Instructions (optional)"
               placeholder="Click to edit instructions shown before starting"
-              value={payload.details.instructions ?? ""}
+              value={refreshRich(payload.details.instructions ?? "")}
               onChange={(instructions) => updateDetails({ instructions })}
               uploadImage={uploadImage}
             />
@@ -392,7 +400,7 @@ export function QuizBuilderEditor({
           </Button>
           <QuizQuestionBuilder
             questions={questions}
-            passages={payload.passages}
+            passages={visiblePassages}
             onChange={(nextQuestions, nextPassages) =>
               setPayload((old) => ({
                 ...old,
@@ -485,16 +493,17 @@ export function QuizBuilderEditor({
       <QuizPreview
         open={preview}
         onOpenChange={setPreview}
-        payload={payload}
-        coverUrl={coverUrl}
+        payload={{ ...payload, details: { ...payload.details, description: refreshRich(payload.details.description ?? ""), instructions: refreshRich(payload.details.instructions ?? "") }, questions, passages: visiblePassages }}
+        coverUrl={activeCoverUrl}
       />
       <QuizBankDialog
         open={bank}
         onOpenChange={setBank}
         courseId={document.courseId}
         jambSubjectId={document.jambSubjectId}
-        onAdd={(question) =>
-          setPayload((old) => ({ ...old, questions: [...old.questions, question] }))
+        quizId={document.id}
+        onAdd={(questions, passages) =>
+          setPayload((old) => ({ ...old, questions: [...old.questions, ...questions], passages: [...old.passages, ...passages] }))
         }
       />
     </div>

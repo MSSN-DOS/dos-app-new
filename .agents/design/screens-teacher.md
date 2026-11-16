@@ -43,7 +43,32 @@ FRAME: Topics
 
 ### `/teacher/questions`
 - **Task:** P3-3 (UI), built on P3-2's draft/publish validation split.
-- **Purpose:** Question bank editor — both question types, rich text, draft-vs-publish gating.
+- **Purpose:** Question bank editor — five authoring types, rich text, draft-vs-publish gating.
+
+**P14 amendment (2026-11-15, supersedes the two-type wireframe below):** shared
+with `/admin/questions`. New question opens the supplied rounded icon-card chooser:
+True or False, Multiple choice, Fill in the gap, Passage and Essay. Two columns
+on larger screens with Essay spanning both; one scrollable column on phones.
+All choices are enabled; Essay is labelled "Manually graded". No Audio type.
+
+The editor reuses Tiptap/KaTeX for stems, options, explanations and shared passage
+text. Passage children are collapsible, support the four individual types and
+require confirmation before removal. True/False has two fixed options; other
+options are editable rich text with one correct answer. Gap answers use `[gap]`
+and trimmed, case-insensitive exact matching. Essays are graded by teachers in
+the quiz grading screen. The footer lists strict publishing blockers and offers
+Save as draft / Publish. Existing bulk entry and science symbol palettes remain.
+
+**P14 APIs:** `POST /api/teacher/questions/documents`,
+`GET/PUT/DELETE /api/teacher/questions/[id]/document`,
+`GET/POST/DELETE /api/teacher/question-images`. Document saves carry a revision;
+stale saves and referenced-question changes return conflicts. Images are private,
+author-owned PNG/JPEG/WebP uploads up to 5 MB, with signed-link renewal and
+reference-aware removal. List requests use `groupPassages=1` to show a passage
+once and distinguish True/False. `POST /api/teacher/quizzes/[id]/bank-copy` copies
+the whole group and images independently into a draft quiz. All requests use
+TanStack Query and `apiFetch`; server guards enforce role, ownership and subject
+assignment. Both themes use the existing tokens and controls have 44px targets.
 
 **Wireframe**
 ```
@@ -125,7 +150,7 @@ FRAME: Quiz Builder — Draft / Published                         [Preview]
   PUBLISHED: read-only authoring; essay grading (teacher/Admin)
 ```
 
-**Data / API:** `GET/PUT /api/teacher/quizzes/[id]/builder` (shared draft/publish Zod, revision conflicts), `POST/DELETE /api/teacher/quizzes/[id]/images` (signed URLs arrive in builder data), `GET/PUT /api/teacher/quiz-preferences`, `GET /api/teacher/questions?...` and question detail for bank copies, `GET/PATCH /api/teacher/quizzes/[id]/grading`. Client requests use TanStack Query and `apiFetch`.
+**Data / API:** `GET/PUT /api/teacher/quizzes/[id]/builder` (shared draft/publish Zod, revision conflicts), `GET/POST/DELETE /api/teacher/quizzes/[id]/images` (private uploads, removal and owner-scoped signed-link renewal), `GET/PUT /api/teacher/quiz-preferences`, `GET /api/teacher/questions?...` and question detail for bank copies, `GET/PATCH /api/teacher/quizzes/[id]/grading`. Client requests use TanStack Query and `apiFetch`. Image links renew every eight minutes without replacing unsaved text, local uploads or the editor's draft state. Referenced images cannot be removed; unused replaced covers can be removed after publishing.
 
 **States:** loading/retry, empty questions with CTA, uploading/error, saving/saved/error, invalid draft fields, strict publish blockers, stale-revision conflict, preview introduction/questions/completion, published lock, essay-grading loading/empty/error/saving. Course Quizzes still require exactly 50 questions; passages count their sub-questions. Drafts tolerate unfinished questions and schedules.
 

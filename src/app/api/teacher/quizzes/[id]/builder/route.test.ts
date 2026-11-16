@@ -7,12 +7,30 @@ vi.mock("@/lib/db", () => ({ getDb }));
 vi.mock("@/lib/auth/teaching-scope", async (original) => ({ ...await original<typeof import("@/lib/auth/teaching-scope")>(), getTeachingScope }));
 vi.mock("@/lib/storage/supabase-storage", () => ({ createQuizImageSignedUrl: vi.fn() }));
 import { GET, PUT } from "./route";
+import { questions, quizQuestions } from "@/lib/db/schema";
 let db: DbMock;
 const params = { params: Promise.resolve({ id: "1" }) };
 const quiz = { id: 1, title: "Mechanics", quizType: "topic", createdBy: 5, courseId: 9, jambSubjectId: null, topicId: 2, status: "draft", builderRevision: 0, passMark: 60 };
 const payload = { details: { title: "Mechanics" }, questions: [{ questionType: "essay", bodyRichText: "Explain equilibrium", marks: 5 }] };
 beforeEach(() => { vi.clearAllMocks(); db = makeDbMock(); getDb.mockReturnValue(db); requireAuth.mockResolvedValue({ userId: 5, roleId: 2, roleName: "teacher" }); getTeachingScope.mockResolvedValue({ unrestricted: false, courseIds: [9], jambSubjectIds: [] }); stubTransaction(db, db); stubUpdate(db, { id: 1 }); stubInsert(db, { id: 10 }); stubDelete(db, null); });
 describe("authenticated quiz builder", () => {
+  it("saves 50 cards in batches, preserves owned IDs and copies bank IDs", async () => {
+    stubSelect(db, [[{ ...quiz, quizType: "course" }], [], [], [{ id: 9 }]]);
+    const writes: { table: unknown; rows: unknown }[] = [];
+    const ids = [{ id: 9 }, ...Array.from({ length: 49 }, (_, i) => ({ id: 20 + i }))];
+    db.insert.mockImplementation((table: unknown) => ({ values: (rows: unknown) => {
+      writes.push({ table, rows });
+      const returning = async () => [...ids].reverse();
+      return Object.assign(Promise.resolve(ids), { returning, onConflictDoUpdate: () => Object.assign(Promise.resolve(ids), { returning }) });
+    } }));
+    const cards = Array.from({ length: 50 }, (_, i) => ({ id: i === 0 ? 9 : i === 1 ? 999 : undefined, clientKey: `q-${i}`, questionType: "essay", bodyRichText: `Q ${i}`, marks: i + 1 }));
+    const res = await PUT(jsonRequest("http://localhost/x", "PUT", { action: "draft", revision: 0, payload: { details: { title: "Mechanics" }, questions: cards } }), params);
+    expect(res.status).toBe(200);
+    expect(writes.find((w) => w.table === questions)?.rows).toEqual(expect.arrayContaining([expect.objectContaining({ id: 9 }), expect.objectContaining({ id: undefined })]));
+    expect(writes.find((w) => w.table === quizQuestions)?.rows).toEqual(expect.arrayContaining([{ quizId: 1, questionId: 9, sortOrder: 0, marks: 1 }, { quizId: 1, questionId: 20, sortOrder: 1, marks: 2 }]));
+    expect(db.insert).toHaveBeenCalledTimes(2);
+    expect(db.delete).toHaveBeenCalledTimes(3);
+  });
   it.each([GET, PUT])("returns 401 for %s", async (handler) => { requireAuth.mockRejectedValueOnce(new UnauthorizedError()); expect((await handler(jsonRequest("http://localhost/x"), params)).status).toBe(401); });
   it.each([GET, PUT])("returns 403 for disallowed roles for %s", async (handler) => { requireAuth.mockRejectedValueOnce(new ForbiddenError()); expect((await handler(jsonRequest("http://localhost/x"), params)).status).toBe(403); });
   it("reads a draft with no questions", async () => { stubSelect(db, [[quiz], [], [], []]); const response = await GET(jsonRequest("http://localhost/x"), params); expect(response.status).toBe(200); expect((await response.json()).data.questions).toEqual([]); expect(requireAuth).toHaveBeenCalledWith(expect.anything(), ["admin", "teacher"]); });

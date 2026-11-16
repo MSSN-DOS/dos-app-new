@@ -2,7 +2,7 @@ import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { QuizAuthoringError } from "@/lib/api/quiz-authoring";
 import type { AuthContext } from "@/lib/auth/guard";
 import { getDb } from "@/lib/db";
-import { questionBlanks, questionOptions, questions, quizAttempts, quizQuestions, quizzes } from "@/lib/db/schema";
+import { passages, questionBlanks, questionOptions, questions, quizAttempts, quizQuestions, quizzes } from "@/lib/db/schema";
 import { studentCanAccessQuiz } from "@/lib/quizzes/access";
 import { quizDurationSeconds } from "@/lib/quizzes/duration";
 import { resolveQuizRichText } from "@/lib/quizzes/images";
@@ -17,6 +17,20 @@ async function accessibleQuiz(id: number, auth: AuthContext) {
   if (!quiz || quiz.status !== "published") throw new QuizAuthoringError(404, "Quiz not found");
   if (auth.roleName === "aspirant" ? !quiz.jambSubjectId : !(await studentCanAccessQuiz(db, auth.userId, quiz))) throw new QuizAuthoringError(403, "This quiz is not available to you");
   return quiz;
+}
+/** Sign only student-visible images: explanation images may reveal answers. */
+export async function quizAttemptImageLinks(id: number, auth: AuthContext) {
+  const quiz = await accessibleQuiz(id, auth); const db = getDb();
+  const [rows, options] = await Promise.all([
+    db.select({ body: questions.bodyRichText, passage: passages.bodyRichText }).from(quizQuestions)
+      .innerJoin(questions, eq(questions.id, quizQuestions.questionId)).leftJoin(passages, eq(passages.id, questions.passageId))
+      .where(eq(quizQuestions.quizId, id)).orderBy(asc(quizQuestions.sortOrder)),
+    db.select({ text: questionOptions.optionText }).from(quizQuestions)
+      .innerJoin(questionOptions, eq(questionOptions.questionId, quizQuestions.questionId))
+      .where(eq(quizQuestions.quizId, id)).orderBy(asc(questionOptions.sortOrder)),
+  ]);
+  const urls = await quizImageUrls(db, id, [quiz.description ?? "", quiz.instructions ?? "", ...rows.flatMap((q) => [q.body, q.passage ?? ""]), ...options.map((o) => o.text)], quiz.coverImagePath);
+  return [...urls].map(([path, url]) => ({ path, url }));
 }
 export async function quizIntroduction(id: number, auth: AuthContext): Promise<QuizIntroductionData> {
   const quiz = await accessibleQuiz(id, auth); const db = getDb();

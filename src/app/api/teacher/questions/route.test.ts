@@ -27,6 +27,23 @@ beforeEach(() => {
 const courseTrack = { courseId: 2 };
 
 describe("GET /api/teacher/questions", () => {
+  it("groups passage children once and distinguishes True / False before pagination", async () => {
+    stubSelect(db, [[
+      { id: 1, questionType: "options", passageId: null },
+      { id: 2, questionType: "options", passageId: 7 },
+      { id: 3, questionType: "essay", passageId: 7 },
+      { id: 4, questionType: "essay", passageId: null },
+    ], [
+      { questionId: 1, optionText: "<p>True</p>", sortOrder: 0 },
+      { questionId: 1, optionText: "False", sortOrder: 1 },
+    ]]);
+    const res = await GET(jsonRequest("http://localhost/x?groupPassages=1", "GET"));
+    expect(res.status).toBe(200);
+    const result = await res.json();
+    expect(result.data.map((row: { id: number; kind: string }) => [row.id, row.kind])).toEqual([[1, "true_false"], [2, "passage"], [4, "essay"]]);
+    expect(result.meta.total).toBe(3);
+  });
+
   it("returns 200 with the question list", async () => {
     stubSelect(db, [
       [

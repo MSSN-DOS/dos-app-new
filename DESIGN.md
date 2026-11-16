@@ -120,6 +120,23 @@ Rules that apply to both:
 - Teachers may enable a start time and optional end time in Africa/Lagos. An enabled schedule uses the same `opens_at`/`closes_at` columns as the Admin availability override and replaces the week-derived window; without scheduling, Course Quizzes retain their existing default/override window. Duration is optional and stored in seconds; null is untimed.
 - Per-user setting defaults and pins are stored in `user_preferences`. New quizzes apply the current user's defaults, with fresh schedule dates and a default pass mark of 60.
 
+### Question-bank authoring amendment (2026-11-15)
+
+The bank exposes True/False, Multiple choice, Fill in the gap, Passage and Essay
+to Teachers/Admins. True/False reuses two fixed single-select options; Passage
+saves a shared text and its child questions together; Essay remains manually
+graded when used in a quiz. Gap grading stays trimmed, case-insensitive exact
+match, with all blanks required. Draft and publish schemas remain distinct.
+
+Bank document writes enforce subject assignment, ownership, revision conflicts
+and existing quiz/attempt references. New quizzes receive independent copies of
+bank documents, passage children and images. Bank images use private Storage
+paths `question-bank/{authorId}/{uuid}.{png|jpg|webp}` and authenticated signed
+links; no guest authoring or direct Storage writes. PNG/JPEG/WebP uploads are
+limited to 5 MB and checked against their file signatures. Referenced images
+cannot be deleted. `questions.bank_revision` and RLS-protected `question_images`
+are additive schema deltas shipped in generated migration 0012.
+
 ## 5. Performance tracking
 
 ### CGPA (Students)

@@ -32,7 +32,7 @@ async function storageRequest(
     apikey: serviceKey,
   };
   if (contentType) headers["Content-Type"] = contentType;
-  return fetch(`${url}/storage/v1${path}`, { method, headers, body });
+  return fetch(`${url}/storage/v1${path}`, { method, headers, body, signal: AbortSignal.timeout(30000) });
 }
 
 // Idempotent: creates the private resources bucket if missing, tolerates "already exists".
@@ -114,4 +114,9 @@ export async function createQuizImageSignedUrl(path: string): Promise<string> {
 export async function removeQuizImageObject(path: string): Promise<void> {
   const response = await storageRequest("DELETE", `/object/${QUIZ_IMAGES_BUCKET}/${path}`);
   if (!response.ok && response.status !== 404) throw new Error("Quiz image removal failed");
+}
+
+export async function copyQuizImageObject(sourcePath: string, destinationPath: string): Promise<void> {
+  const response = await storageRequest("POST", "/object/copy", JSON.stringify({ bucketId: QUIZ_IMAGES_BUCKET, sourceKey: sourcePath, destinationKey: destinationPath }), "application/json");
+  if (!response.ok) throw new Error("Question image could not be copied to the quiz");
 }

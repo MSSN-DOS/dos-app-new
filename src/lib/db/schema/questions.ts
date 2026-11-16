@@ -54,6 +54,7 @@ export const questions = pgTable(
     jambSubjectId: integer("jamb_subject_id").references(() => jambSubjects.id),
     topicId: integer("topic_id").references(() => topics.id),
     questionType: questionTypeEnum("question_type").notNull(),
+    bankRevision: integer("bank_revision").notNull().default(0),
     bodyRichText: text("body_rich_text").notNull(),
     // Optional explanation shown after the attempt when the quiz reveals answers.
     // Never sent to a client that is not allowed to see the answer key.
@@ -105,3 +106,12 @@ export const questionBlanks = pgTable(
   },
   () => [denyPublicPolicy("question_blanks")]
 ).enableRLS();
+
+// Bank images belong to the author and may be reused within their bank. Quiz
+// imports copy the object so later bank edits/removal cannot change a quiz.
+export const questionImages = pgTable("question_images", {
+  id: serial("id").primaryKey(),
+  objectPath: varchar("object_path", { length: 500 }).notNull().unique(),
+  createdBy: integer("created_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+}, () => [denyPublicPolicy("question_images")]).enableRLS();

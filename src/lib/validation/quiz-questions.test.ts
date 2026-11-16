@@ -230,6 +230,20 @@ describe("quizQuestionPublishSchema", () => {
 });
 
 describe("quizDraftPayloadSchema", () => {
+  it.each(["id", "clientKey"] as const)("rejects duplicate %s before a batch save", (field) => {
+    const question = { questionType: "essay", bodyRichText: "", [field]: field === "id" ? 10 : "same" };
+    const result = quizDraftPayloadSchema.safeParse({ details: { title: "Heat" }, questions: [question, question] });
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.issues[0].path).toEqual(["questions", 1, field]);
+  });
+  it("allows copies with independent card identities", () => {
+    const q = { questionType: "essay", bodyRichText: "Same text" };
+    expect(quizDraftPayloadSchema.safeParse({ details: { title: "Heat" }, questions: [{ ...q, id: 10, clientKey: "original" }, { ...q, clientKey: "copy" }] }).success).toBe(true);
+  });
+  it("rejects ambiguous passage keys", () => {
+    const p = { clientKey: "same", bodyRichText: "" };
+    expect(quizDraftPayloadSchema.safeParse({ details: { title: "Heat" }, passages: [p, p] }).success).toBe(false);
+  });
   it("saves a titled quiz with no questions yet", () => {
     const parsed = quizDraftPayloadSchema.parse({ details: { title: "Heat" } });
     expect(parsed.details.title).toBe("Heat");

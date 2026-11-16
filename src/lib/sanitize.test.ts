@@ -159,4 +159,12 @@ describe("sanitizeRichText", () => {
       expect(sanitizeRichText(once)).toBe(once);
     }
   });
+
+  it("preserves private bank image references without widening URL trust", () => {
+    const path = "question-bank/2/abc-123.png";
+    const html = `<img src="https://example.supabase.co/storage/v1/object/sign/quiz-images/${path}?token=test" data-storage-path="${path}" alt="Diagram">`;
+    expect(sanitizeRichText(html)).toContain(`data-storage-path="${path}"`);
+    expect(sanitizeRichText(html.replace("example.supabase.co", "evil.test"))).not.toContain("data-storage-path");
+    expect(sanitizeRichText(html.replaceAll(path, "question-bank/2/../other.png"))).not.toContain("data-storage-path");
+  });
 });

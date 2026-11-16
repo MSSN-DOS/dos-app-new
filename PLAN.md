@@ -75,6 +75,26 @@ PDF/article resource uploads.
 - **P12-8** Wire Teacher/Admin pages, quiz details, sticky draft/publish actions with
   inline errors and blocker summary, student preview and runtime behavior. Update
   the page specs and verify mobile layout, keyboard access and both themes.
+- **P12-9** Complete functional integration on the confirmed development database:
+  verify draft/publish persistence, private Storage, defaults, attempts, weighted
+  grading, manual essays and Admin release. Fix failures with regression tests.
+  Use isolated synthetic records and exact-ID cleanup. Do not deploy production.
+
+## Phase 14 — Question-bank types and private images (2026-11-15)
+
+The Board explicitly requests the reference type modal in the question bank only,
+with all five types and private images functional. This work may proceed independently
+of Phase 13 and deployment. Reuse the existing question/passage models, shared
+validation, Tiptap/KaTeX, shadcn primitives and Teacher/Admin ownership rules.
+
+- **P14-1** Shared bank draft/publish document schemas, private image schema and
+  generated migration, with validation tests.
+- **P14-2** Transactional bank document APIs and private image upload/renew/delete
+  APIs; preserve legacy bank endpoints and test auth, scope, validation and conflicts.
+- **P14-3** Reference card modal and functional bank editor for True/False, Multiple
+  choice, Fill in the gap, Passage and manual Essay; images and draft/publish actions.
+- **P14-4** Verify persistence, image access, editing and quiz reuse, mobile layout,
+  keyboard/modal behavior, both themes, lint/typecheck/tests; update tracking/docs.
 
 ## Phase 3 — Question bank & quizzes (Teacher)
 

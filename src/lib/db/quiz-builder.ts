@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, or } from "drizzle-orm";
+import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 import { QuizAuthoringError } from "@/lib/api/quiz-authoring";
 import type { AuthContext } from "@/lib/auth/guard";
 import { forbiddenUnlessOwned } from "@/lib/auth/ownership";
@@ -100,19 +100,33 @@ export async function saveQuizBuilder(id: number, auth: AuthContext, input: Quiz
       passageMap.set(p.clientKey, row.id);
     }
     const savedQuestions = await tx.select().from(questions).where(eq(questions.builderQuizId, id)).orderBy(asc(questions.id));
-    const newIds: number[] = [];
+    const ownedIds = new Set(savedQuestions.map((q) => q.id));
+    const values = payload.questions.map((q) => ({
+      ...track, id: q.id && ownedIds.has(q.id) ? q.id : undefined,
+      createdBy: auth.userId, questionType: q.questionType,
+      bodyRichText: persistQuizRichText(q.bodyRichText), reasonRichText: persistQuizRichText(q.reasonRichText ?? ""),
+      passageId: q.passageKey ? passageMap.get(q.passageKey) ?? null : null, status,
+    }));
+    // Batch writes keep full Course Quiz saves within remote request limits.
+    // Foreign/bank question IDs are copied, never modified by this upsert.
+    const rows = values.length ? await tx.insert(questions).values(values).onConflictDoUpdate({ target: questions.id, set: {
+      questionType: sql`excluded.question_type`, bodyRichText: sql`excluded.body_rich_text`,
+      reasonRichText: sql`excluded.reason_rich_text`, passageId: sql`excluded.passage_id`, status,
+    } }).returning({ id: questions.id }) : [];
+    // Serial defaults allocate new IDs in VALUES order; existing IDs stay stable.
+    // Sort the new IDs so attachment order is independent of RETURNING row order.
+    const createdIds = rows.filter((q) => !ownedIds.has(q.id)).map((q) => q.id).sort((a, b) => a - b);
+    let createdIndex = 0;
+    const newIds = values.map((q) => q.id ?? createdIds[createdIndex++]);
     await tx.delete(quizQuestions).where(eq(quizQuestions.quizId, id));
-    for (const [index, q] of payload.questions.entries()) {
-      const values = { ...track, questionType: q.questionType, bodyRichText: persistQuizRichText(q.bodyRichText), reasonRichText: persistQuizRichText(q.reasonRichText ?? ""), passageId: q.passageKey ? passageMap.get(q.passageKey) ?? null : null, status };
-      const [row] = q.id && savedQuestions.some((s) => s.id === q.id)
-        ? await tx.update(questions).set(values).where(eq(questions.id, q.id)).returning({ id: questions.id })
-        : await tx.insert(questions).values({ ...values, createdBy: auth.userId }).returning({ id: questions.id });
-      newIds.push(row.id);
-      await tx.delete(questionOptions).where(eq(questionOptions.questionId, row.id));
-      await tx.delete(questionBlanks).where(eq(questionBlanks.questionId, row.id));
-      if (q.questionType === "options" && q.options?.length) await tx.insert(questionOptions).values(q.options.map((o, sortOrder) => ({ questionId: row.id, optionText: persistQuizRichText(o.optionText), isCorrect: o.isCorrect, sortOrder })));
-      if (q.questionType === "fill_in_gap" && q.blanks?.length) await tx.insert(questionBlanks).values(q.blanks.map((b, i) => ({ questionId: row.id, acceptedAnswer: b.acceptedAnswer, blankIndex: i + 1, caseSensitive: false })));
-      await tx.insert(quizQuestions).values({ quizId: id, questionId: row.id, sortOrder: index, marks: q.marks });
+    if (newIds.length) {
+      await tx.delete(questionOptions).where(inArray(questionOptions.questionId, newIds));
+      await tx.delete(questionBlanks).where(inArray(questionBlanks.questionId, newIds));
+      const options = payload.questions.flatMap((q, index) => q.questionType === "options" ? (q.options ?? []).map((o, sortOrder) => ({ questionId: newIds[index], optionText: persistQuizRichText(o.optionText), isCorrect: o.isCorrect, sortOrder })) : []);
+      const blanks = payload.questions.flatMap((q, index) => q.questionType === "fill_in_gap" ? (q.blanks ?? []).map((b, i) => ({ questionId: newIds[index], acceptedAnswer: b.acceptedAnswer, blankIndex: i + 1, caseSensitive: false })) : []);
+      if (options.length) await tx.insert(questionOptions).values(options);
+      if (blanks.length) await tx.insert(questionBlanks).values(blanks);
+      await tx.insert(quizQuestions).values(payload.questions.map((q, index) => ({ quizId: id, questionId: newIds[index], sortOrder: index, marks: q.marks })));
     }
     const removed = savedQuestions.filter((q) => !newIds.includes(q.id)).map((q) => q.id);
     if (removed.length) await tx.delete(questions).where(inArray(questions.id, removed));

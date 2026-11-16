@@ -99,7 +99,8 @@ describe("quiz authoring integration", () => {
       revision: 3,
       payload: { questions: [] },
     });
-  }, 15000);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save draft" })).toBeEnabled());
+  }, 30000);
   it("publishes a complete essay without inventing an automatic answer", async () => {
     mount(true);
     expect(screen.getByRole("button", { name: "Publish" })).toBeEnabled();
@@ -112,7 +113,8 @@ describe("quiz authoring integration", () => {
       action: "publish",
       payload: { questions: [{ questionType: "essay", marks: 5, options: [] }] },
     });
-  }, 15000);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Publish" })).toBeEnabled());
+  }, 30000);
   it("previews the student introduction and the manually graded question", async () => {
     mount(true);
     fireEvent.click(screen.getByRole("button", { name: "Preview" }));
@@ -120,5 +122,5 @@ describe("quiz authoring integration", () => {
     fireEvent.click(screen.getByRole("button", { name: "Start preview" }));
     expect(screen.getByLabelText("Your response")).toBeInTheDocument();
     expect(apiFetch.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(false);
-  }, 15000);
+  }, 30000);
 });

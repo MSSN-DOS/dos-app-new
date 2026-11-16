@@ -17,7 +17,7 @@ export const blankInputSchema = z.object({
 });
 
 const questionFields = {
-  questionType: z.enum(["fill_in_gap", "options"]),
+  questionType: z.enum(["fill_in_gap", "options", "essay"]),
   courseId: nullableInt.optional(),
   jambSubjectId: nullableInt.optional(),
   topicId: nullableInt.optional(),
@@ -34,7 +34,7 @@ const questionFields = {
   blanks: z.array(blankInputSchema).optional(),
 };
 
-function requireSingleTrack(
+export function requireSingleTrack(
   data: { courseId?: number | null; jambSubjectId?: number | null },
   ctx: z.RefinementCtx,
 ) {

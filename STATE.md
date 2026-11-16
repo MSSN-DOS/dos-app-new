@@ -301,6 +301,35 @@ Scope decisions taken before any code:
 
 ---
 
+- [x] P12-9 — Complete and verify quiz functional integration
+  - 2026-11-15: verified real exported route handlers with custom JWT, Drizzle and
+    private Supabase Storage on the user-confirmed development database using
+    `src/lib/db/verify-quiz-integration.ts --development`. Defaults/pins, lenient
+    drafts, strict publish, auth/revision conflicts, all five types, passages,
+    marks/order, uploads/downloads and unused cover cleanup passed. Synthetic
+    records and Storage objects were removed by exact IDs after each run.
+  - Attempt start/progress/resume preserved shuffle order and original start time.
+    Image renewal preserved local draft/answer state and excluded explanation-only
+    images. Weighted full-mark deductions, all-or-nothing gaps, manual essays,
+    Admin release, Post-UTME, academic scope, seconds/math persistence, saved
+    expiry submission, hidden history/results and Topic exclusion from CGPA passed.
+  - Fixed slow full-quiz saves with batched persistence, rejected duplicate card
+    identities, added private image-link renewal, allowed unused cover cleanup
+    after publish, and bounded Storage/DB connection waits. Regression tests cover
+    these changes. Full suite: 90 files / 1,020 tests passed; typecheck passed;
+    lint passed with only the existing client-fetch navigation warning.
+  - Actual local browser typing, LaTeX insertion, answer selection, draft save and
+    publish passed through real HTTP APIs, with database assertions and cleanup.
+    Both themes were checked with the site toggle after rendering settled: text
+    and equations measured 17.4:1 light / 16.2:1 dark contrast, no mobile overflow.
+    The earlier dim screenshot was captured during the theme transition.
+  - Restored only the generated next-env.d.ts dev-path delta; final typecheck and
+    diff whitespace checks passed. Production deployment remains out of scope.
+  - Dev schema drift: courses.session_id is NOT NULL in the database but absent
+    from schema/courses.ts and DESIGN.md. Quiz verification reads an existing
+    eligible Board course; it does not invent a session or change that schema.
+    TODO(needs-board-decision): reconcile academic-session schema separately.
+
 ## Phase 13 — Admin student lifecycle: deactivate and hard delete
 
 Board decision (2026-11-15): an Admin can take a Student out of the platform at any time — no
@@ -316,6 +345,46 @@ because rankings are computed live from `cgpa_records` — accepted, and warned 
 - [x] P13-3 — `DELETE /api/admin/users/students/[id]` transactional hard delete in FK order
 - [x] P13-4 — `/admin/students` status filter + badge, Deactivate/Reactivate action, typed-identifier delete dialog
 - [x] P13-5 — Endpoint tests: 401, 403, happy paths, 422 `error.details`, 404; status-filter test
+
+## Phase 14 — Question-bank types and private images
+
+Requested scope: question bank only, all five reference types and images working.
+Progress checklist: `QUESTION-BANK-TODO.md`. Todoist sync is unavailable because
+this session has no Rube/Todoist connector.
+
+- [x] P14-1 — Shared schemas, private image table and generated migration
+  - Generated/applied additive `0012_common_talos.sql` on the confirmed dev DB.
+    Private question_images has RLS and a deny-all policy; bank_revision detects
+    stale saves. Shared draft/publish validation covers all types and passage groups.
+    Full suite 92 files / 1,049 tests passed; typecheck and lint passed (existing warning).
+- [x] P14-2 — Transactional document and private image APIs with endpoint tests
+  - Authenticated transactional document CRUD, owner-scoped image upload/renew/delete,
+    exact image-source validation, revision conflicts and reference blocks. Private
+    images and passage/essay groups copy independently into quizzes. Real dev API/JWT/
+    Drizzle/Storage verification passed and cleaned all synthetic fixtures. Full suite
+    96 files / 1,093 tests passed; typecheck and lint passed (existing warning).
+- [x] P14-3 — Reference modal and functional bank editor
+  - All five cards open functional editors. Reused Tiptap/KaTeX for questions,
+    options, explanations and passages; private uploads and signed-link renewal,
+    radio answers, gap answers, manual essays and group draft/publish are connected.
+    Existing bulk entry and science palettes remain. Browser chooser checks passed
+    at 390/1280px in both themes, including focus, Escape and 44px targets. Full
+    suite passed: 99 files / 1,112 tests using thread workers; lint/typecheck passed.
+    Corrected a loader timer assertion and the quiz-render test's Windows timeout
+    during the required full-suite checks without changing their product behavior.
+- [x] P14-4 — Live/visual verification, required checks and documentation
+  - Real dev JWT/Drizzle/Storage integration verified all five types, lenient
+    drafts, strict publishing, revisions, protected images and independent quiz
+    copies. Real HTTP/browser checks verified all five editor entry points and
+    saved documents, Tiptap typing, LaTeX and image insertion, draft reload and
+    publishing. Checked 390px/1280px layouts, both themes, 44px targets (including
+    radio labels), focus/Escape and no horizontal overflow after animations settle.
+    Synthetic fixtures and Storage objects were removed after each verification.
+  - Full suite: `pnpm test --pool=threads --maxWorkers=2` passed 99 files / 1,112
+    tests. Typecheck and lint passed; only the existing client-fetch navigation
+    warning remains. Thread workers avoided local fork-startup timeouts. Updated
+    DESIGN, screen specs, README and QUESTION-BANK-TODO. Todoist sync remains
+    unavailable without the Rube/Todoist connector; no production deployment.
 
 ## Phase 15 — Loading states
 

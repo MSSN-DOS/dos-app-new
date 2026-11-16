@@ -1,4 +1,4 @@
-import { and, asc, eq, ilike, isNull, notInArray } from "drizzle-orm";
+import { and, asc, eq, ilike, isNull, isNotNull, notInArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 
@@ -9,6 +9,7 @@ import { requireAuth } from "@/lib/auth/guard";
 import { ownershipScope } from "@/lib/auth/ownership";
 import { getTeachingScope, isTrackAllowed } from "@/lib/auth/teaching-scope";
 import { getDb } from "@/lib/db";
+import { presentBankRows } from "@/lib/db/question-bank";
 import {
   questionBlanks,
   questionOptions,
@@ -73,6 +74,7 @@ export async function GET(request: Request): Promise<NextResponse> {
     const courseId = params.get("courseId");
     const jambSubjectId = params.get("jambSubjectId");
     const type = params.get("type");
+    const groupPassages = params.get("groupPassages") === "1";
     const status = params.get("status");
     const topicId = params.get("topicId");
     const search = params.get("search")?.trim() ?? null;
@@ -93,9 +95,11 @@ export async function GET(request: Request): Promise<NextResponse> {
       topicId !== null && /^\d+$/.test(topicId)
         ? eq(questions.topicId, Number(topicId))
         : undefined,
-      type === "fill_in_gap" || type === "options"
-        ? eq(questions.questionType, type)
+      type === "fill_in_gap" || type === "options" || type === "essay" || type === "true_false"
+        ? eq(questions.questionType, type === "true_false" ? "options" : type)
         : undefined,
+      type === "passage" ? isNotNull(questions.passageId) : undefined,
+      groupPassages && type && type !== "passage" ? isNull(questions.passageId) : undefined,
       status === "draft" || status === "published"
         ? eq(questions.status, status)
         : undefined,
@@ -139,6 +143,7 @@ export async function GET(request: Request): Promise<NextResponse> {
         jambSubjectId: questions.jambSubjectId,
         topicId: questions.topicId,
         questionType: questions.questionType,
+        passageId: questions.passageId,
         bodyRichText: questions.bodyRichText,
         status: questions.status,
         createdBy: questions.createdBy,
@@ -150,6 +155,10 @@ export async function GET(request: Request): Promise<NextResponse> {
         ? await base.where(and(...conds)).orderBy(asc(questions.id))
         : await base.orderBy(asc(questions.id));
 
+    if (groupPassages) {
+      const groups = await presentBankRows(db, rows);
+      return NextResponse.json(paginate(type ? groups.filter(q => q.kind === type) : groups, pagination.params));
+    }
     return NextResponse.json(paginate(rows, pagination.params));
   } catch (err) {
     return errorResponse(err);
