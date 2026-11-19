@@ -1,28 +1,11 @@
 ﻿"use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Search, SearchX, Plus, X } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { ChevronLeft, ChevronRight, Pencil, SearchX, Layers, GraduationCap, Plus, Filter, Calendar, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useDeferredValue, useState } from "react";
-import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { quizCreateSchema, quizListFiltersSchema } from "@/lib/validation/quizzes";
-import { toast } from "sonner";
+import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogClose,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -31,7 +14,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ApiError, apiFetch } from "@/lib/auth/client-fetch";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { apiFetch } from "@/lib/auth/client-fetch";
+import { NewQuizDialog } from "@/components/teaching/new-quiz-dialog";
 import { useAuthoringSubjects } from "@/components/teaching/use-authoring-subjects";
 
 type QuizRow = {
@@ -48,10 +33,7 @@ type QuizRow = {
   subjectName: string | null;
 };
 
-type TopicOption = { id: number; title: string; courseId: number };
-
 const ALL = "__all__";
-
 const PAGE_SIZE = 10;
 type PageMeta = { page: number; pageSize: number; total: number; totalPages: number };
 type PaginatedQuizzes = { data: QuizRow[]; meta: PageMeta };
@@ -66,609 +48,198 @@ const TYPE_LABEL: Record<QuizRow["quizType"], string> = {
 // route prefix (without trailing slash) used for builder navigation.
 export function QuizzesView({ basePath }: { basePath: string }) {
   const router = useRouter();
-  const queryClient = useQueryClient();
 
-  const [filterMode, setFilterMode] = useState("all");
-  const [search, setSearch] = useState("");
-  const deferredSearch = useDeferredValue(search);
+  const [filterType, setFilterType] = useState<string>(ALL);
   const [filterCourse, setFilterCourse] = useState<string>(ALL);
   const [page, setPage] = useState(1);
 
   const [editorOpen, setEditorOpen] = useState(false);
-  const [formTitle, setFormTitle] = useState("");
-  const [formQuizType, setFormQuizType] = useState<"topic" | "course">("topic");
-  const [track, setTrack] = useState<"course" | "jamb">("course");
-  const [formCourseId, setFormCourseId] = useState("");
-  const [formSubjectId, setFormSubjectId] = useState("");
-  const [formTopicId, setFormTopicId] = useState("");
-  const [formWeekStart, setFormWeekStart] = useState("");
-  const [formError, setFormError] = useState("");
-
-  const {
-    courses,
-    jambSubjects: subjects,
-    isPending: subjectsPending,
-    isError: subjectsError,
-    refetch: refetchSubjects,
-  } = useAuthoringSubjects();
+  const { courses } = useAuthoringSubjects();
 
   const quizzesQuery = useQuery({
-    queryKey: ["teacher", "quizzes", filterMode, filterCourse, deferredSearch, page],
+    queryKey: ["teacher", "quizzes", filterType, filterCourse, page],
     queryFn: () => {
-      const filters = quizListFiltersSchema.parse({
-        search: deferredSearch,
-        type: filterMode === "topic" || filterMode === "course" ? filterMode : undefined,
-        status: filterMode === "draft" ? "draft" : undefined,
-        courseId: filterCourse !== ALL ? filterCourse : undefined,
-      });
-      const params = new URLSearchParams({
-        page: String(page),
-        pageSize: String(PAGE_SIZE),
-      });
-      if (filters.search) params.set("search", filters.search);
-      if (filters.type) params.set("type", filters.type);
-      if (filters.status) params.set("status", filters.status);
-      if (filters.courseId) params.set("courseId", String(filters.courseId));
-      return apiFetch<PaginatedQuizzes>("/teacher/quizzes?" + params.toString()).then(
-        (r) => ({ ...r, data: r.data ?? [] }),
-      );
+      const params = new URLSearchParams();
+      if (filterType !== ALL) params.set("type", filterType);
+      if (filterCourse !== ALL) params.set("courseId", filterCourse);
+      params.set("page", String(page));
+      params.set("pageSize", String(PAGE_SIZE));
+      const qs = params.toString();
+      return apiFetch<PaginatedQuizzes>(`/teacher/quizzes${qs ? `?${qs}` : ""}`).then((r) => ({ ...r, data: r.data ?? [] }));
     },
   });
-
-  const topicsQuery = useQuery({
-    queryKey: ["teacher", "topics", formCourseId],
-    queryFn: () =>
-      apiFetch<{ data: TopicOption[] }>(`/teacher/topics?courseId=${formCourseId}`).then(
-        (r) => r.data ?? [],
-      ),
-    enabled: editorOpen && formQuizType === "topic" && formCourseId !== "",
-  });
-
-  function resetForm() {
-    setFormTitle("");
-    setFormQuizType("topic");
-    setTrack("course");
-    setFormCourseId("");
-    setFormSubjectId("");
-    setFormTopicId("");
-    setFormWeekStart("");
-    setFormError("");
-  }
-
-  const createMutation = useMutation({
-    mutationFn: (body: Record<string, unknown>) =>
-      apiFetch<QuizRow>("/teacher/quizzes", {
-        method: "POST",
-        body: JSON.stringify(quizCreateSchema.parse(body)),
-      }),
-    onSuccess: (quiz) => {
-      queryClient.invalidateQueries({ queryKey: ["teacher", "quizzes"] });
-      toast.success("Quiz created — opening builder");
-      router.push(`${basePath}/${quiz.id}`);
-    },
-    onError: (err) => {
-      const msg = err instanceof ApiError ? err.message : "Something went wrong";
-      setFormError(msg);
-      toast.error(msg);
-    },
-  });
-
-  const createPayload = {
-    title: formTitle.trim(),
-    quizType: formQuizType,
-    courseId: track === "course" && formCourseId ? Number(formCourseId) : null,
-    jambSubjectId: track === "jamb" && formSubjectId ? Number(formSubjectId) : null,
-    topicId: formQuizType === "topic" && formTopicId ? Number(formTopicId) : null,
-    weekStart: formQuizType === "course" ? formWeekStart || null : null,
-  };
-  const formReady =
-    !subjectsPending &&
-    !subjectsError &&
-    quizCreateSchema.safeParse(createPayload).success;
-  function handleCreate() {
-    setFormError("");
-    createMutation.mutate(createPayload);
-  }
 
   const quizzes = quizzesQuery.data?.data ?? [];
-  const filtersActive =
-    filterMode !== "all" || filterCourse !== ALL || search.trim() !== "";
-  const clearFilters = () => {
-    setFilterMode("all");
-    setFilterCourse(ALL);
-    setSearch("");
-    setPage(1);
-  };
+  const filtersActive = filterType !== ALL || filterCourse !== ALL;
   const total = quizzesQuery.data?.meta.total ?? 0;
 
   return (
-    <div className="mx-auto min-w-0 max-w-6xl space-y-4">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
-            Quizzes
-          </h1>
-          <p className="mt-1 text-base text-sub">
-            {total} quizzes · create, edit and review attempts
-          </p>
-        </div>
-        <Button
-          className="min-h-11 gap-2 text-base"
-          onClick={() => {
-            resetForm();
-            setEditorOpen(true);
-          }}
-        >
-          <Plus className="size-4" /> New quiz
-        </Button>
-      </header>
-      <div className="space-y-3">
-        <div className="relative">
-          <Search
-            className="pointer-events-none absolute left-3 top-3.5 size-4 text-sub"
-            aria-hidden="true"
-          />
-          <Input
-            type="search"
-            aria-label="Search quizzes"
-            placeholder="Search quizzes"
-            maxLength={200}
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-            className="min-h-11 border-line bg-panel pl-10 text-base text-ink"
-          />
-        </div>
-        <Tabs
-          value={filterMode}
-          onValueChange={(value) => {
-            setFilterMode(value);
-            setPage(1);
-          }}
-        >
-          <TabsList
-            aria-label="Filter quizzes"
-            className="grid min-h-12 w-full grid-cols-4 rounded-xl border border-line bg-canvas p-1"
+    <div className="space-y-6">
+      {/* header */}
+      <div className="space-y-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-brand" style={{ fontFamily: "JetBrains Mono, monospace" }}>
+              <Layers className="size-3" /> Quizzes
+            </p>
+            <h1 className="mt-1 text-[28px] font-bold leading-none tracking-tight text-ink sm:text-[32px]" style={{ fontFamily: "var(--font-fraunces), serif" }}>
+              Quizzes
+            </h1>
+            <p className="mt-2 max-w-xl text-[13px] leading-relaxed text-sub">
+              Topic quizzes are ad-hoc. Course quizzes run weekly (Sat–Sun) and feed CGPA / Post-UTME. Drafts unlock the builder — publish when the bank is attached.
+            </p>
+          </div>
+          <Button
+            className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl bg-brand px-5 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(91,127,255,0.35)] hover:bg-brand-hover"
+            onClick={() => setEditorOpen(true)}
           >
-            {[
-              ["all", "All"],
-              ["course", "Course"],
-              ["topic", "Topic"],
-              ["draft", "Drafts"],
-            ].map(([value, label]) => (
-              <TabsTrigger
-                key={value}
-                value={value}
-                className="min-h-11 min-w-0 rounded-lg px-2 text-base"
-              >
-                {label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
-        <div className="flex flex-wrap items-center gap-2">
-          <Select
-            value={filterCourse}
-            disabled={subjectsPending || subjectsError}
-            onValueChange={(value) => {
-              setFilterCourse(value);
-              setPage(1);
-            }}
-          >
-            <SelectTrigger
-              className="min-h-11 w-full border-line bg-panel text-base text-ink sm:w-64"
-              aria-label="Filter by course"
-            >
+            <Plus className="size-4" /> New quiz
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+          {[
+            { label: "Total", value: total, sub: "quizzes", accent: "text-ink" },
+            { label: "Topic", value: quizzes.filter((q) => q.quizType === "topic").length, sub: "in view", accent: "text-gold" },
+            { label: "Course", value: quizzes.filter((q) => q.quizType === "course").length, sub: "in view", accent: "text-brand" },
+          ].map((s) => (
+            <div key={s.label} className="rounded-2xl border border-line bg-panel px-3 py-3 sm:px-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-faint" style={{ fontFamily: "JetBrains Mono, monospace" }}>{s.label}</p>
+              <p className={`mt-1 text-xl font-bold leading-none ${s.accent}`} style={{ fontFamily: "var(--font-fraunces), serif" }}>{s.value}</p>
+              <p className="mt-1 text-[11px] text-faint">{s.sub}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* filters */}
+      <div className="rounded-2xl border border-line bg-panel p-3 sm:p-4">
+        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-faint" style={{ fontFamily: "JetBrains Mono, monospace" }}>
+          <Filter className="size-3.5" /> Filters
+          {filtersActive && <span className="rounded-full bg-brand px-2 py-0.5 text-[10px] text-white">active</span>}
+        </div>
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+          <Select value={filterType} onValueChange={(v) => { setFilterType(v); setPage(1); }}>
+            <SelectTrigger className="w-full rounded-xl border-line bg-canvas text-ink sm:w-44" aria-label="Filter by type">
+              <SelectValue placeholder="All types" />
+            </SelectTrigger>
+            <SelectContent className="border-line bg-panel text-ink">
+              <SelectItem value={ALL}>All types</SelectItem>
+              <SelectItem value="topic">Topic Quiz</SelectItem>
+              <SelectItem value="course">Course Quiz</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={filterCourse} onValueChange={(v) => { setFilterCourse(v); setPage(1); }}>
+            <SelectTrigger className="w-full rounded-xl border-line bg-canvas text-ink sm:w-56" aria-label="Filter by course">
               <SelectValue placeholder="All courses" />
             </SelectTrigger>
-            <SelectContent className="[&_[role=option]]:min-h-11 [&_[role=option]]:text-base">
+            <SelectContent className="border-line bg-panel text-ink">
               <SelectItem value={ALL}>All courses</SelectItem>
-              {courses.map((course) => (
-                <SelectItem key={course.id} value={String(course.id)}>
-                  {course.code}
-                </SelectItem>
-              ))}
+              {courses.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.code}</SelectItem>)}
             </SelectContent>
           </Select>
           {filtersActive && (
-            <Button
-              type="button"
-              variant="ghost"
-              className="min-h-11 text-base text-sub"
-              onClick={clearFilters}
-            >
-              <X className="size-4" /> Clear filters
-            </Button>
+            <button type="button" onClick={() => { setFilterType(ALL); setFilterCourse(ALL); setPage(1); }} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-line bg-canvas px-3 text-xs font-semibold text-sub hover:text-ink sm:min-h-11">
+              <X className="size-3.5" /> Clear
+            </button>
           )}
         </div>
       </div>
-      {subjectsError && (
-        <div
-          role="alert"
-          className="flex flex-wrap items-center gap-2 text-base text-ruby"
-        >
-          <p>Could not load your courses and subjects.</p>
-          <Button
-            type="button"
-            variant="outline"
-            className="min-h-11 text-base"
-            onClick={() => refetchSubjects()}
-          >
-            Retry subjects
-          </Button>
-        </div>
-      )}
-      {quizzesQuery.isPending ? (
-        <div aria-busy="true" aria-label="Loading quizzes" className="space-y-2">
-          {[0, 1, 2].map((key) => (
-            <Skeleton key={key} className="h-24 w-full rounded-xl" />
-          ))}
-        </div>
-      ) : quizzesQuery.isError ? (
-        <Card className="border-ruby/30 bg-panel p-5 text-center">
-          <p role="alert" className="text-base text-ruby">
-            {quizzesQuery.error.message}
-          </p>
-          <Button
-            variant="outline"
-            className="mx-auto min-h-11 text-base"
-            onClick={() => quizzesQuery.refetch()}
-          >
-            Try again
-          </Button>
-        </Card>
-      ) : quizzes.length === 0 ? (
-        <Card className="border-dashed border-line bg-panel p-6 text-center">
-          <SearchX className="mx-auto size-8 text-sub" aria-hidden="true" />
-          <h2 className="text-lg font-semibold text-ink">
-            {filtersActive ? "No matching quizzes" : "Create your first quiz"}
-          </h2>
-          <p className="text-base leading-relaxed text-sub">
-            {filtersActive
-              ? "Try another search or clear your filters."
-              : "Choose a course or subject, then add questions in the builder."}
-          </p>
-          <Button
-            variant="outline"
-            className="mx-auto min-h-11 text-base"
-            onClick={
-              filtersActive
-                ? clearFilters
-                : () => {
-                    resetForm();
-                    setEditorOpen(true);
-                  }
-            }
-          >
-            {filtersActive ? "Clear filters" : "New quiz"}
-          </Button>
-        </Card>
-      ) : (
-        <section aria-label="Quiz list" className="space-y-2">
-          <div
-            aria-hidden="true"
-            className="hidden grid-cols-[minmax(0,1fr)_6rem_8rem_4rem_6rem] gap-3 px-4 text-sm font-semibold text-sub lg:grid"
-          >
-            <span>Quiz</span>
-            <span>Type</span>
-            <span>Course / subject</span>
-            <span>Questions</span>
-            <span>Status</span>
+
+      {/* list */}
+      <div className="space-y-3">
+        {quizzesQuery.isPending ? (
+          <div className="space-y-3">
+            <Skeleton className="h-[88px] w-full rounded-2xl bg-line" />
+            <Skeleton className="h-[88px] w-full rounded-2xl bg-line" />
+            <Skeleton className="h-[88px] w-full rounded-2xl bg-line" />
           </div>
-          <ul className="space-y-2">
-            {quizzes.map((quiz) => (
-              <li key={quiz.id}>
-                <Card className="overflow-hidden border-line bg-panel py-0">
-                  <Button
-                    asChild
-                    variant="ghost"
-                    className="grid h-auto min-h-24 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 whitespace-normal rounded-xl p-4 text-left hover:bg-canvas lg:grid-cols-[minmax(0,1fr)_6rem_8rem_4rem_6rem]"
-                  >
-                    <Link
-                      href={basePath + "/" + quiz.id}
-                      aria-label={"Open " + quiz.title}
-                      className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 lg:grid-cols-[minmax(0,1fr)_6rem_8rem_4rem_6rem]"
-                    >
-                      <span className="min-w-0">
-                        <span className="block break-words text-base font-semibold text-ink">
-                          {quiz.title}
-                        </span>
-                        <span className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-base font-normal text-sub lg:hidden">
-                          <span>{TYPE_LABEL[quiz.quizType]}</span>
-                          <span>
-                            · {quiz.courseCode ?? quiz.subjectName ?? "No subject"}
-                          </span>
-                          <span>· {quiz.questionCount} questions</span>
-                        </span>
-                        {quiz.weekStart && (
-                          <span className="mt-1 block text-base font-normal text-sub">
-                            Week of {quiz.weekStart}
-                          </span>
-                        )}
-                      </span>
-                      <span className="hidden lg:block">
-                        <Badge
-                          variant="secondary"
-                          className={
-                            quiz.quizType === "course"
-                              ? "bg-brand/10 text-ink"
-                              : "bg-gold/10 text-ink"
-                          }
-                        >
-                          {quiz.quizType === "course" ? "Course" : "Topic"}
-                        </Badge>
-                      </span>
-                      <span className="hidden break-words text-base font-normal text-sub lg:block">
-                        {quiz.courseCode ?? quiz.subjectName ?? "—"}
-                      </span>
-                      <span className="hidden text-base font-normal tabular-nums text-sub lg:block">
-                        {quiz.questionCount}
-                      </span>
-                      <Badge
-                        variant="secondary"
-                        className={
-                          quiz.status === "published"
-                            ? "bg-success/10 text-ink"
-                            : "bg-canvas text-sub"
-                        }
-                      >
-                        {quiz.status === "published" ? "Published" : "Draft"}
-                      </Badge>
-                    </Link>
-                  </Button>
-                </Card>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-      {quizzesQuery.data && quizzesQuery.data.meta.totalPages > 1 && (
-        <nav
-          aria-label="Quizzes pagination"
-          className="flex flex-wrap items-center justify-between gap-2"
-        >
-          <Button
-            variant="outline"
-            className="min-h-11 text-base"
-            disabled={page <= 1}
-            onClick={() => setPage((value) => value - 1)}
-          >
-            <ChevronLeft className="size-4" /> Previous
-          </Button>
-          <span className="text-base text-sub">
-            Page {quizzesQuery.data.meta.page} of {quizzesQuery.data.meta.totalPages}
-          </span>
-          <Button
-            variant="outline"
-            className="min-h-11 text-base"
-            disabled={page >= quizzesQuery.data.meta.totalPages}
-            onClick={() => setPage((value) => value + 1)}
-          >
-            Next <ChevronRight className="size-4" />
-          </Button>
-        </nav>
-      )}
-      <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
-        <DialogContent
-          showCloseButton={false}
-          className="bottom-0 left-0 right-0 top-auto max-h-[calc(100dvh-1rem)] w-full max-w-none translate-x-0 translate-y-0 overflow-y-auto rounded-b-none rounded-t-2xl border-line bg-panel p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] text-ink sm:bottom-auto sm:left-1/2 sm:right-auto sm:top-1/2 sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl"
-        >
-          <DialogHeader className="pr-12 text-left">
-            <DialogTitle className="text-xl font-semibold">New quiz</DialogTitle>
-            <DialogDescription className="text-base leading-relaxed text-sub">
-              Choose the type and subject. Add questions and timing next.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogClose asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              className="absolute right-2 top-2 size-11"
-              aria-label="Close new quiz dialog"
-            >
-              <X className="size-5" />
-            </Button>
-          </DialogClose>
-          <div className="space-y-4">
-            {subjectsPending && (
-              <p role="status" className="text-base text-sub">
-                Loading courses and subjects…
-              </p>
-            )}
-            {subjectsError && (
-              <div role="alert" className="space-y-2 text-base text-ruby">
-                <p>Could not load your courses and subjects.</p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="min-h-11 text-base"
-                  onClick={() => refetchSubjects()}
-                >
-                  Retry subjects
-                </Button>
-              </div>
-            )}
-            <div className="space-y-2">
-              <Label htmlFor="new-quiz-title" className="text-base">
-                Title
-              </Label>
-              <Input
-                id="new-quiz-title"
-                maxLength={200}
-                value={formTitle}
-                onChange={(e) => setFormTitle(e.target.value)}
-                className="min-h-11 text-base"
-                placeholder="Quiz title"
-              />
+        ) : quizzesQuery.isError ? (
+          <div className="rounded-2xl border border-ruby/30 bg-ruby/10 p-6 text-center">
+            <p className="text-sm font-medium text-ink">{(quizzesQuery.error as Error).message}</p>
+            <Button variant="outline" size="sm" className="mt-3 min-h-9 rounded-xl border-line bg-panel text-ink" onClick={() => quizzesQuery.refetch()}>Try again</Button>
+          </div>
+        ) : quizzes.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-line bg-panel/60 p-10 text-center">
+            <div className="mx-auto flex size-12 items-center justify-center rounded-2xl border border-line bg-canvas">
+              <SearchX className="size-6 text-faint" />
             </div>
-            <Tabs
-              value={formQuizType}
-              onValueChange={(value) => {
-                if (value === "topic" || value === "course") {
-                  setFormQuizType(value);
-                  setFormTopicId("");
-                  setFormWeekStart("");
-                }
-              }}
-            >
-              <TabsList
-                aria-label="Quiz type"
-                className="grid min-h-12 w-full grid-cols-2"
-              >
-                <TabsTrigger
-                  value="topic"
-                  disabled={track === "jamb"}
-                  className="min-h-11 text-base"
-                >
-                  Topic Quiz
-                </TabsTrigger>
-                <TabsTrigger value="course" className="min-h-11 text-base">
-                  Course Quiz
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-            <Tabs
-              value={track}
-              onValueChange={(value) => {
-                if (value === "course" || value === "jamb") {
-                  setTrack(value);
-                  setFormTopicId("");
-                  if (value === "jamb") {
-                    setFormQuizType("course");
-                    setFormCourseId("");
-                  }
-                }
-              }}
-            >
-              <TabsList
-                aria-label="Quiz subject track"
-                className="grid min-h-12 w-full grid-cols-2"
-              >
-                <TabsTrigger value="course" className="min-h-11 text-base">
-                  Course
-                </TabsTrigger>
-                <TabsTrigger value="jamb" className="min-h-11 text-base">
-                  JAMB subject
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-            <div className="space-y-2">
-              <Label htmlFor="new-quiz-subject" className="text-base">
-                {track === "course" ? "Course" : "JAMB subject"}
-              </Label>
-              <Select
-                value={track === "course" ? formCourseId : formSubjectId}
-                onValueChange={(value) => {
-                  if (track === "course") {
-                    setFormCourseId(value);
-                    setFormTopicId("");
-                  } else setFormSubjectId(value);
-                }}
-              >
-                <SelectTrigger
-                  id="new-quiz-subject"
-                  className="min-h-11 w-full text-base"
-                >
-                  <SelectValue
-                    placeholder={track === "course" ? "Pick a course" : "Pick a subject"}
-                  />
-                </SelectTrigger>
-                <SelectContent className="[&_[role=option]]:min-h-11 [&_[role=option]]:text-base">
-                  {track === "course"
-                    ? courses.map((course) => (
-                        <SelectItem key={course.id} value={String(course.id)}>
-                          {course.code} — {course.title}
-                        </SelectItem>
-                      ))
-                    : subjects.map((subject) => (
-                        <SelectItem key={subject.id} value={String(subject.id)}>
-                          {subject.name}
-                        </SelectItem>
-                      ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {formQuizType === "topic" ? (
-              <div className="space-y-2">
-                <Label htmlFor="new-quiz-topic" className="text-base">
-                  Topic
-                </Label>
-                <Select
-                  value={formTopicId}
-                  onValueChange={setFormTopicId}
-                  disabled={!formCourseId || topicsQuery.isPending}
-                >
-                  <SelectTrigger
-                    id="new-quiz-topic"
-                    className="min-h-11 w-full text-base"
-                  >
-                    <SelectValue
-                      placeholder={
-                        !formCourseId
-                          ? "Pick a course first"
-                          : topicsQuery.isPending
-                            ? "Loading topics…"
-                            : "Pick a topic"
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent className="[&_[role=option]]:min-h-11 [&_[role=option]]:text-base">
-                    {(topicsQuery.data ?? []).map((topic) => (
-                      <SelectItem key={topic.id} value={String(topic.id)}>
-                        {topic.title}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {topicsQuery.isError && (
-                  <div role="alert">
-                    <p className="text-base text-ruby">Topics could not be loaded.</p>
-                    <Button
-                      variant="outline"
-                      className="min-h-11 text-base"
-                      onClick={() => topicsQuery.refetch()}
-                    >
-                      Retry topics
-                    </Button>
-                  </div>
-                )}
-              </div>
+            <p className="mt-4 text-sm font-semibold text-ink" style={{ fontFamily: "var(--font-fraunces), serif" }}>{filtersActive ? "No matches" : "No quizzes yet"}</p>
+            <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-sub">{filtersActive ? "Try a different filter — or clear them to see everything." : "Create your first quiz — pick Topic or Course, choose the course/subject, and continue to the builder to attach questions."}</p>
+            {filtersActive ? (
+              <Button variant="outline" size="sm" className="mt-4 rounded-xl border-line bg-canvas text-ink" onClick={() => { setFilterType(ALL); setFilterCourse(ALL); setPage(1); }}>Clear filters</Button>
             ) : (
-              <div className="space-y-2">
-                <Label htmlFor="new-quiz-week" className="text-base">
-                  Week start (Saturday)
-                </Label>
-                <Input
-                  id="new-quiz-week"
-                  type="date"
-                  value={formWeekStart}
-                  onChange={(e) => setFormWeekStart(e.target.value)}
-                  className="min-h-11 text-base"
-                />
-                <p className="text-base text-sub">
-                  Course quizzes open Saturday to Monday by default.
-                </p>
-              </div>
-            )}
-            {formError && (
-              <p role="alert" className="text-base text-ruby">
-                {formError}
-              </p>
+              <Button size="sm" className="mt-4 rounded-xl bg-brand text-white hover:bg-brand-hover" onClick={() => setEditorOpen(true)}><Plus className="size-4" /> New quiz</Button>
             )}
           </div>
-          <DialogFooter className="mx-0 mb-0 rounded-none border-line bg-panel p-0 pt-4">
-            <Button
-              className="min-h-11 w-full text-base sm:w-auto"
-              disabled={!formReady || createMutation.isPending}
-              onClick={handleCreate}
-            >
-              {createMutation.isPending ? "Creating…" : "Create & continue"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        ) : (
+          <>
+            {/* mobile cards */}
+            <div className="grid gap-3 lg:hidden">
+              {quizzes.map((quiz) => (
+                <div key={quiz.id} className="group relative overflow-hidden rounded-2xl border border-line bg-panel p-4 hover:border-brand/30">
+                  <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-brand/25 to-transparent opacity-0 group-hover:opacity-100" />
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="truncate text-[15px] font-semibold leading-5 text-ink" style={{ fontFamily: "var(--font-fraunces), serif" }}>{quiz.title}</h3>
+                      <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-sub">
+                        <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${quiz.quizType === "course" ? "border-brand/30 bg-brand/15 text-brand-soft" : "border-gold/30 bg-gold/15 text-gold"}`}>
+                          {quiz.quizType === "course" ? <GraduationCap className="size-3" /> : <Layers className="size-3" />}
+                          {TYPE_LABEL[quiz.quizType]}
+                        </span>
+                        <span className="text-faint">·</span>
+                        <span className="truncate">{quiz.courseCode ?? quiz.subjectName ?? "—"}</span>
+                      </p>
+                    </div>
+                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${quiz.status === "published" ? "bg-brand text-white" : "border border-line bg-canvas text-sub"}`}>{quiz.status}</span>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between text-xs text-faint" style={{ fontFamily: "JetBrains Mono, monospace" }}>
+                    <span className="inline-flex items-center gap-1.5"><Calendar className="size-3" />{quiz.weekStart ? quiz.weekStart : "No week"} · {quiz.questionCount} Qs</span>
+                    <Button variant="ghost" size="sm" className="min-h-9 rounded-xl bg-canvas text-ink hover:bg-line hover:text-white" onClick={() => router.push(`${basePath}/${quiz.id}`)}><Pencil className="size-3.5" />Open builder</Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* desktop table */}
+            <div className="hidden overflow-hidden rounded-2xl border border-line bg-panel lg:block">
+              <Table aria-label="Quizzes">
+                <TableHeader>
+                  <TableRow className="border-line bg-canvas/60 hover:bg-canvas/60">
+                    <TableHead className="h-10 text-[11px] font-semibold uppercase tracking-[0.1em] text-faint" style={{ fontFamily: "JetBrains Mono, monospace" }}>Quiz</TableHead>
+                    <TableHead className="h-10 text-[11px] font-semibold uppercase tracking-[0.1em] text-faint" style={{ fontFamily: "JetBrains Mono, monospace" }}>Type</TableHead>
+                    <TableHead className="h-10 text-[11px] font-semibold uppercase tracking-[0.1em] text-faint" style={{ fontFamily: "JetBrains Mono, monospace" }}>Course / Subject</TableHead>
+                    <TableHead className="h-10 text-[11px] font-semibold uppercase tracking-[0.1em] text-faint" style={{ fontFamily: "JetBrains Mono, monospace" }}>Status</TableHead>
+                    <TableHead className="h-10 text-right text-[11px] font-semibold uppercase tracking-[0.1em] text-faint" style={{ fontFamily: "JetBrains Mono, monospace" }}>Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {quizzes.map((quiz) => (
+                    <TableRow key={quiz.id} className="border-line hover:bg-canvas/40">
+                      <TableCell className="max-w-[22rem] truncate font-medium text-ink">{quiz.title}</TableCell>
+                      <TableCell>
+                        <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${quiz.quizType === "course" ? "border-brand/30 bg-brand/12 text-brand-soft" : "border-gold/30 bg-gold/12 text-gold"}`}>{TYPE_LABEL[quiz.quizType]}</span>
+                      </TableCell>
+                      <TableCell className="text-sm text-sub">{quiz.courseCode ?? quiz.subjectName ?? "—"}<span className="text-faint">{quiz.weekStart ? ` · ${quiz.weekStart}` : ""} · {quiz.questionCount} Qs</span></TableCell>
+                      <TableCell><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${quiz.status === "published" ? "bg-brand text-white" : "border border-line bg-canvas text-sub"}`}>{quiz.status === "published" ? "Published" : "Draft"}</span></TableCell>
+                      <TableCell className="text-right"><Button variant="ghost" size="sm" className="min-h-9 rounded-xl hover:bg-line hover:text-white" onClick={() => router.push(`${basePath}/${quiz.id}`)}><Pencil className="size-3.5" />Edit</Button></TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </>
+        )}
+      </div>
+
+      {quizzesQuery.data && quizzesQuery.data.meta.totalPages > 1 && (
+        <div className="flex items-center justify-between gap-3" aria-label="Quizzes pagination">
+          <Button variant="outline" className="min-h-11 rounded-xl border-line bg-panel text-ink hover:bg-line" disabled={page <= 1} onClick={() => setPage((v) => v - 1)}><ChevronLeft className="size-4" />Previous</Button>
+          <span className="text-xs font-medium text-sub" style={{ fontFamily: "JetBrains Mono, monospace" }}>Page {quizzesQuery.data.meta.page} of {quizzesQuery.data.meta.totalPages}</span>
+          <Button variant="outline" className="min-h-11 rounded-xl border-line bg-panel text-ink hover:bg-line" disabled={page >= quizzesQuery.data.meta.totalPages} onClick={() => setPage((v) => v + 1)}>Next<ChevronRight className="size-4" /></Button>
+        </div>
+      )}
+
+      <NewQuizDialog open={editorOpen} onOpenChange={setEditorOpen} basePath={basePath} />
     </div>
   );
 }

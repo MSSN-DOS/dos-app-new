@@ -115,11 +115,14 @@ FRAME: Quizzes
   LIST ROW: "Mass Transfer — Practice" | Topic Quiz | CHE 301 | Draft pill | [Edit]
   LIST ROW: "Course Quiz — Week 4" | Course Quiz | CHE 301 | Published pill | [Edit]
 
-FRAME: New Quiz (modal, then routes to /teacher/quizzes/[id] for full config)
-  ACTION ROW: [Topic Quiz] [Course Quiz]  -- type choice
-  FIELD: Course or JAMB Subject -> [ select ]
-  FIELD (Topic Quiz only): Topic -> [ select ]
-  ACTION ROW: [Create & continue: primary]
+FRAME: New Quiz (sheet on phones, centred dialog from md up, then routes to /teacher/quizzes/[id] for full config)
+  SECTION "Quiz basics": Title -> [ text ]; Quiz type -> [Course | Topic]
+  SECTION "Scope & schedule": For -> [Students | Aspirants] (course only)
+                              Course / JAMB Subject -> [ select ]
+                              Topic -> [ select ] (Topic Quiz only)
+                              Week -> [ date, prefilled to the next Saturday ]
+  SUMMARY: title | scope line | "Question builder opens next"
+  ACTION ROW: [Cancel] [Create & continue: primary]
 ```
 
 **P12-10 amendment (2026-11-16):** shared with `/admin/quizzes`. The Teacher header
@@ -131,6 +134,16 @@ course filter before pagination. New Quiz uses a bottom sheet on phones and a
 centered dialog on larger screens, with labelled 44px inputs and choices. Subject
 and topic loading/errors have retry controls. JAMB uses Course Quiz because topics
 are course-scoped. No visibility, payment, social or upgrade controls are added.
+
+**Create-flow pass (2026-11-19):** the sheet was rebuilt in the Quizboot two-section
+shape — brand header, numbered "Quiz basics" and "Scope & schedule" sections,
+segmented quiz-type and academic-track radios with arrow-key navigation, the weekly
+Course Quiz preselected with `weekStart` on the next Saturday, a live summary card
+and a sticky Cancel / Create footer. Choosing Topic forces course scope and clears
+any JAMB subject, so the impossible Topic + Aspirant combination is unreachable.
+Readiness reuses `quizCreateSchema` instead of a hand-written check, and catalogue
+and topic failures each carry their own Retry. Component tests live in
+`new-quiz-dialog.test.tsx`.
 
 **Data / API:** `GET /api/teacher/quizzes?search=&type=&status=&courseId=&page=&pageSize=`, `POST /api/teacher/quizzes` (creates a draft shell, redirects to the builder). Shared Zod filters validate requests; search matches literal title text and preserves teacher ownership.
 

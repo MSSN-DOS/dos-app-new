@@ -220,7 +220,12 @@ Work top to bottom. Don't check a later phase's box before every task above it i
   - Enforcement: all three window checks in `api/quizzes/[id]/attempt/route.ts` now pass the override (`:232` stale-attempt auto-submit, `:252` block starting an attempt, `:481` block submitting). The 409 message distinguishes an admin-set window from the default so students aren't told "Saturday-Sunday" when it isn't.
   - UI: `components/admin/quiz-availability-panel.tsx`, rendered from the shared `QuizBuilderView` **only** when `basePath.startsWith("/admin")` and the quiz is a Course Quiz — Teachers never see it. Two `datetime-local` inputs (opens/closes), Save + "Reset to default", all times shown and parsed in `Africa/Lagos` explicitly so a Nigerian admin isn't shown their device timezone instead of WAT. TanStack Query mutation + `apiFetch`; local edit state held separately so there's no effect-driven mirroring.
   - Tests: `lib/quizzes/window.test.ts` +8 cases (early open, default close retained, early close, extension past Monday, clearing, degenerate close≤open, topic-quiz immunity, `resolveCourseQuizWindow` defaults). Full suite 723 passed / 61 files.
-  - Spec gap: `.agents/design/screens-admin.md` has **no** `/admin/quizzes` entry — that screen reuses the teacher's `QuizBuilderView`. The panel follows the existing page's token vocabulary (`border-line`/`bg-panel`/`text-ink`/`bg-brand`) rather than inventing a new admin pattern. Worth a spec entry at the next design pass.
+  - Spec gap closed (2026-11-19): `.agents/design/screens-admin.md` now carries an
+    `/admin/quizzes` entry (list, create sheet, builder pointer) plus a shared-authoring
+    note covering `/admin/topics` and `/admin/questions`, which reuse the teacher views
+    for the same reason. The panel follows the existing page's token vocabulary
+    (`border-line`/`bg-panel`/`text-ink`/`bg-brand`) rather than inventing a new admin
+    pattern.
 
 ---
 
@@ -355,6 +360,20 @@ Scope decisions taken before any code:
   - Security prerequisite committed separately as 0627fb8: restored clean tooling
     configs/secret ignores from bde784d and preserved detected auto-run artifacts in a
     temporary quarantine directory. The repository/pre-commit guard passes.
+  - Create-flow pass (2026-11-19): `new-quiz-dialog.tsx` rebuilt in two numbered Quizboot
+    sections — brand header, "Quiz basics" (title + quiz type) and "Scope & schedule"
+    (Students/Aspirants, course or JAMB subject, topic, week), a live summary card and a
+    sticky Cancel / Create footer. Phone bottom sheet, centred dialog from md up.
+    Course Quiz is preselected with `weekStart` on the next Saturday; choosing Topic
+    forces course scope and clears any JAMB subject so Topic + Aspirant is unreachable.
+    Readiness reuses `quizCreateSchema` (the route's own schema); catalogue and topic
+    failures each have a Retry. New `lib/quizzes/saturday.ts` (`nextSaturday`,
+    `isSaturday`). `new-quiz-dialog.test.tsx` adds 5 interaction tests (defaults,
+    Topic/JAMB prevention, arrow-key radio navigation, create payload, catalogue retry).
+    Headless Chrome at 320/390/768/1280: no horizontal overflow, no targets under 44px,
+    sheet/dialog inside the viewport, sticky footer visible. Full suite 109 files /
+    1,191 tests, typecheck clean, repo lint clean apart from the existing
+    `client-fetch.ts` navigation warning. No new dependency, no migration.
 
 - [x] P12-11 — Complete Quizboot authoring features, authorized 2026-11-16
   - Board confirmed Multi-answer and Numeric questions, autosave, editable header
