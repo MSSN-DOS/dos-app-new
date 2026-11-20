@@ -86,7 +86,7 @@ export function QuizzesView({ basePath }: { basePath: string }) {
               Quizzes
             </h1>
             <p className="mt-2 max-w-xl text-[13px] leading-relaxed text-sub">
-              Topic quizzes are ad-hoc. Course quizzes run weekly (Sat–Sun) and feed CGPA / Post-UTME. Drafts unlock the builder — publish when the bank is attached.
+              Create topic quizzes anytime, or weekly course quizzes for Sat–Sun assessments.
             </p>
           </div>
           <Button
