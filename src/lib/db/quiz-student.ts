@@ -52,6 +52,19 @@ async function accessibleQuiz(id: number, auth: AuthContext) {
 export async function quizAttemptImageLinks(id: number, auth: AuthContext) {
   const quiz = await accessibleQuiz(id, auth);
   const db = getDb();
+  const [openAttempt] = await db
+    .select({ id: quizAttempts.id })
+    .from(quizAttempts)
+    .where(
+      and(
+        eq(quizAttempts.quizId, id),
+        eq(quizAttempts.userId, auth.userId),
+        isNull(quizAttempts.submittedAt),
+      ),
+    )
+    .limit(1);
+  if (!openAttempt)
+    throw new QuizAuthoringError(409, "Start the quiz before loading question images");
   const [rows, options] = await Promise.all([
     db
       .select({ body: questions.bodyRichText, passage: passages.bodyRichText })

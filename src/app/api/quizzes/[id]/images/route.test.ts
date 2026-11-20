@@ -27,7 +27,7 @@ describe("student image renewal", () => {
     expect((await GET(jsonRequest("http://localhost/x"), params)).status).toBe(403);
   });
   it("renews visible content without changing the attempt", async () => {
-    stubSelect(db, [[quiz], [{ body: `<p>Question</p><img src="${path}" data-storage-path="${path}">`, passage: "Passage" }], [{ text: "Option" }], [{ objectPath: path }]]);
+    stubSelect(db, [[quiz], [{ id: 9 }], [{ body: `<p>Question</p><img src="${path}" data-storage-path="${path}">`, passage: "Passage" }], [{ text: "Option" }], [{ objectPath: path }]]);
     const res = await GET(jsonRequest("http://localhost/x"), params);
     expect(res.status).toBe(200);
     expect((await res.json()).data).toEqual([{ path, url: expect.stringContaining("token=fresh") }]);
@@ -35,8 +35,13 @@ describe("student image renewal", () => {
     expect(db.insert).not.toHaveBeenCalled(); expect(db.update).not.toHaveBeenCalled();
   });
   it("does not sign unreferenced registered images", async () => {
-    stubSelect(db, [[quiz], [{ body: "Question", passage: null }], [{ text: "Option" }]]);
+    stubSelect(db, [[quiz], [{ id: 9 }], [{ body: "Question", passage: null }], [{ text: "Option" }]]);
     expect((await (await GET(jsonRequest("http://localhost/x"), params)).json()).data).toEqual([]);
+    expect(sign).not.toHaveBeenCalled();
+  });
+  it("does not reveal question image paths before an attempt starts", async () => {
+    stubSelect(db, [[quiz], []]);
+    expect((await GET(jsonRequest("http://localhost/x"), params)).status).toBe(409);
     expect(sign).not.toHaveBeenCalled();
   });
   it("protects drafts", async () => {
