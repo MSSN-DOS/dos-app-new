@@ -21,10 +21,12 @@ import {
   ChevronDown,
   Copy,
   GripVertical,
+  Info,
   Plus,
   Trash2,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -68,6 +70,7 @@ import {
   type QuestionPreset,
 } from "@/lib/quizzes/builder";
 import { distributeMarks, sumMarks } from "@/lib/quizzes/marks";
+import { cn } from "@/lib/utils";
 import type { QuizPublishBlocker } from "@/lib/validation/quiz-questions";
 import { QuestionTypeDialog } from "./question-type-dialog";
 import { RichTextEditor, type QuizImageUploader } from "./rich-text-editor";
@@ -681,6 +684,7 @@ export function QuizQuestionBuilder({
   onOpenBank,
   onOpenBulk,
   readOnly = false,
+  reserveBottomNav = false,
 }: {
   questions: BuilderQuestion[];
   collapseSavedQuestions?: boolean;
@@ -691,6 +695,8 @@ export function QuizQuestionBuilder({
   uploadImage?: QuizImageUploader;
   onOpenBank?: () => void;
   onOpenBulk?: () => void;
+  /** Lift the floating add button above the phone bottom tab bar (Teacher shell). */
+  reserveBottomNav?: boolean;
 }) {
   const [expandedKey, setExpandedKey] = useState<string | null>(
     collapseSavedQuestions ? null : (questions[0]?.clientKey ?? null),
@@ -703,6 +709,7 @@ export function QuizQuestionBuilder({
   } | null>(null);
   const [total, setTotal] = useState("");
   const [marksError, setMarksError] = useState<string | null>(null);
+  const [marksHelp, setMarksHelp] = useState(false);
   const [announcement, setAnnouncement] = useState("");
   const blocks = builderBlocks(questions, passages);
   const flat = blocks.flatMap((b) => b.questions);
@@ -819,75 +826,78 @@ export function QuizQuestionBuilder({
         <h2 id="question-builder-heading" className="text-xl font-semibold text-ink">
           Questions <span className="text-sub">({questions.length})</span>
         </h2>
-        <Button
-          type="button"
-          disabled={readOnly}
-          className="min-h-11 bg-brand text-primary-foreground hover:bg-brand-hover"
-          onClick={() => setChooser({ passageKey: null })}
-        >
-          <Plus className="size-4" />
-          Add new question
-        </Button>
       </div>
-      <div className="space-y-2 rounded-xl border border-line bg-panel p-3 sm:p-4">
-        <p className="text-base font-semibold text-ink">
-          Total marks: {sumMarks(questions.map((q) => q.marks))}
-        </p>
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="w-40 space-y-1">
-            <Label htmlFor="quiz-total-marks" className="text-base">
-              Set total marks
-            </Label>
+      {questions.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="mr-auto text-base font-semibold text-ink">
+              Total marks: {sumMarks(questions.map((q) => q.marks))}
+            </p>
             <Input
               id="quiz-total-marks"
+              aria-label="Set total marks"
+              placeholder="Set total"
               disabled={readOnly}
               type="number"
               min={questions.length || 1}
               step={1}
-              className="min-h-11 text-base"
+              className="min-h-11 w-28 text-base"
               value={total}
               onChange={(e) => setTotal(e.target.value)}
             />
+            <Button
+              type="button"
+              disabled={readOnly}
+              variant="outline"
+              className="min-h-11 border-line text-ink"
+              onClick={() => {
+                const result = distributeMarks(Number(total), questions.length);
+                if (!result.ok) {
+                  setMarksError(
+                    result.reason === "no-questions"
+                      ? "Add questions before distributing marks."
+                      : result.reason === "total-below-count"
+                        ? "Use at least one mark per question."
+                        : "Enter a positive whole number.",
+                  );
+                  return;
+                }
+                if (result.marks.some((mark) => mark > 1000)) {
+                  setMarksError("Each question can have at most 1000 marks.");
+                  return;
+                }
+                setMarksError(null);
+                changeQuestions(flat.map((q, i) => ({ ...q, marks: result.marks[i] })));
+              }}
+            >
+              Apply
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-11 text-sub"
+              aria-label="How Apply works"
+              aria-expanded={marksHelp}
+              onClick={() => setMarksHelp((open) => !open)}
+            >
+              <Info className="size-5" />
+            </Button>
           </div>
-          <Button
-            type="button"
-            disabled={readOnly}
-            variant="outline"
-            className="min-h-11 border-line text-ink"
-            onClick={() => {
-              const result = distributeMarks(Number(total), questions.length);
-              if (!result.ok) {
-                setMarksError(
-                  result.reason === "no-questions"
-                    ? "Add questions before distributing marks."
-                    : result.reason === "total-below-count"
-                      ? "Use at least one mark per question."
-                      : "Enter a positive whole number.",
-                );
-                return;
-              }
-              if (result.marks.some((mark) => mark > 1000)) {
-                setMarksError("Each question can have at most 1000 marks.");
-                return;
-              }
-              setMarksError(null);
-              changeQuestions(flat.map((q, i) => ({ ...q, marks: result.marks[i] })));
-            }}
-          >
-            Apply
-          </Button>
+          {marksHelp && (
+            <p className="text-base text-sub">
+              Apply distributes whole marks evenly across questions and their correct
+              answers. Any remainder goes to the earliest questions. Each gap question is
+              graded as a whole.
+            </p>
+          )}
+          {marksError && (
+            <p role="alert" className="text-base text-ruby">
+              {marksError}
+            </p>
+          )}
         </div>
-        <p className="text-base text-sub">
-          Apply distributes whole marks evenly across questions and their correct answers.
-          Any remainder goes to the earliest questions. Each gap question is graded as a
-          whole.
-        </p>
-        {marksError && (
-          <p role="alert" className="text-base text-ruby">
-            {marksError}
-          </p>
-        )}
-      </div>
+      )}
       {questions.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-2">
           <label className="flex min-h-11 cursor-pointer items-center gap-2 text-base text-ink">
@@ -924,15 +934,12 @@ export function QuizQuestionBuilder({
           <p className="mt-2 text-base text-sub">
             Add a question, a passage, or a manually graded essay.
           </p>
-          <Button
-            type="button"
-            variant="outline"
-            className="mt-4 min-h-11 border-line text-ink"
-            onClick={() => setChooser({ passageKey: null })}
-          >
-            <Plus className="size-4" />
-            Add your first question
-          </Button>
+          {!readOnly && (
+            <p className="mt-4 inline-flex items-center gap-2 text-base font-medium text-brand">
+              <Plus className="size-4" />
+              Use the Add question button, bottom right
+            </p>
+          )}
         </div>
       ) : (
         <SortableRows keys={blocks.map((b) => b.key)} onReorder={reorderBlocks}>
@@ -1138,74 +1145,84 @@ export function QuizQuestionBuilder({
           </div>
         </SortableRows>
       )}
-      {!readOnly && (
-        <div className="fixed bottom-[calc(11rem+env(safe-area-inset-bottom))] right-4 z-30 flex justify-end lg:bottom-24 lg:right-[max(1rem,calc((100vw-1080px)/2))]">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                className="size-13 gap-2 rounded-full p-0 text-base md:w-auto md:px-5"
-                aria-label="Add question"
-              >
-                <Plus className="size-5" />
-                <span className="hidden md:inline">Add question</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              side="top"
-              align="center"
-              className="max-h-[55dvh] w-[min(18rem,calc(100vw-2rem))] overflow-y-auto border-line bg-panel text-ink [&_[role=menuitem]]:min-h-11 [&_[role=menuitem]]:text-base"
-            >
-              <DropdownMenuLabel>New question</DropdownMenuLabel>
-              {(
-                [
-                  "true_false",
-                  "options",
-                  "multi_answer",
-                  "fill_in_gap",
-                  "numeric",
-                  "passage",
-                  "essay",
-                ] as const
-              ).map((type) => (
-                <DropdownMenuItem
-                  key={type}
-                  onSelect={() => {
-                    setChooser(null);
-                    choose(type);
-                  }}
+      {!readOnly &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            className={cn(
+              "fixed right-[max(1rem,env(safe-area-inset-right))] z-40 flex justify-end",
+              reserveBottomNav
+                ? "bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-[calc(1rem+env(safe-area-inset-bottom))]"
+                : "bottom-[calc(1rem+env(safe-area-inset-bottom))]",
+            )}
+          >
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  className="size-14 gap-2 rounded-full p-0 text-base shadow-lg md:w-auto md:px-5"
+                  aria-label="Add question"
                 >
-                  {
+                  <Plus className="size-5" />
+                  <span className="hidden md:inline">Add question</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                side="top"
+                align="end"
+                className="max-h-[55dvh] w-[min(18rem,calc(100vw-2rem))] overflow-y-auto border-line bg-panel text-ink [&_[role=menuitem]]:min-h-11 [&_[role=menuitem]]:text-base"
+              >
+                <DropdownMenuLabel>New question</DropdownMenuLabel>
+                {(
+                  [
+                    "true_false",
+                    "options",
+                    "multi_answer",
+                    "fill_in_gap",
+                    "numeric",
+                    "passage",
+                    "essay",
+                  ] as const
+                ).map((type) => (
+                  <DropdownMenuItem
+                    key={type}
+                    onSelect={() => {
+                      setChooser(null);
+                      choose(type);
+                    }}
+                  >
                     {
-                      true_false: "True / False",
-                      options: "Multiple choice",
-                      multi_answer: "Multi-answer",
-                      fill_in_gap: "Fill in the gap",
-                      numeric: "Numeric",
-                      passage: "Passage",
-                      essay: "Essay · manually graded",
-                    }[type]
-                  }
+                      {
+                        true_false: "True / False",
+                        options: "Multiple choice",
+                        multi_answer: "Multi-answer",
+                        fill_in_gap: "Fill in the gap",
+                        numeric: "Numeric",
+                        passage: "Passage",
+                        essay: "Essay · manually graded",
+                      }[type]
+                    }
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => setChooser({ passageKey: null })}>
+                  Choose question type…
                 </DropdownMenuItem>
-              ))}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => setChooser({ passageKey: null })}>
-                Choose question type…
-              </DropdownMenuItem>
-              {onOpenBank && (
-                <DropdownMenuItem onSelect={onOpenBank}>
-                  From question bank
-                </DropdownMenuItem>
-              )}
-              {onOpenBulk && (
-                <DropdownMenuItem onSelect={onOpenBulk}>
-                  Bulk paste questions
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      )}
+                {onOpenBank && (
+                  <DropdownMenuItem onSelect={onOpenBank}>
+                    From question bank
+                  </DropdownMenuItem>
+                )}
+                {onOpenBulk && (
+                  <DropdownMenuItem onSelect={onOpenBulk}>
+                    Bulk paste questions
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>,
+          document.body,
+        )}
       <QuestionTypeDialog
         open={chooser !== null}
         onOpenChange={(open) => {

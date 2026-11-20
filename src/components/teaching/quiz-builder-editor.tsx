@@ -5,7 +5,6 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
-  BookOpen,
   CheckCircle2,
   Eye,
   ImagePlus,
@@ -320,24 +319,99 @@ export function QuizBuilderEditor({
     : null;
   return (
     <div className="mx-auto min-w-0 max-w-6xl space-y-4 pb-6">
-      <header className="flex flex-wrap items-center gap-3 border-b border-line pb-4">
-        <div className="min-w-0 flex-1 space-y-1">
-          <Link
-            href={basePath}
-            className="inline-flex min-h-11 items-center gap-2 rounded-md text-base text-sub underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <ArrowLeft className="size-4" /> Back to quizzes
-          </Link>
+      <header className="space-y-2">
+        <Link
+          href={basePath}
+          className="inline-flex min-h-11 items-center gap-2 rounded-md text-base text-sub underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <ArrowLeft className="size-4" /> Back to quizzes
+        </Link>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <Input
             aria-label="Quiz header title"
             maxLength={200}
             disabled={locked}
-            className="min-h-11 w-full border-transparent bg-transparent px-0 text-xl font-semibold text-ink hover:border-line focus-visible:px-2"
+            className="min-h-11 min-w-0 flex-[1_1_16rem] border-transparent bg-transparent px-2 text-2xl font-bold text-ink hover:border-line focus-visible:border-ring"
+            style={{ fontFamily: "var(--font-fraunces), serif" }}
             value={payload.details.title}
             placeholder="Untitled quiz"
             onChange={(e) => updateDetails({ title: e.target.value })}
           />
-          <p role="status" className="text-base text-sub">
+          <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-11 min-w-11 text-base"
+              aria-label="Question paper"
+              onClick={() => setPrint(true)}
+            >
+              <Printer className="size-5" />
+              <span className="sr-only lg:not-sr-only">Print</span>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-11 min-w-11 text-base"
+              onClick={() => setPreview(true)}
+            >
+              <Eye className="size-5" />
+              <span className="sr-only lg:not-sr-only">Preview</span>
+            </Button>
+            {!locked && (
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-11 min-w-11 text-base"
+                aria-label="Save draft"
+                disabled={saveMutation.isPending || uploadMutation.isPending}
+                onClick={() => void save("draft")}
+              >
+                <Save className="size-5" />
+                <span className="sr-only lg:not-sr-only">
+                  {saveMutation.isPending ? "Saving…" : "Save draft"}
+                </span>
+              </Button>
+            )}
+            {!published && (
+              <Button
+                className="ml-auto min-h-11 px-5 text-base sm:ml-0"
+                disabled={
+                  saveMutation.isPending ||
+                  uploadMutation.isPending ||
+                  lifecycle.isPending ||
+                  blockers.length > 0
+                }
+                title={
+                  blockers.length > 0
+                    ? "Fix the items in the checklist before publishing"
+                    : undefined
+                }
+                onClick={() =>
+                  hasAttempts ? lifecycle.mutate("republish") : void save("publish")
+                }
+              >
+                {hasAttempts ? "Republish" : "Publish"}
+              </Button>
+            )}
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-base text-sub">
+          <Badge
+            variant="secondary"
+            className={published ? "bg-success/10 text-ink" : "text-sub"}
+          >
+            {published ? "Published" : "Draft"}
+          </Badge>
+          <span>
+            {document.quizType === "course"
+              ? `Course Quiz · 50 questions · Week ${document.weekStart}`
+              : "Topic Quiz"}
+          </span>
+          <span role="status" className="inline-flex items-center gap-2">
+            <span
+              aria-hidden
+              className={`size-2 rounded-full ${fingerprint !== savedVersion || saveMutation.isPending ? "bg-warning" : "bg-success"}`}
+            />
             {saveMutation.isPending
               ? "Saving…"
               : fingerprint !== savedVersion
@@ -345,57 +419,27 @@ export function QuizBuilderEditor({
                   ? saveStatus
                   : "Unsaved changes · autosave pending"
                 : saveStatus}
-          </p>
-          <p className="text-base text-sub">
-            {document.quizType === "course"
-              ? `Course Quiz · 50 questions · Week ${document.weekStart}`
-              : "Topic Quiz"}
-          </p>
+          </span>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          className="min-h-11 text-base"
-          aria-label="Question paper"
-          onClick={() => setPrint(true)}
-        >
-          <Printer className="size-5" />
-          <span className="sr-only md:not-sr-only">Print / PDF</span>
-        </Button>
-        {!published && (
-          <Button
-            className="min-h-11 text-base"
-            disabled={
-              saveMutation.isPending || lifecycle.isPending || blockers.length > 0
-            }
-            onClick={() =>
-              hasAttempts ? lifecycle.mutate("republish") : void save("publish")
-            }
-          >
-            {hasAttempts ? "Republish" : "Publish"}
-          </Button>
-        )}
-        <Badge
-          variant="secondary"
-          className={published ? "bg-success/10 text-ink" : "text-sub"}
-        >
-          {published ? "Published" : "Draft"}
-        </Badge>
-        <Button
-          type="button"
-          variant="outline"
-          className="min-h-11 text-base"
-          onClick={() => setPreview(true)}
-        >
-          <Eye className="size-5" />
-          <span className="sr-only md:not-sr-only">Preview</span>
-        </Button>
       </header>
+      {published && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-warning/30 bg-warning/10 p-3 text-base">
+          <p>Published · editing locked</p>
+          <Button
+            variant="outline"
+            className="min-h-11 text-base"
+            disabled={lifecycle.isPending}
+            onClick={() => setUnpublish(true)}
+          >
+            Unpublish
+          </Button>
+        </div>
+      )}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="min-w-0 gap-4">
         <TabsList
           variant="line"
           aria-label="Quiz sections"
-          className="grid min-h-12 w-full grid-cols-3 border-b border-line p-0"
+          className="flex min-h-12 w-full justify-start gap-1 border-b border-line p-0"
         >
           {[
             ["questions", "Questions"],
@@ -405,9 +449,14 @@ export function QuizBuilderEditor({
             <TabsTrigger
               key={value}
               value={value}
-              className="min-h-11 px-2 text-base data-[state=active]:text-brand"
+              className="min-h-11 flex-none px-4 text-base data-[state=active]:text-brand"
             >
               {label}
+              {value === "questions" && (
+                <span className="ml-2 rounded-full bg-line px-2 text-sm tabular-nums text-sub">
+                  {questions.length}
+                </span>
+              )}
             </TabsTrigger>
           ))}
         </TabsList>
@@ -536,18 +585,11 @@ export function QuizBuilderEditor({
             className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]"
           >
             <div className="min-w-0 space-y-4">
-              <Button
-                type="button"
-                variant="outline"
-                className="min-h-11 w-full text-base sm:w-auto"
-                onClick={() => setBank(true)}
-              >
-                <BookOpen className="size-4" /> Add from question bank
-              </Button>
               <QuizQuestionBuilder
                 onOpenBank={() => setBank(true)}
                 onOpenBulk={() => setBulk(true)}
                 collapseSavedQuestions
+                reserveBottomNav={!basePath.startsWith("/admin")}
                 readOnly={
                   locked ||
                   lifecycle.isPending ||
@@ -573,7 +615,7 @@ export function QuizBuilderEditor({
               aria-label="Quiz summary"
               className="order-first rounded-xl border border-line bg-panel p-4 lg:order-last lg:sticky lg:top-20"
             >
-              <dl className="grid grid-cols-3 gap-2 text-center lg:gap-3">
+              <dl className="grid grid-cols-3 gap-2 text-center">
                 {[
                   { label: "Questions", value: questions.length },
                   { label: "Marks", value: sumMarks(questions.map((q) => q.marks)) },
@@ -581,29 +623,55 @@ export function QuizBuilderEditor({
                     label: "Time",
                     value: payload.details.durationSeconds
                       ? formatDurationSeconds(payload.details.durationSeconds)
-                      : "Untimed",
+                      : "No limit",
                   },
                 ].map(({ label, value }) => (
                   <div key={label} className="min-w-0">
-                    <dd className="break-words text-xl font-semibold tabular-nums text-ink">
+                    <dd
+                      className="text-xl font-bold tabular-nums leading-tight text-ink"
+                      style={{ fontFamily: "var(--font-fraunces), serif" }}
+                    >
                       {value}
                     </dd>
-                    <dt className="mt-1 text-base text-sub">{label}</dt>
+                    <dt className="mt-1 text-sm uppercase tracking-wider text-faint">
+                      {label}
+                    </dt>
                   </div>
                 ))}
               </dl>
-              <p
-                className={`mt-4 flex items-start gap-2 border-t border-line pt-3 text-base ${blockers.length ? "text-sub" : "text-ink"}`}
-              >
-                {!blockers.length && (
-                  <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-success" />
+              <div className="mt-3 border-t border-line pt-3 text-base">
+                {published ? (
+                  <p>Published · editing locked</p>
+                ) : issues.length ? (
+                  <>
+                    <h2
+                      id="publish-blockers-heading"
+                      className="text-sm font-semibold uppercase tracking-wider text-faint"
+                    >
+                      What blocks publishing ({issues.length})
+                    </h2>
+                    <ul
+                      aria-labelledby="publish-blockers-heading"
+                      className="mt-2 max-h-48 space-y-1 overflow-y-auto text-sub"
+                    >
+                      {issues.map((issue, i) => (
+                        <li key={`${issue.path}-${i}`} className="flex items-start gap-2">
+                          <span
+                            aria-hidden
+                            className="mt-2 size-2 shrink-0 rounded-full bg-warning"
+                          />
+                          {issueLabel(issue)}
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                ) : (
+                  <p className="flex items-center gap-2 text-ink">
+                    <CheckCircle2 className="size-5 shrink-0 text-success" />
+                    Ready to publish
+                  </p>
                 )}
-                {published
-                  ? "Published · editing locked"
-                  : blockers.length
-                    ? `${blockers.length} things to review before publishing`
-                    : "Ready to publish"}
-              </p>
+              </div>
               {!published && (
                 <Button
                   type="button"
@@ -660,12 +728,15 @@ export function QuizBuilderEditor({
           {formError}
         </p>
       )}
-      {!published && issues.length > 0 && (
+      {!published && issues.length > 0 && activeTab !== "questions" && (
         <section
           className="rounded-xl border border-line bg-panel p-4"
-          aria-labelledby="publish-blockers-heading"
+          aria-labelledby="publish-blockers-tab-heading"
         >
-          <h2 id="publish-blockers-heading" className="text-base font-semibold text-ink">
+          <h2
+            id="publish-blockers-tab-heading"
+            className="text-base font-semibold text-ink"
+          >
             What blocks publishing ({issues.length})
           </h2>
           <ul className="mt-2 max-h-48 list-disc space-y-1 overflow-y-auto pl-5 text-base text-sub">
@@ -674,60 +745,6 @@ export function QuizBuilderEditor({
             ))}
           </ul>
         </section>
-      )}
-      {!locked && (
-        <div className="sticky bottom-[calc(5rem+env(safe-area-inset-bottom))] z-20 flex flex-col gap-3 rounded-xl border border-line bg-panel p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4 lg:bottom-0">
-          <p className="text-base text-sub">
-            {published
-              ? "Published quiz · editing is locked"
-              : "Drafts may contain unfinished questions."}
-          </p>
-          {!locked && (
-            <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
-              <Button
-                type="button"
-                variant="outline"
-                className="min-h-11"
-                disabled={saveMutation.isPending || uploadMutation.isPending}
-                onClick={() => save("draft")}
-              >
-                <Save className="size-4" />
-                {saveMutation.isPending ? "Saving…" : "Save draft"}
-              </Button>
-              <Button
-                type="button"
-                className="min-h-11"
-                disabled={
-                  saveMutation.isPending ||
-                  uploadMutation.isPending ||
-                  blockers.length > 0
-                }
-                onClick={() => save("publish")}
-              >
-                Publish
-              </Button>
-            </div>
-          )}
-          {published && (
-            <Button
-              className="min-h-11 text-base"
-              variant="outline"
-              disabled={lifecycle.isPending || saveMutation.isPending}
-              onClick={() => setUnpublish(true)}
-            >
-              Unpublish
-            </Button>
-          )}
-          {!published && hasAttempts && (
-            <Button
-              className="min-h-11 text-base"
-              disabled={lifecycle.isPending || blockers.length > 0}
-              onClick={() => lifecycle.mutate("republish")}
-            >
-              Republish
-            </Button>
-          )}
-        </div>
       )}
       {hasAttempts && (
         <p
@@ -758,19 +775,6 @@ export function QuizBuilderEditor({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      {published && (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-warning/30 bg-warning/10 p-3 text-base">
-          <p>Published · editing locked</p>
-          <Button
-            variant="outline"
-            className="min-h-11 text-base"
-            disabled={lifecycle.isPending}
-            onClick={() => setUnpublish(true)}
-          >
-            Unpublish
-          </Button>
-        </div>
-      )}
       <QuizBulkDialog
         open={bulk}
         onOpenChange={setBulk}

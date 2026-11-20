@@ -155,8 +155,14 @@ describe("quiz authoring integration", () => {
     });
     fireEvent.click(screen.getByRole("combobox", { name: "Show results" }));
     fireEvent.click(screen.getByRole("option", { name: "Hidden" }));
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "Questions" }));
-    fireEvent.click(screen.getByRole("button", { name: "Add new question" }));
+    fireEvent.mouseDown(screen.getByRole("tab", { name: /^Questions/ }));
+    // The floating Add question button is the only add control now.
+    fireEvent.keyDown(screen.getByRole("button", { name: "Add question" }), {
+      key: "Enter",
+    });
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "Choose question type…" }),
+    );
     fireEvent.click(
       within(screen.getByRole("dialog")).getByRole("button", {
         name: "Essay",
