@@ -8,3 +8,10 @@ node_modules/
 .freebuff/
 .tmp/
 .vscode/
+node_modules/
+.next/
+!.env.example
+*.tsbuildinfo
+.DS_Store
+.freebuff/
+config.bat
