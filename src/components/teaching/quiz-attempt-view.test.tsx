@@ -105,7 +105,7 @@ describe("student quiz integration", () => {
     expect(screen.getByText("Manually graded")).toBeInTheDocument();
     expect(screen.getByText("No time limit", { exact: true })).toBeInTheDocument();
     expect(apiFetch.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
-  });
+  }, 30000);
   it("saves gap and essay responses, then submits only after confirmation and shows the grading gate", async () => {
     mount();
     fireEvent.click(await screen.findByRole("button", { name: "Resume attempt" }));

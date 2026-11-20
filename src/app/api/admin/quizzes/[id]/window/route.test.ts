@@ -29,7 +29,7 @@ beforeEach(() => {
 
 describe("PATCH /api/admin/quizzes/[id]/window", () => {
   it("sets an explicit open/close window and returns the effective instants", async () => {
-    stubSelect(db, [[{ id: 5, quizType: "course", weekStart: WEEK }]]);
+    stubSelect(db, [[{ id: 5, quizType: "course", weekStart: WEEK }], []]);
     stubUpdate(db, {
       id: 5,
       opensAt: new Date("2026-08-20T09:00:00Z"),
@@ -56,7 +56,7 @@ describe("PATCH /api/admin/quizzes/[id]/window", () => {
   });
 
   it("clears the override when both fields are null, restoring the default window", async () => {
-    stubSelect(db, [[{ id: 5, quizType: "course", weekStart: WEEK }]]);
+    stubSelect(db, [[{ id: 5, quizType: "course", weekStart: WEEK }], []]);
     stubUpdate(db, { id: 5, opensAt: null, closesAt: null });
 
     const res = await PATCH(
@@ -75,7 +75,7 @@ describe("PATCH /api/admin/quizzes/[id]/window", () => {
   });
 
   it("keeps the default close when only opensAt is provided", async () => {
-    stubSelect(db, [[{ id: 5, quizType: "course", weekStart: WEEK }]]);
+    stubSelect(db, [[{ id: 5, quizType: "course", weekStart: WEEK }], []]);
     stubUpdate(db, {
       id: 5,
       opensAt: new Date("2026-08-19T10:00:00Z"),
@@ -83,7 +83,10 @@ describe("PATCH /api/admin/quizzes/[id]/window", () => {
     });
 
     const res = await PATCH(
-      jsonRequest("http://localhost/x", "PATCH", { opensAt: "2026-08-19T10:00:00Z", closesAt: null }),
+      jsonRequest("http://localhost/x", "PATCH", {
+        opensAt: "2026-08-19T10:00:00Z",
+        closesAt: null,
+      }),
       ctx("5"),
     );
 
@@ -105,7 +108,9 @@ describe("PATCH /api/admin/quizzes/[id]/window", () => {
     expect(res.status).toBe(422);
     const body = await res.json();
     expect(body.error.code).toBe("VALIDATION_ERROR");
-    expect(body.error.details.some((d: { field: string }) => d.field === "closesAt")).toBe(true);
+    expect(
+      body.error.details.some((d: { field: string }) => d.field === "closesAt"),
+    ).toBe(true);
     expect(db.update).not.toHaveBeenCalled();
   });
 

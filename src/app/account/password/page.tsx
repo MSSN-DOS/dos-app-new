@@ -1,6 +1,6 @@
 "use client";
 
-import { KeyRound, Loader2 } from "lucide-react";
+import { KeyRound } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
 
@@ -10,6 +10,7 @@ import { RequireRole } from "@/components/auth/require-role";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Spinner } from "@/components/ui/spinner";
 
 // Shared "your account" password rotation page. Every role reaches it from the header user
 // menu; the API behind it (POST /api/auth/change-password) is deliberately role-agnostic —
@@ -109,7 +110,7 @@ export default function ChangePasswordPage() {
             aria-busy={saving}
             className="h-11 w-full justify-center gap-2"
           >
-            {saving ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <KeyRound className="size-4" aria-hidden="true" />}
+            {saving ? <Spinner /> : <KeyRound className="size-4" aria-hidden="true" />}
             {saving ? "Saving…" : "Change password"}
           </Button>
         </form>

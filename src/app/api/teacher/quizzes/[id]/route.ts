@@ -6,6 +6,7 @@ import { errorResponse } from "@/lib/api/response";
 import { requireAuth } from "@/lib/auth/guard";
 import { forbiddenUnlessOwned } from "@/lib/auth/ownership";
 import { getDb } from "@/lib/db";
+import { quizHasAttempts } from "@/lib/db/quiz-builder";
 import {
   courses,
   jambSubjects,
@@ -145,7 +146,7 @@ export async function PATCH(
       );
     }
 
-    if (existing.status === "published") {
+    if (existing.status === "published" || (await quizHasAttempts(db, existing))) {
       return NextResponse.json(
         {
           error: {
@@ -203,9 +204,7 @@ export async function PATCH(
         passMark: input.passMark,
         allowMultipleAttempts: input.allowMultipleAttempts,
         loseFocusPolicy: input.loseFocusPolicy,
-        ...(input.weekStart !== undefined
-          ? { weekStart: input.weekStart }
-          : {}),
+        ...(input.weekStart !== undefined ? { weekStart: input.weekStart } : {}),
       })
       .where(eq(quizzes.id, id))
       .returning();

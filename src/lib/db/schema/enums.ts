@@ -26,16 +26,15 @@ export const questionTypeEnum = pgEnum("question_type", [
   "fill_in_gap",
   "options",
   "essay",
+  "multi_answer",
+  "numeric",
 ]);
 
 export const contentStatusEnum = pgEnum("status", ["draft", "published"]);
 
 // Quiz authoring (P12). `private` is the default so a half-built quiz is never
 // listed to students, and an existing quiz keeps its current reach on migration.
-export const quizVisibilityEnum = pgEnum("quiz_visibility", [
-  "public",
-  "private",
-]);
+export const quizVisibilityEnum = pgEnum("quiz_visibility", ["public", "private"]);
 
 // One type serves both "show answers after" and "show result after": the question
 // is *when*, and never-immediately-after-the-attempt is covered by `after_release`

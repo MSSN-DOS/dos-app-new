@@ -69,13 +69,15 @@ export function QuizSettingsPanel({
               {setting.description}
             </p>
           </div>
-          <div className="flex min-h-11 items-center">
+          <Label
+            htmlFor={id}
+            className="flex size-11 shrink-0 cursor-pointer items-center justify-center has-[:disabled]:cursor-not-allowed"
+          >
             <Switch
               id={id}
               checked={checked}
               disabled={setting.key === "requireLoginToAttempt"}
               aria-describedby={`${id}-description`}
-              className="min-h-11 min-w-14 data-[state=checked]:bg-brand"
               onCheckedChange={(enabled) => {
                 if (
                   setting.key === "showAnswersAfter" ||
@@ -98,7 +100,7 @@ export function QuizSettingsPanel({
                 else onChange({ ...value, [setting.key]: enabled });
               }}
             />
-          </div>
+          </Label>
           <Button
             type="button"
             variant="ghost"
@@ -112,6 +114,52 @@ export function QuizSettingsPanel({
             />
           </Button>
         </div>
+        {setting.key === "allowMultipleAttempts" && value.allowMultipleAttempts && (
+          <div className="space-y-2 rounded-xl border border-line bg-canvas p-3">
+            <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 text-base">
+              <span>Limit number of attempts</span>
+              <span className="flex size-11 items-center justify-center">
+                <Switch
+                  aria-label="Limit number of attempts"
+                  checked={value.maxAttempts !== null}
+                  onCheckedChange={(enabled) =>
+                    onChange({ ...value, maxAttempts: enabled ? 3 : null })
+                  }
+                />
+              </span>
+            </label>
+            {value.maxAttempts !== null && (
+              <div className="space-y-1">
+                <Label htmlFor="quiz-attempt-limit" className="text-base">
+                  Maximum attempts
+                </Label>
+                <Input
+                  id="quiz-attempt-limit"
+                  type="number"
+                  min={2}
+                  max={100}
+                  className="min-h-11 text-base"
+                  value={value.maxAttempts}
+                  onChange={(e) =>
+                    onChange({ ...value, maxAttempts: Number(e.target.value) })
+                  }
+                />
+              </div>
+            )}
+            <p className="text-base text-sub">
+              {value.maxAttempts === null
+                ? "Unlimited attempts."
+                : `Up to ${value.maxAttempts} attempts per student. Resuming does not use another attempt.`}
+            </p>
+            {errors
+              .filter((e) => e.path === "settings.maxAttempts")
+              .map((e) => (
+                <p key={e.path} role="alert" className="text-base text-ruby">
+                  {e.message}
+                </p>
+              ))}
+          </div>
+        )}
         {setting.key === "scheduleEnabled" && value.scheduleEnabled && (
           <div className="space-y-3 rounded-xl border border-line bg-canvas p-3">
             <p className="text-base text-sub">

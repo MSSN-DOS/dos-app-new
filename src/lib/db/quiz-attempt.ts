@@ -27,6 +27,7 @@ import { quizGradingQuestions } from "@/lib/db/quiz-grading";
 import { QuizAuthoringError, quizAuthoringErrorResponse } from "@/lib/api/quiz-authoring";
 import { quizImageUrls } from "@/lib/db/quiz-image-urls";
 import { resolveQuizRichText } from "@/lib/quizzes/images";
+import { hasAttemptRemaining } from "@/lib/quizzes/attempt-limit";
 
 function normalize(text: string): string {
   return text.trim().toLowerCase();
@@ -69,6 +70,8 @@ function fromStoredAnswers(
   return (rows ?? []).map((a) => ({
     questionId: a.questionId,
     selectedOptionId: a.selectedOptionId ?? null,
+    selectedOptionIds: a.selectedOptionIds ?? [],
+    numericAnswer: a.numericAnswer ?? null,
     blankAnswers: a.blankAnswers ?? {},
     essayAnswer: a.essayAnswer ?? null,
   }));
@@ -96,13 +99,20 @@ async function persistAttemptOutcome(
   gradingQuestions.forEach((q, index) => {
     const a = submitted.find((s) => s.questionId === q.id);
     const verdict = result.results[index];
-    if (q.questionType === "options" || q.questionType === "essay") {
+    if (q.questionType !== "fill_in_gap") {
       values.push({
         attemptId: row.id,
         questionId: q.id,
         selectedOptionId:
           q.questionType === "options" ? (a?.selectedOptionId ?? null) : null,
-        textAnswer: q.questionType === "essay" ? (a?.essayAnswer ?? "") : null,
+        selectedOptionIds:
+          q.questionType === "multi_answer" ? (a?.selectedOptionIds ?? []) : null,
+        textAnswer:
+          q.questionType === "essay"
+            ? (a?.essayAnswer ?? "")
+            : q.questionType === "numeric"
+              ? (a?.numericAnswer ?? "")
+              : null,
         blankIndex: null,
         isCorrect: verdict.isCorrect,
         awardedMarks: verdict.awardedMarks,
@@ -129,14 +139,12 @@ async function persistAttemptOutcome(
       .where(and(eq(bestScores.userId, userId), eq(bestScores.quizId, quizId)))
       .limit(1);
     if (!best)
-      await db
-        .insert(bestScores)
-        .values({
-          userId,
-          quizId,
-          bestScore: result.score.toFixed(2),
-          achievedAt: new Date(),
-        });
+      await db.insert(bestScores).values({
+        userId,
+        quizId,
+        bestScore: result.score.toFixed(2),
+        achievedAt: new Date(),
+      });
     else if (result.score > Number(best.bestScore))
       await db
         .update(bestScores)
@@ -202,6 +210,8 @@ export async function getQuizAttempt(
         passMark: quizzes.passMark,
         instructions: quizzes.instructions,
         status: quizzes.status,
+        unpublishedAt: quizzes.unpublishedAt,
+        maxAttempts: quizzes.maxAttempts,
         quizType: quizzes.quizType,
         weekStart: quizzes.weekStart,
         opensAt: quizzes.opensAt,
@@ -224,7 +234,7 @@ export async function getQuizAttempt(
       .from(quizzes)
       .where(eq(quizzes.id, quizId))
       .limit(1);
-    if (!quiz || quiz.status !== "published") {
+    if (!quiz || (quiz.status !== "published" && !quiz.unpublishedAt)) {
       return NextResponse.json(
         { error: { code: "NOT_FOUND", message: "Quiz not found" } },
         { status: 404 },
@@ -270,6 +280,8 @@ export async function getQuizAttempt(
     let completedCount = priorRows.filter(
       (attempt) => attempt.submittedAt !== null,
     ).length;
+    if (quiz.status !== "published" && !openAttempt)
+      throw new QuizAuthoringError(404, "Quiz not found");
 
     // Auto-submit stale open attempt on expiry (time limit or window closed)
     // so single-attempt users aren't permanently locked out.
@@ -343,7 +355,7 @@ export async function getQuizAttempt(
         { status: 409 },
       );
     }
-    if (!openAttempt && !quiz.allowMultipleAttempts && completedCount > 0) {
+    if (!openAttempt && !hasAttemptRemaining(quiz, completedCount)) {
       return NextResponse.json(
         {
           error: {
@@ -357,8 +369,19 @@ export async function getQuizAttempt(
 
     const attempt = openAttempt
       ? openAttempt
-      : (
-          await db
+      : await db.transaction(async (tx) => {
+          // Locks the quiz row against unpublish/content writes before starting.
+          const [locked] = await tx
+            .update(quizzes)
+            .set({ attemptsStarted: true })
+            .where(and(eq(quizzes.id, quizId), eq(quizzes.status, "published")))
+            .returning({ id: quizzes.id });
+          if (!locked)
+            throw new QuizAuthoringError(
+              409,
+              "This quiz is no longer available for new attempts",
+            );
+          const [started] = await tx
             .insert(quizAttempts)
             .values({
               quizId,
@@ -373,13 +396,16 @@ export async function getQuizAttempt(
               id: quizAttempts.id,
               attemptNumber: quizAttempts.attemptNumber,
               startedAt: quizAttempts.startedAt,
-            })
-        )[0];
+            });
+          return started;
+        });
 
     const attachedRows = await db
       .select({
         id: questions.id,
         questionType: questions.questionType,
+        numericUnit: questions.numericUnit,
+        shuffleOptions: questions.shuffleOptions,
         bodyRichText: questions.bodyRichText,
         passageId: questions.passageId,
         marks: quizQuestions.marks,
@@ -470,6 +496,7 @@ export async function getQuizAttempt(
         questions: questionRows.map((question) => ({
           id: question.id,
           questionType: question.questionType,
+          numericUnit: question.numericUnit ?? "",
           bodyRichText: resolveQuizRichText(question.bodyRichText, urls),
           marks: question.marks ?? 1,
           passage: question.passageId
@@ -484,7 +511,7 @@ export async function getQuizAttempt(
                   : null;
               })()
             : null,
-          options: (quiz.shuffleOptions
+          options: (quiz.shuffleOptions || question.shuffleOptions
             ? shuffleForAttempt(
                 optionRows.filter((option) => option.questionId === question.id),
                 attempt.id + question.id,
@@ -555,6 +582,8 @@ export async function submitQuizAttempt(
         id: quizzes.id,
         status: quizzes.status,
         allowMultipleAttempts: quizzes.allowMultipleAttempts,
+        unpublishedAt: quizzes.unpublishedAt,
+        maxAttempts: quizzes.maxAttempts,
         quizType: quizzes.quizType,
         weekStart: quizzes.weekStart,
         opensAt: quizzes.opensAt,
@@ -574,7 +603,7 @@ export async function submitQuizAttempt(
       .from(quizzes)
       .where(eq(quizzes.id, quizId))
       .limit(1);
-    if (!quiz || quiz.status !== "published") {
+    if (!quiz || (quiz.status !== "published" && !quiz.unpublishedAt)) {
       return NextResponse.json(
         { error: { code: "NOT_FOUND", message: "Quiz not found" } },
         { status: 404 },
@@ -620,10 +649,12 @@ export async function submitQuizAttempt(
       .where(and(eq(quizAttempts.quizId, quizId), eq(quizAttempts.userId, auth.userId)))
       .orderBy(asc(quizAttempts.id));
     const openAttempt = priorRows.find((attempt) => attempt.submittedAt === null);
+    if (quiz.status !== "published" && !openAttempt)
+      throw new QuizAuthoringError(404, "Quiz not found");
     const completedCount = priorRows.filter(
       (attempt) => attempt.submittedAt !== null,
     ).length;
-    if (!openAttempt && !quiz.allowMultipleAttempts && completedCount > 0) {
+    if (!openAttempt && !hasAttemptRemaining(quiz, completedCount)) {
       return NextResponse.json(
         {
           error: {
@@ -671,6 +702,8 @@ export async function submitQuizAttempt(
         id: questions.id,
         questionType: questions.questionType,
         marks: quizQuestions.marks,
+        numericAnswer: questions.numericAnswer,
+        numericTolerance: questions.numericTolerance,
       })
       .from(quizQuestions)
       .innerJoin(questions, eq(quizQuestions.questionId, questions.id))
@@ -708,6 +741,8 @@ export async function submitQuizAttempt(
     const gradingQuestions: WeightedGradingQuestion[] = attachedRows.map((row) => ({
       id: row.id,
       questionType: row.questionType,
+      numericAnswer: row.numericAnswer,
+      numericTolerance: row.numericTolerance,
       marks: row.marks ?? 1,
       options: optionRows
         .filter((option) => option.questionId === row.id)
@@ -743,9 +778,19 @@ export async function submitQuizAttempt(
           { field: "answers", message: "An answer option belongs to another question" },
         ]);
       }
+      if (
+        answer.selectedOptionIds?.some(
+          (id) => !gradingQuestion?.options.some((o) => o.id === id),
+        )
+      )
+        throw new QuizAuthoringError(422, "Choose options belonging to their question", [
+          { field: "answers", message: "An answer option belongs to another question" },
+        ]);
       submittedAnswers.push({
         questionId: answer.questionId,
         selectedOptionId: answer.selectedOptionId ?? null,
+        selectedOptionIds: answer.selectedOptionIds ?? [],
+        numericAnswer: answer.numericAnswer ?? null,
         blankAnswers,
         essayAnswer: answer.essayAnswer ?? null,
       });

@@ -2,6 +2,15 @@ import { sanitizeRichText } from "@/lib/sanitize";
 
 export const QUIZ_IMAGES_BUCKET = "quiz-images";
 export const MAX_QUIZ_IMAGE_BYTES = 5 * 1024 * 1024;
+export const QUIZ_IMAGE_REFRESH_MS = 8 * 60 * 1000;
+/** Refresh a link without replacing local draft content or losing upload previews. */
+export function refreshQuizRichText(html: string, urls: ReadonlyMap<string, string>): string {
+  return sanitizeRichText(html).replace(/<img\b[^>]*>/g, (tag) => {
+    const path = /data-storage-path="([^"]+)"/.exec(tag)?.[1];
+    const url = path ? urls.get(path) : undefined;
+    return url ? tag.replace(/src="[^"]*"/, `src="${url}"`) : tag;
+  });
+}
 export function quizImagePaths(html: string): string[] {
   return [...new Set([...sanitizeRichText(html).matchAll(/data-storage-path="([^"]+)"/g)].map((m) => m[1]))];
 }

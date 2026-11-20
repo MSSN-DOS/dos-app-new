@@ -106,7 +106,48 @@ Create `.mcp.json` at the repo root:
 | `pnpm db:migrate` | Apply pending migrations |
 | `pnpm db:seed` | Run seed script (roles + bootstrap Admin) |
 
+## Development quiz integration verification
+
+After applying the quiz migrations and explicitly confirming that `.env.local`
+targets the development database, run:
+
+```powershell
+pnpm exec tsx src/lib/db/verify-quiz-integration.ts --development
+```
+
+This opt-in check invokes real authenticated API handlers with Drizzle and private
+Supabase Storage. It verifies defaults, draft/publish persistence, all question
+types, marks/order, attempt resume, image renewal, weighted grading, manual essays,
+Admin release and result visibility. It creates isolated synthetic records and
+cleans them and their Storage objects by exact IDs. A recovery manifest remains
+in the OS temporary directory if cleanup fails. It reads an existing eligible
+department-scoped course in the active semester and leaves that course unchanged.
+Run it only against development. It is separate from Vitest and requires network
+access to the configured development database and Storage.
+
+Quiz image URLs expire after ten minutes; authenticated clients renew them every
+eight minutes. Student renewal excludes explanation-only images and preserves
+answers and the original attempt start time. Storage requests time out after
+thirty seconds.
+
 ## Folder structure
+
+The question bank at `/teacher/questions` and `/admin/questions` supports
+True/False, Multiple choice, Fill in the gap, Passage and manually graded Essay.
+Choose **New question**, select a type, choose its academic subject and write the
+content. Incomplete content can be saved as a draft; publishing lists required
+fixes. Passage questions share text and save their children together.
+
+The shared rich-text toolbar supports equations and private image uploads
+(PNG/JPEG/WebP, up to 5 MB). Remove an image from saved content before deleting
+its upload under **Uploaded images**. Copying from the bank into a quiz creates
+independent question and image copies. Migration `0012_common_talos.sql` adds
+revision checking and the RLS-protected image registry.
+
+Development-only API/Storage verification: `pnpm exec tsx
+src/lib/db/verify-question-bank.ts --development`. It creates synthetic fixtures
+and removes them by exact IDs. Progress is tracked in `QUESTION-BANK-TODO.md`;
+Todoist sync requires a connected Rube/Todoist tool.
 
 ```
 src/

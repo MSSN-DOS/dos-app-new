@@ -5,6 +5,7 @@ import { errorResponse } from "@/lib/api/response";
 import { requireAuth } from "@/lib/auth/guard";
 import { forbiddenUnlessOwned } from "@/lib/auth/ownership";
 import { getDb } from "@/lib/db";
+import { quizHasAttempts } from "@/lib/db/quiz-builder";
 import { questions, quizzes, quizQuestions } from "@/lib/db/schema";
 
 function isUniqueViolation(e: unknown): boolean {
@@ -98,7 +99,7 @@ export async function POST(
       );
     }
 
-    if (quiz.status === "published") {
+    if (quiz.status === "published" || (await quizHasAttempts(db, quiz))) {
       return NextResponse.json(
         {
           error: {
@@ -111,7 +112,11 @@ export async function POST(
     }
 
     const [question] = await db
-      .select({ id: questions.id, status: questions.status, createdBy: questions.createdBy })
+      .select({
+        id: questions.id,
+        status: questions.status,
+        createdBy: questions.createdBy,
+      })
       .from(questions)
       .where(and(eq(questions.id, questionId), isNull(questions.builderQuizId)))
       .orderBy(asc(questions.id));
@@ -154,9 +159,7 @@ export async function POST(
     }
 
     try {
-      await db
-        .insert(quizQuestions)
-        .values({ quizId, questionId });
+      await db.insert(quizQuestions).values({ quizId, questionId });
     } catch (err) {
       if (isUniqueViolation(err)) {
         return NextResponse.json(
@@ -172,10 +175,7 @@ export async function POST(
       throw err;
     }
 
-    return NextResponse.json(
-      { quizId, questionId },
-      { status: 201 },
-    );
+    return NextResponse.json({ quizId, questionId }, { status: 201 });
   } catch (err) {
     return errorResponse(err);
   }

@@ -2,7 +2,6 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
 
 import { useAuth } from "@/components/auth/auth-provider";
 import { PasswordInput } from "@/components/auth/password-input";
@@ -10,6 +9,7 @@ import { ApiError } from "@/lib/auth/client-fetch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Spinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 
 export function LoginForm() {
@@ -99,7 +99,7 @@ export function LoginForm() {
       <Button type="submit" disabled={submitting} aria-busy={submitting} className="w-full min-h-11">
         {submitting ? (
           <>
-            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+            <Spinner />
             Logging in…
           </>
         ) : (

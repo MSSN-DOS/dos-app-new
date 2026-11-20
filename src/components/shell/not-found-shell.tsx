@@ -6,6 +6,7 @@ import { useAuth } from "@/components/auth/auth-provider";
 import { roleDashboardPath } from "@/components/auth/redirect-if-authenticated";
 import { AdminSidebar } from "@/components/admin/admin-nav";
 import { AppSidebar } from "@/components/shell/app-sidebar";
+import { PageLoader } from "@/components/shell/page-loader";
 import { StudentBottomNav, StudentTopTabs } from "@/components/shell/student-tab-nav";
 import {
   STUDENT_NAV_ITEMS,
@@ -20,11 +21,7 @@ export function NotFoundShell() {
   const { user, loading, isAuthenticated } = useAuth();
 
   if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      </div>
-    );
+    return <PageLoader fullScreen />;
   }
 
   const content = (

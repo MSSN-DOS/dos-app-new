@@ -220,7 +220,12 @@ Work top to bottom. Don't check a later phase's box before every task above it i
   - Enforcement: all three window checks in `api/quizzes/[id]/attempt/route.ts` now pass the override (`:232` stale-attempt auto-submit, `:252` block starting an attempt, `:481` block submitting). The 409 message distinguishes an admin-set window from the default so students aren't told "Saturday-Sunday" when it isn't.
   - UI: `components/admin/quiz-availability-panel.tsx`, rendered from the shared `QuizBuilderView` **only** when `basePath.startsWith("/admin")` and the quiz is a Course Quiz — Teachers never see it. Two `datetime-local` inputs (opens/closes), Save + "Reset to default", all times shown and parsed in `Africa/Lagos` explicitly so a Nigerian admin isn't shown their device timezone instead of WAT. TanStack Query mutation + `apiFetch`; local edit state held separately so there's no effect-driven mirroring.
   - Tests: `lib/quizzes/window.test.ts` +8 cases (early open, default close retained, early close, extension past Monday, clearing, degenerate close≤open, topic-quiz immunity, `resolveCourseQuizWindow` defaults). Full suite 723 passed / 61 files.
-  - Spec gap: `.agents/design/screens-admin.md` has **no** `/admin/quizzes` entry — that screen reuses the teacher's `QuizBuilderView`. The panel follows the existing page's token vocabulary (`border-line`/`bg-panel`/`text-ink`/`bg-brand`) rather than inventing a new admin pattern. Worth a spec entry at the next design pass.
+  - Spec gap closed (2026-11-19): `.agents/design/screens-admin.md` now carries an
+    `/admin/quizzes` entry (list, create sheet, builder pointer) plus a shared-authoring
+    note covering `/admin/topics` and `/admin/questions`, which reuse the teacher views
+    for the same reason. The panel follows the existing page's token vocabulary
+    (`border-line`/`bg-panel`/`text-ink`/`bg-brand`) rather than inventing a new admin
+    pattern.
 
 ---
 
@@ -301,6 +306,94 @@ Scope decisions taken before any code:
 
 ---
 
+- [x] P12-9 — Complete and verify quiz functional integration
+  - 2026-11-15: verified real exported route handlers with custom JWT, Drizzle and
+    private Supabase Storage on the user-confirmed development database using
+    `src/lib/db/verify-quiz-integration.ts --development`. Defaults/pins, lenient
+    drafts, strict publish, auth/revision conflicts, all five types, passages,
+    marks/order, uploads/downloads and unused cover cleanup passed. Synthetic
+    records and Storage objects were removed by exact IDs after each run.
+  - Attempt start/progress/resume preserved shuffle order and original start time.
+    Image renewal preserved local draft/answer state and excluded explanation-only
+    images. Weighted full-mark deductions, all-or-nothing gaps, manual essays,
+    Admin release, Post-UTME, academic scope, seconds/math persistence, saved
+    expiry submission, hidden history/results and Topic exclusion from CGPA passed.
+  - Fixed slow full-quiz saves with batched persistence, rejected duplicate card
+    identities, added private image-link renewal, allowed unused cover cleanup
+    after publish, and bounded Storage/DB connection waits. Regression tests cover
+    these changes. Full suite: 90 files / 1,020 tests passed; typecheck passed;
+    lint passed with only the existing client-fetch navigation warning.
+  - Actual local browser typing, LaTeX insertion, answer selection, draft save and
+    publish passed through real HTTP APIs, with database assertions and cleanup.
+    Both themes were checked with the site toggle after rendering settled: text
+    and equations measured 17.4:1 light / 16.2:1 dark contrast, no mobile overflow.
+    The earlier dim screenshot was captured during the theme transition.
+  - Restored only the generated next-env.d.ts dev-path delta; final typecheck and
+    diff whitespace checks passed. Production deployment remains out of scope.
+  - Dev schema drift: courses.session_id is NOT NULL in the database but absent
+    from schema/courses.ts and DESIGN.md. Quiz verification reads an existing
+    eligible Board course; it does not invent a session or change that schema.
+    TODO(needs-board-decision): reconcile academic-session schema separately.
+
+- [x] P12-10 — Mobile-first quiz list, builder and Add Question dialog
+  - Quizboot reference applied with DOS tokens: compact quiz rows, working search,
+    Course/Topic/Drafts filters and pagination, and responsive New Quiz creation.
+    Shared Zod filters and Drizzle list helpers preserve Teacher ownership and escape
+    literal search characters. Subject/topic loading and retry states remain usable.
+  - Questions/Settings/Results tabs preserve the draft payload. Questions includes
+    count/marks/exact-duration summaries and compact collapsible cards; Settings holds
+    details and grouped controls; Results reuses released-only performance and manual
+    essay grading. Sticky save actions stay above phone navigation.
+  - Reused the generated shadcn Switch with 44px clickable Labels. The shared five-type
+    chooser and bank picker use phone sheets and centered larger dialogs. Chooser
+    header stays fixed, choices scroll without clipped descriptions, and Essay retains
+    its manual-grading badge. Teacher header links are compact below 960px to fix
+    existing tablet overflow; accessible names and the current shell are retained.
+  - Native Edge verification: 32 list/create/chooser/settings checks at 320/390/768/1280px
+    in both actual themes passed, with screenshots inspected. No horizontal overflow,
+    dialogs inside the viewport, 44px targets, focus/Escape/restoration, all five types,
+    passage children, tab state, draft payloads, search/draft filters and held results
+    passed using synthetic intercepted APIs without database writes.
+  - `pnpm test --pool=threads --maxWorkers=4`: 100 files / 1,122 tests passed
+    (500.83s total; assertions 74.37s). Final typecheck and lint passed; lint retains
+    only the existing client-fetch navigation warning. No new dependencies or migration.
+  - Security prerequisite committed separately as 0627fb8: restored clean tooling
+    configs/secret ignores from bde784d and preserved detected auto-run artifacts in a
+    temporary quarantine directory. The repository/pre-commit guard passes.
+  - Create-flow pass (2026-11-19): `new-quiz-dialog.tsx` rebuilt in two numbered Quizboot
+    sections — brand header, "Quiz basics" (title + quiz type) and "Scope & schedule"
+    (Students/Aspirants, course or JAMB subject, topic, week), a live summary card and a
+    sticky Cancel / Create footer. Phone bottom sheet, centred dialog from md up.
+    Course Quiz is preselected with `weekStart` on the next Saturday; choosing Topic
+    forces course scope and clears any JAMB subject so Topic + Aspirant is unreachable.
+    Readiness reuses `quizCreateSchema` (the route's own schema); catalogue and topic
+    failures each have a Retry. New `lib/quizzes/saturday.ts` (`nextSaturday`,
+    `isSaturday`). `new-quiz-dialog.test.tsx` adds 5 interaction tests (defaults,
+    Topic/JAMB prevention, arrow-key radio navigation, create payload, catalogue retry).
+    Headless Chrome at 320/390/768/1280: no horizontal overflow, no targets under 44px,
+    sheet/dialog inside the viewport, sticky footer visible. Full suite 109 files /
+    1,191 tests, typecheck clean, repo lint clean apart from the existing
+    `client-fetch.ts` navigation warning. No new dependency, no migration.
+
+- [x] P12-11 — Complete Quizboot authoring features, authorized 2026-11-16
+  - Board confirmed Multi-answer and Numeric questions, autosave, editable header
+    title, per-question shuffle, limited attempts, science palettes, real result charts,
+    Print/PDF and Unpublish. This supersedes earlier reference exclusions.
+  - Shared schemas/data model first, then persistence/runtime/grading, UI and tests.
+    Detailed progress: QUIZ-UI-TODO.md. Scores remain held until Admin release.
+  - Board confirmed Unpublish: hide new access, allow started attempts to finish,
+    and permanently lock attempted content. Republish restores access. No quiz versions.
+  - Board confirmed exact-match gaps without alternatives, independent bank copies,
+    and Admin-only score release. Spec corrections preserve DOS tokens and accessibility.
+  - Completed shared active-field toolbar, inline gaps, science slots, released-data
+    charts, A4 pagination and direct PDF. Generated migrations 0013/0014 applied to dev.
+  - Verified: full suite 108 files / 1,186 tests; final focused grading/lifecycle,
+    science/autosave/export tests; lint (one existing navigation warning) and typecheck.
+    Real dev API/Storage checks passed, including exact-set/tolerance grading, limits,
+    Unpublish/Republish and cleanup. Browser verified New quiz creation, focused-option
+    toolbar, autosave, mouse/touch reorder, 320/390/768/1280px in both themes and an
+    actual four-page PDF download. PDF is rasterized; production was not modified.
+
 ## Phase 13 — Admin student lifecycle: deactivate and hard delete
 
 Board decision (2026-11-15): an Admin can take a Student out of the platform at any time — no
@@ -316,6 +409,78 @@ because rankings are computed live from `cgpa_records` — accepted, and warned 
 - [x] P13-3 — `DELETE /api/admin/users/students/[id]` transactional hard delete in FK order
 - [x] P13-4 — `/admin/students` status filter + badge, Deactivate/Reactivate action, typed-identifier delete dialog
 - [x] P13-5 — Endpoint tests: 401, 403, happy paths, 422 `error.details`, 404; status-filter test
+
+## Phase 14 — Question-bank types and private images
+
+Requested scope: question bank only, all five reference types and images working.
+Progress checklist: `QUESTION-BANK-TODO.md`. Todoist sync is unavailable because
+this session has no Rube/Todoist connector.
+
+- [x] P14-1 — Shared schemas, private image table and generated migration
+  - Generated/applied additive `0012_common_talos.sql` on the confirmed dev DB.
+    Private question_images has RLS and a deny-all policy; bank_revision detects
+    stale saves. Shared draft/publish validation covers all types and passage groups.
+    Full suite 92 files / 1,049 tests passed; typecheck and lint passed (existing warning).
+- [x] P14-2 — Transactional document and private image APIs with endpoint tests
+  - Authenticated transactional document CRUD, owner-scoped image upload/renew/delete,
+    exact image-source validation, revision conflicts and reference blocks. Private
+    images and passage/essay groups copy independently into quizzes. Real dev API/JWT/
+    Drizzle/Storage verification passed and cleaned all synthetic fixtures. Full suite
+    96 files / 1,093 tests passed; typecheck and lint passed (existing warning).
+- [x] P14-3 — Reference modal and functional bank editor
+  - All five cards open functional editors. Reused Tiptap/KaTeX for questions,
+    options, explanations and passages; private uploads and signed-link renewal,
+    radio answers, gap answers, manual essays and group draft/publish are connected.
+    Existing bulk entry and science palettes remain. Browser chooser checks passed
+    at 390/1280px in both themes, including focus, Escape and 44px targets. Full
+    suite passed: 99 files / 1,112 tests using thread workers; lint/typecheck passed.
+    Corrected a loader timer assertion and the quiz-render test's Windows timeout
+    during the required full-suite checks without changing their product behavior.
+- [x] P14-4 — Live/visual verification, required checks and documentation
+  - Real dev JWT/Drizzle/Storage integration verified all five types, lenient
+    drafts, strict publishing, revisions, protected images and independent quiz
+    copies. Real HTTP/browser checks verified all five editor entry points and
+    saved documents, Tiptap typing, LaTeX and image insertion, draft reload and
+    publishing. Checked 390px/1280px layouts, both themes, 44px targets (including
+    radio labels), focus/Escape and no horizontal overflow after animations settle.
+    Synthetic fixtures and Storage objects were removed after each verification.
+  - Full suite: `pnpm test --pool=threads --maxWorkers=2` passed 99 files / 1,112
+    tests. Typecheck and lint passed; only the existing client-fetch navigation
+    warning remains. Thread workers avoided local fork-startup timeouts. Updated
+    DESIGN, screen specs, README and QUESTION-BANK-TODO. Todoist sync remains
+    unavailable without the Rube/Todoist connector; no production deployment.
+
+## Phase 15 — Loading states
+
+Board request (2026-11-15): port the three loading states from the supplied reference file (`DOS Site Loader.html`) — the page loader, the skeleton shimmer and the busy-button spinner — and nothing else. Motion is not a new design direction: it fills the gaps where the app previously showed nothing or a bare pulse.
+
+- [x] P15-1 — Motion foundation in `globals.css`
+  - `--dos-shimmer` added to both `:root` and `.dark` (the skeleton sweep is the one colour a token didn't already cover); `--font-brand` maps the brand wordmark to the already-loaded Fraunces face, matching the reference's serif `.brand`.
+  - Keyframes `dos-flip`, `dos-bob`, `dos-slide`, `dos-sweep`, `dos-rot` plus unlayered `.dos-page-loader` / `.dos-book*` / `.dos-progress` / `.dos-shimmer` / `.dos-spinner` classes. Unlayered on purpose: the repo-wide `@layer base` reduced-motion rule would otherwise beat a layered fallback.
+  - Reference bug fixed rather than copied: `.leaf:nth-child(3|4)` never matched (children 3 and 4 are the two `.half` elements), so all three leaves flipped in unison. Leaves are staged by `data-leaf="1|2|3"` instead.
+  - `prefers-reduced-motion: reduce` keeps the layout: third leaf pre-flipped, progress bar held at 60%, shimmer and spinner stilled. No frozen empty bar that reads as "stuck".
+  - The `.dos-page-loader` radial wash is a scoped exception to the "one signature surface" rule in DESIGN.md §12 — it is part of the supplied reference, it is token-derived, and it exists only inside the loader.
+
+- [x] P15-2 — `PageLoader` in `components/shell/`
+  - Brand + optional role pill, 176×112 book with two halves and three staged leaves, bobbing accent spark, sliding progress bar, status line cycling every 1800 ms inside `role="status" aria-live="polite"`.
+  - `fullScreen` for gates (`min-h-dvh`), shorter block for route segments (`min-h-[60dvh]`), so a segment loader doesn't push the shell's chrome around.
+  - `statusMessageAt()` is exported and pure (trunc, modulo, negative and empty-list safe) so the rotation is unit-tested instead of being asserted through a 1.8 s timer.
+  - Copy stays honest: the messages are generic because the loader cannot know what is actually loading.
+
+- [x] P15-3 — Route loaders and auth gates
+  - `loading.tsx` for the root, `/admin`, `/teacher` and the student/aspirant group; `RequireRole` and `NotFoundShell` render `PageLoader` instead of their old placeholder text.
+  - `FullPageLoading` in `auth-card.tsx` had zero importers and was deleted rather than reimplemented — two loaders would drift apart.
+
+- [x] P15-4 — Shared `Skeleton` upgraded to `.dos-shimmer`
+  - One primitive change covers all existing skeleton callers; no per-page skeleton components were added.
+
+- [x] P15-5 — `Spinner` atom in `components/ui/` and busy-button swaps
+  - shadcn ships no spinner primitive, so this is the sanctioned hand-rolled case. The ring is `currentColor` with a transparent top border, so one class reads correctly on primary, outline and ghost buttons without variants.
+  - Swapped the ad-hoc lucide `Loader2` in login, register, onboarding, password and identifiers. `rich-text-editor.tsx` keeps its icon: it is another session's uncommitted file and does not belong in this change.
+
+- [x] P15-6 — Tests and documentation
+  - `page-loader.test.tsx` covers the rotation helper (order, wrap, negative/fractional ticks, empty array) and the rendered loader (polite live region, 1800 ms advance, role pill, `fullScreen` height, custom messages).
+  - `DESIGN.md` §12 gained a motion subsection recording the three states, the token mapping and the reduced-motion contract.
 
 ## Open items still needing a real answer from the Board (not blocking dev, but don't let these go silently forgotten)
 

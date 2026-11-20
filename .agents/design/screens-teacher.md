@@ -43,7 +43,32 @@ FRAME: Topics
 
 ### `/teacher/questions`
 - **Task:** P3-3 (UI), built on P3-2's draft/publish validation split.
-- **Purpose:** Question bank editor — both question types, rich text, draft-vs-publish gating.
+- **Purpose:** Question bank editor — five authoring types, rich text, draft-vs-publish gating.
+
+**P14 amendment (2026-11-15, supersedes the two-type wireframe below):** shared
+with `/admin/questions`. New question opens the supplied rounded icon-card chooser:
+True or False, Multiple choice, Fill in the gap, Passage and Essay. Two columns
+on larger screens with Essay spanning both; one scrollable column on phones.
+All choices are enabled; Essay is labelled "Manually graded". No Audio type.
+
+The editor reuses Tiptap/KaTeX for stems, options, explanations and shared passage
+text. Passage children are collapsible, support the four individual types and
+require confirmation before removal. True/False has two fixed options; other
+options are editable rich text with one correct answer. Gap answers use `[gap]`
+and trimmed, case-insensitive exact matching. Essays are graded by teachers in
+the quiz grading screen. The footer lists strict publishing blockers and offers
+Save as draft / Publish. Existing bulk entry and science symbol palettes remain.
+
+**P14 APIs:** `POST /api/teacher/questions/documents`,
+`GET/PUT/DELETE /api/teacher/questions/[id]/document`,
+`GET/POST/DELETE /api/teacher/question-images`. Document saves carry a revision;
+stale saves and referenced-question changes return conflicts. Images are private,
+author-owned PNG/JPEG/WebP uploads up to 5 MB, with signed-link renewal and
+reference-aware removal. List requests use `groupPassages=1` to show a passage
+once and distinguish True/False. `POST /api/teacher/quizzes/[id]/bank-copy` copies
+the whole group and images independently into a draft quiz. All requests use
+TanStack Query and `apiFetch`; server guards enforce role, ownership and subject
+assignment. Both themes use the existing tokens and controls have 44px targets.
 
 **Wireframe**
 ```
@@ -90,20 +115,54 @@ FRAME: Quizzes
   LIST ROW: "Mass Transfer — Practice" | Topic Quiz | CHE 301 | Draft pill | [Edit]
   LIST ROW: "Course Quiz — Week 4" | Course Quiz | CHE 301 | Published pill | [Edit]
 
-FRAME: New Quiz (modal, then routes to /teacher/quizzes/[id] for full config)
-  ACTION ROW: [Topic Quiz] [Course Quiz]  -- type choice
-  FIELD: Course or JAMB Subject -> [ select ]
-  FIELD (Topic Quiz only): Topic -> [ select ]
-  ACTION ROW: [Create & continue: primary]
+FRAME: New Quiz (sheet on phones, centred dialog from md up, then routes to /teacher/quizzes/[id] for full config)
+  SECTION "Quiz basics": Title -> [ text ]; Quiz type -> [Course | Topic]
+  SECTION "Scope & schedule": For -> [Students | Aspirants] (course only)
+                              Course / JAMB Subject -> [ select ]
+                              Topic -> [ select ] (Topic Quiz only)
+                              Week -> [ date, prefilled to the next Saturday ]
+  SUMMARY: title | scope line | "Question builder opens next"
+  ACTION ROW: [Cancel] [Create & continue: primary]
 ```
 
-**Data / API:** `GET /api/teacher/quizzes?type=&courseId=`, `POST /api/teacher/quizzes` (creates a draft shell, redirects to the builder).
+**P12-10 amendment (2026-11-16):** shared with `/admin/quizzes`. The Teacher header
+uses compact icon links with screen-reader labels below 960px to prevent tablet
+overflow. Compact linked
+rows wrap title, type, subject, question count and status on phones; column labels
+appear on desktop. Search and All / Course / Topic / Drafts tabs combine with a
+course filter before pagination. New Quiz uses a bottom sheet on phones and a
+centered dialog on larger screens, with labelled 44px inputs and choices. Subject
+and topic loading/errors have retry controls. JAMB uses Course Quiz because topics
+are course-scoped. No visibility, payment, social or upgrade controls are added.
+
+**Create-flow pass (2026-11-19):** the sheet was rebuilt in the Quizboot two-section
+shape — brand header, numbered "Quiz basics" and "Scope & schedule" sections,
+segmented quiz-type and academic-track radios with arrow-key navigation, the weekly
+Course Quiz preselected with `weekStart` on the next Saturday, a live summary card
+and a sticky Cancel / Create footer. Choosing Topic forces course scope and clears
+any JAMB subject, so the impossible Topic + Aspirant combination is unreachable.
+Readiness reuses `quizCreateSchema` instead of a hand-written check, and catalogue
+and topic failures each carry their own Retry. Component tests live in
+`new-quiz-dialog.test.tsx`.
+
+**Data / API:** `GET /api/teacher/quizzes?search=&type=&status=&courseId=&page=&pageSize=`, `POST /api/teacher/quizzes` (creates a draft shell, redirects to the builder). Shared Zod filters validate requests; search matches literal title text and preserves teacher ownership.
 
 **States:** loading · empty · error.
 
 ---
 
 ### `/teacher/quizzes/[id]` — Quiz builder
+- **P12-11 expansion:** Add question is a floating shadcn dropdown containing the
+  five existing authoring types plus Multi-answer, Numeric, Question bank and Bulk
+  paste. All entries must lead to functional editors/actions. New quiz keeps the
+  responsive create sheet and DOS's required academic fields. Drafts autosave with
+  real status and no lost edits; title is editable in the header. Add question-level
+  shuffle, limited attempts, math/chemistry palettes, released-data charts and
+  durations, and a teacher-only question-paper view with Print/PDF and answer key.
+  Unpublish hides new access, lets started attempts finish, and permanently locks
+  attempted questions/settings. Republish restores access to the same content.
+  The updated spec uses one active-field toolbar, inline gap answer boxes, editable
+  science slots, More/Advanced panels, and paginated A4 papers with direct PDF download.
 - **Task:** P3-5, rebuilt in P12-8 (also used at `/admin/quizzes/[id]`).
 - **Purpose:** Write quiz details and questions, configure settings, preview the student experience, and save a draft or publish.
 
@@ -125,11 +184,23 @@ FRAME: Quiz Builder — Draft / Published                         [Preview]
   PUBLISHED: read-only authoring; essay grading (teacher/Admin)
 ```
 
-**Data / API:** `GET/PUT /api/teacher/quizzes/[id]/builder` (shared draft/publish Zod, revision conflicts), `POST/DELETE /api/teacher/quizzes/[id]/images` (signed URLs arrive in builder data), `GET/PUT /api/teacher/quiz-preferences`, `GET /api/teacher/questions?...` and question detail for bank copies, `GET/PATCH /api/teacher/quizzes/[id]/grading`. Client requests use TanStack Query and `apiFetch`.
+**Data / API:** `GET/PUT /api/teacher/quizzes/[id]/builder` (shared draft/publish Zod, revision conflicts), `GET/POST/DELETE /api/teacher/quizzes/[id]/images` (private uploads, removal and owner-scoped signed-link renewal), `GET/PUT /api/teacher/quiz-preferences`, `GET /api/teacher/questions?...` and question detail for bank copies, `GET/PATCH /api/teacher/quizzes/[id]/grading`. Client requests use TanStack Query and `apiFetch`. Image links renew every eight minutes without replacing unsaved text, local uploads or the editor's draft state. Referenced images cannot be removed; unused replaced covers can be removed after publishing.
 
 **States:** loading/retry, empty questions with CTA, uploading/error, saving/saved/error, invalid draft fields, strict publish blockers, stale-revision conflict, preview introduction/questions/completion, published lock, essay-grading loading/empty/error/saving. Course Quizzes still require exactly 50 questions; passages count their sub-questions. Drafts tolerate unfinished questions and schedules.
 
-**Layout/accessibility:** single column on phones, details/questions plus settings column on desktop. All controls have labels, focus states and 44px targets; dialogs use shadcn focus management. Reorder has keyboard sensors and explicit move buttons. Rich text reuses Tiptap/KaTeX with full formatting, safe private images and fullscreen editing. Both themes use the existing tokens. Signed-in-only access is fixed; Public/Private controls are omitted. Results remain held until manual grading finishes and an Admin releases them. No premium, payment, social, AI-banner or add-on UI.
+**P12-10 layout amendment (2026-11-16):** Questions / Settings / Results shadcn
+tabs preserve the draft payload outside tab content. Questions shows a live count,
+marks and exact duration summary above the cards on phones, alongside them on
+desktop. Saved cards start collapsed; new cards expand, with separate wrapping
+reorder/duplicate/delete actions. Settings holds details and the grouped settings
+panel. Results embeds `GET /api/teacher/results/[quizId]` and manual essay grading
+for published quizzes; drafts show an empty state. Admin availability controls stay
+under Settings. The shared Add Question chooser has a fixed header and scrolling
+single column on phones, two columns in a centered desktop dialog, safe-area
+padding, a 44px close control and the manually graded Essay badge. The question-bank
+picker also uses a phone sheet. Save draft / Publish sits above mobile navigation.
+
+**Layout/accessibility:** single column on phones, enhanced at larger widths. All controls have labels, focus states and 44px targets; dialogs use shadcn focus management. Reorder has keyboard sensors and explicit move buttons. Rich text reuses Tiptap/KaTeX with full formatting, safe private images and fullscreen editing. Both themes use the existing tokens. Signed-in-only access is fixed; Public/Private controls are omitted. Results remain held until manual grading finishes and an Admin releases them. No premium, payment, social, AI-banner or add-on UI.
 
 ---
 

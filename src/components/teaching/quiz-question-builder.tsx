@@ -21,10 +21,12 @@ import {
   ChevronDown,
   Copy,
   GripVertical,
+  Info,
   Plus,
   Trash2,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -45,6 +47,18 @@ import {
 } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { renderRichText } from "@/lib/rich-text";
+import { Switch } from "@/components/ui/switch";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   builderBlocks,
   duplicateBuilderQuestion,
@@ -56,9 +70,11 @@ import {
   type QuestionPreset,
 } from "@/lib/quizzes/builder";
 import { distributeMarks, sumMarks } from "@/lib/quizzes/marks";
+import { cn } from "@/lib/utils";
 import type { QuizPublishBlocker } from "@/lib/validation/quiz-questions";
 import { QuestionTypeDialog } from "./question-type-dialog";
 import { RichTextEditor, type QuizImageUploader } from "./rich-text-editor";
+import { RichTextToolbarProvider, RichTextToolbarHost } from "./rich-text-toolbar";
 
 const actionClass = "min-h-11 min-w-11 text-ink";
 
@@ -151,8 +167,14 @@ function QuestionCard({
   canMoveDown,
   errors,
   uploadImage,
+  expanded,
+  onExpandedChange,
+  readOnly,
 }: {
   question: BuilderQuestion;
+  expanded: boolean;
+  onExpandedChange: (open: boolean) => void;
+  readOnly: boolean;
   number: number;
   handle: ReactNode;
   selected: boolean;
@@ -166,7 +188,8 @@ function QuestionCard({
   errors: QuizPublishBlocker[];
   uploadImage?: QuizImageUploader;
 }) {
-  const [open, setOpen] = useState(true);
+  const open = expanded;
+  const [more, setMore] = useState(false);
   const q = question;
   const prefix = `question-${q.clientKey}`;
   const update = (patch: Partial<BuilderQuestion>) => onChange({ ...q, ...patch });
@@ -182,48 +205,53 @@ function QuestionCard({
   return (
     <Collapsible
       open={open}
-      onOpenChange={setOpen}
-      className="overflow-hidden rounded-2xl border border-line bg-panel"
+      onOpenChange={onExpandedChange}
+      id={prefix}
+      className={
+        "overflow-hidden rounded-xl border bg-panel " +
+        (open ? "border-brand/40" : "border-line")
+      }
     >
-      <div className="flex flex-wrap items-center gap-1 border-b border-line p-2 sm:p-3">
-        {handle}
-        <label className="flex min-h-11 min-w-11 cursor-pointer items-center justify-center">
-          <Checkbox
-            checked={selected}
-            onCheckedChange={onSelect}
-            aria-label={`Select question ${number}`}
-          />
-        </label>
-        <span className="text-base font-semibold text-ink">{number}.</span>
-        <Badge variant="secondary" className="text-sub">
-          {typeLabel}
-        </Badge>
-        {q.questionType === "essay" && (
-          <Badge variant="outline" className="border-line text-sub">
-            Manually graded
-          </Badge>
-        )}
-        <div className="ml-auto flex flex-wrap items-center">
+      <div className="flex min-w-0 items-start gap-1 p-2 sm:p-3">
+        {!readOnly && handle}
+        <CollapsibleTrigger asChild>
           <Button
             type="button"
             variant="ghost"
-            className={actionClass}
-            disabled={!canMoveUp}
-            aria-label={`Move question ${number} up`}
-            onClick={() => onMove(-1)}
+            className="h-auto min-h-11 min-w-0 flex-1 items-start justify-start gap-2 whitespace-normal px-1 py-2 text-left"
+            aria-label={(open ? "Collapse" : "Expand") + " question " + number}
           >
-            <ArrowUp className="size-4" />
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-ink text-sm font-semibold tabular-nums text-canvas">
+              {number}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span
+                className="dos-rich-text block max-h-[3.2em] overflow-hidden break-words text-base font-medium [&_img]:max-h-24"
+                dangerouslySetInnerHTML={{
+                  __html:
+                    renderRichText(q.bodyRichText.replaceAll("[gap]", "_____")) ||
+                    "Untitled question",
+                }}
+              />
+              <span className="mt-1 block text-sm font-normal text-sub sm:hidden">
+                {typeLabel} · {q.marks}pt
+              </span>
+            </span>
+            {errors.length > 0 && (
+              <span
+                aria-label="Needs review"
+                className="mt-2 size-2 shrink-0 rounded-full bg-warning"
+              />
+            )}
+            <Badge
+              variant="secondary"
+              className="hidden shrink-0 text-sub sm:inline-flex"
+            >
+              {typeLabel} · {q.marks}pt
+            </Badge>
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            className={actionClass}
-            disabled={!canMoveDown}
-            aria-label={`Move question ${number} down`}
-            onClick={() => onMove(1)}
-          >
-            <ArrowDown className="size-4" />
-          </Button>
+        </CollapsibleTrigger>
+        {!readOnly && (
           <Button
             type="button"
             variant="ghost"
@@ -233,206 +261,408 @@ function QuestionCard({
           >
             <Copy className="size-4" />
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            className={`${actionClass} text-ruby`}
-            aria-label={`Delete question ${number}`}
-            onClick={onDelete}
-          >
-            <Trash2 className="size-4" />
-          </Button>
-          <CollapsibleTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              className={actionClass}
-              aria-label={`${open ? "Collapse" : "Expand"} question ${number}`}
-            >
-              <ChevronDown
-                className={`size-5 transition-transform ${open ? "rotate-180" : ""}`}
-              />
-            </Button>
-          </CollapsibleTrigger>
-        </div>
+        )}
       </div>
-      <CollapsibleContent className="space-y-4 p-3 sm:p-5">
-        <RichTextEditor
-          id={`${prefix}-body`}
-          label="Question"
-          value={q.bodyRichText}
-          onChange={(bodyRichText) => update({ bodyRichText })}
-          uploadImage={uploadImage}
-        />
-        {fieldErrors("bodyRichText")}
-        {q.questionType === "options" && (
-          <fieldset className="space-y-3">
-            <legend className="mb-2 text-base font-semibold text-ink">
-              Options — select one correct answer
-            </legend>
-            {(q.options ?? []).map((option, index) => (
-              <div
-                key={index}
-                className="space-y-2 rounded-xl border border-line bg-canvas p-3"
+      <CollapsibleContent>
+        <RichTextToolbarProvider initialEditorId={`${prefix}-body`}>
+          <fieldset disabled={readOnly} className="space-y-4 p-3 sm:p-5">
+            <Tabs
+              value={typeLabel === "True / False" ? "true_false" : q.questionType}
+              onValueChange={(type) => {
+                if (
+                  type === "options" ||
+                  type === "multi_answer" ||
+                  type === "numeric" ||
+                  type === "fill_in_gap" ||
+                  type === "true_false" ||
+                  type === "essay"
+                ) {
+                  const next = newBuilderQuestion(
+                    type,
+                    q.clientKey,
+                    q.passageKey ?? null,
+                  );
+                  update({
+                    ...next,
+                    id: q.id,
+                    bodyRichText: q.bodyRichText,
+                    marks: q.marks,
+                    reasonRichText: q.reasonRichText,
+                  });
+                }
+              }}
+            >
+              <TabsList
+                aria-label={`Question ${number} type`}
+                className="flex min-h-12 w-full min-w-0 [&_button]:flex-1"
               >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-base font-semibold text-ink">
-                    {String.fromCharCode(65 + index)}
-                  </span>
-                  <label className="flex min-h-11 cursor-pointer items-center gap-2 text-base text-ink">
-                    <Checkbox
-                      checked={option.isCorrect}
-                      onCheckedChange={(checked) =>
-                        update({
-                          options: q.options?.map((o, i) => ({
-                            ...o,
-                            isCorrect: i === index && checked === true,
-                          })),
-                        })
-                      }
-                      aria-label={`Select option ${String.fromCharCode(65 + index)} as answer for question ${number}`}
-                    />
-                    Select as answer
-                  </label>
-                  {typeLabel !== "True / False" && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className={`${actionClass} text-ruby`}
-                      aria-label={`Remove option ${String.fromCharCode(65 + index)} from question ${number}`}
-                      onClick={() =>
-                        update({ options: q.options?.filter((_, i) => i !== index) })
+                {(
+                  [
+                    "options",
+                    "multi_answer",
+                    "fill_in_gap",
+                    "numeric",
+                    "true_false",
+                    "essay",
+                  ] as const
+                ).map((type) => (
+                  <TabsTrigger
+                    key={type}
+                    value={type}
+                    aria-label={
+                      {
+                        options: "Choice",
+                        multi_answer: "Multi-answer",
+                        fill_in_gap: "Gap",
+                        numeric: "Number",
+                        true_false: "True / False",
+                        essay: "Essay",
+                      }[type]
+                    }
+                    className="min-h-11 min-w-0 px-1 text-base"
+                  >
+                    <span
+                      className={
+                        (type === "true_false" && typeLabel === "True / False") ||
+                        type === q.questionType
+                          ? ""
+                          : "sr-only sm:not-sr-only"
                       }
                     >
-                      <Trash2 className="size-4" />
-                    </Button>
-                  )}
-                </div>
-                {typeLabel === "True / False" ? (
-                  <p className="text-base text-ink">{index === 0 ? "True" : "False"}</p>
-                ) : (
-                  <RichTextEditor
-                    id={`${prefix}-option-${index}`}
-                    label={`Option ${String.fromCharCode(65 + index)}`}
-                    value={option.optionText}
-                    onChange={(optionText) =>
+                      {
+                        {
+                          options: "Choice",
+                          multi_answer: "Multi",
+                          fill_in_gap: "Gap",
+                          numeric: "Number",
+                          true_false: "T/F",
+                          essay: "Essay",
+                        }[type]
+                      }
+                    </span>
+                    <span
+                      aria-hidden="true"
+                      className={
+                        (type === "true_false" && typeLabel === "True / False") ||
+                        type === q.questionType
+                          ? "hidden"
+                          : "sm:hidden"
+                      }
+                    >
+                      {
+                        {
+                          options: "A",
+                          multi_answer: "✓",
+                          fill_in_gap: "[ ]",
+                          numeric: "#",
+                          true_false: "T/F",
+                          essay: "E",
+                        }[type]
+                      }
+                    </span>
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+            <RichTextToolbarHost />
+            <RichTextEditor
+              id={`${prefix}-body`}
+              label="Question"
+              value={q.bodyRichText}
+              gapAnswers={
+                q.questionType === "fill_in_gap"
+                  ? (q.blanks ?? []).map((b) => b.acceptedAnswer)
+                  : undefined
+              }
+              clickToEdit={false}
+              readOnly={readOnly}
+              onChange={(bodyRichText, answers) =>
+                update({
+                  bodyRichText,
+                  ...(answers
+                    ? { blanks: answers.map((acceptedAnswer) => ({ acceptedAnswer })) }
+                    : {}),
+                })
+              }
+              uploadImage={uploadImage}
+            />
+            {fieldErrors("bodyRichText")}
+            {(q.questionType === "options" || q.questionType === "multi_answer") && (
+              <fieldset className="space-y-3">
+                <legend className="mb-2 text-base font-semibold text-ink">
+                  {q.questionType === "multi_answer"
+                    ? "Options — select all correct answers"
+                    : "Options — select one correct answer"}
+                </legend>
+                <RadioGroup
+                  role={q.questionType === "multi_answer" ? "group" : "radiogroup"}
+                  aria-label={`Correct answers for question ${number}`}
+                  value={String(q.options?.findIndex((option) => option.isCorrect) ?? -1)}
+                  onValueChange={(selected) => {
+                    if (q.questionType === "options")
                       update({
-                        options: q.options?.map((o, i) =>
-                          i === index ? { ...o, optionText } : o,
-                        ),
-                      })
-                    }
-                    uploadImage={uploadImage}
-                  />
-                )}
-              </div>
-            ))}
-            {typeLabel !== "True / False" && (
-              <Button
-                type="button"
-                variant="outline"
-                className="min-h-11 w-full border-dashed border-line text-ink"
-                onClick={() =>
-                  update({
-                    options: [...(q.options ?? []), { optionText: "", isCorrect: false }],
-                  })
-                }
-              >
-                <Plus className="size-4" />
-                Add more option
-              </Button>
-            )}
-            {fieldErrors("options")}
-          </fieldset>
-        )}
-        {q.questionType === "fill_in_gap" && (
-          <fieldset className="space-y-3">
-            <legend className="mb-2 text-base font-semibold text-ink">Gap answers</legend>
-            <p className="text-base text-sub">
-              Insert [gap] in the question for each answer, in order. Answers ignore case
-              and surrounding spaces. Every gap must be correct to earn marks.
-            </p>
-            {(q.blanks ?? []).map((blank, index) => (
-              <div key={index} className="space-y-1">
-                <Label htmlFor={`${prefix}-blank-${index}`} className="text-base">
-                  Gap {index + 1}
-                </Label>
-                <div className="flex gap-2">
-                  <Input
-                    id={`${prefix}-blank-${index}`}
-                    className="min-h-11 text-base"
-                    value={blank.acceptedAnswer}
-                    onChange={(e) =>
-                      update({
-                        blanks: q.blanks?.map((b, i) =>
-                          i === index ? { acceptedAnswer: e.target.value } : b,
-                        ),
-                      })
-                    }
-                  />
+                        options: q.options?.map((option, index) => ({
+                          ...option,
+                          isCorrect: index === Number(selected),
+                        })),
+                      });
+                  }}
+                >
+                  {(q.options ?? []).map((option, index) => (
+                    <div
+                      key={index}
+                      className="space-y-2 rounded-xl border border-line bg-canvas p-3"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-base font-semibold text-ink">
+                          {String.fromCharCode(65 + index)}
+                        </span>
+                        <label className="flex min-h-11 cursor-pointer items-center gap-2 text-base text-ink">
+                          <span className="flex size-11 items-center justify-center">
+                            {q.questionType === "multi_answer" ? (
+                              <Checkbox
+                                checked={option.isCorrect}
+                                aria-label={`Select option ${String.fromCharCode(65 + index)} as answer for question ${number}`}
+                                onCheckedChange={(checked) =>
+                                  update({
+                                    options: q.options?.map((o, i) => ({
+                                      ...o,
+                                      isCorrect:
+                                        i === index ? checked === true : o.isCorrect,
+                                    })),
+                                  })
+                                }
+                              />
+                            ) : (
+                              <RadioGroupItem
+                                value={String(index)}
+                                aria-label={`Select option ${String.fromCharCode(65 + index)} as answer for question ${number}`}
+                              />
+                            )}
+                          </span>
+                          Select as answer
+                        </label>
+                        {typeLabel !== "True / False" && (q.options?.length ?? 0) > 2 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            className={`${actionClass} text-ruby`}
+                            aria-label={`Remove option ${String.fromCharCode(65 + index)} from question ${number}`}
+                            onClick={() =>
+                              update({
+                                options: q.options?.filter((_, i) => i !== index),
+                              })
+                            }
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        )}
+                      </div>
+                      {typeLabel === "True / False" ? (
+                        <p className="text-base text-ink">
+                          {index === 0 ? "True" : "False"}
+                        </p>
+                      ) : (
+                        <RichTextEditor
+                          id={`${prefix}-option-${index}`}
+                          label={`Option ${String.fromCharCode(65 + index)}`}
+                          value={option.optionText}
+                          readOnly={readOnly}
+                          onChange={(optionText) =>
+                            update({
+                              options: q.options?.map((o, i) =>
+                                i === index ? { ...o, optionText } : o,
+                              ),
+                            })
+                          }
+                          uploadImage={uploadImage}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </RadioGroup>
+                {typeLabel !== "True / False" && (
                   <Button
                     type="button"
-                    variant="ghost"
-                    className={`${actionClass} text-ruby`}
-                    aria-label={`Remove gap ${index + 1}`}
+                    variant="outline"
+                    className="min-h-11 w-full border-dashed border-line text-ink"
                     onClick={() =>
-                      update({ blanks: q.blanks?.filter((_, i) => i !== index) })
+                      update({
+                        options: [
+                          ...(q.options ?? []),
+                          { optionText: "", isCorrect: false },
+                        ],
+                      })
                     }
                   >
-                    <Trash2 className="size-4" />
+                    <Plus className="size-4" />
+                    Add more option
                   </Button>
+                )}
+                {fieldErrors("options")}
+              </fieldset>
+            )}
+            {q.questionType === "fill_in_gap" && (
+              <p className="hidden text-sm text-sub md:block">
+                Use [ ] to insert a gap and enter its accepted answer in the sentence.
+                Answers ignore case and surrounding spaces; every gap must match.
+              </p>
+            )}
+            {q.questionType === "numeric" && (
+              <fieldset className="grid min-w-0 gap-3 sm:grid-cols-3">
+                <legend className="mb-2 text-base font-semibold">Numeric grading</legend>
+                <div className="space-y-1">
+                  <Label htmlFor={`${prefix}-numeric`} className="text-base">
+                    Correct answer
+                  </Label>
+                  <Input
+                    id={`${prefix}-numeric`}
+                    type="number"
+                    step="any"
+                    className="min-h-11 text-base"
+                    value={q.numericAnswer ?? ""}
+                    onChange={(e) =>
+                      update({
+                        numericAnswer:
+                          e.target.value === "" ? null : Number(e.target.value),
+                      })
+                    }
+                  />
+                  {fieldErrors("numericAnswer")}
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor={`${prefix}-tolerance`} className="text-base">
+                    Absolute tolerance
+                  </Label>
+                  <Input
+                    id={`${prefix}-tolerance`}
+                    type="number"
+                    min={0}
+                    step="any"
+                    className="min-h-11 text-base"
+                    value={q.numericTolerance}
+                    onChange={(e) => update({ numericTolerance: Number(e.target.value) })}
+                  />
+                  {fieldErrors("numericTolerance")}
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor={`${prefix}-unit`} className="text-base">
+                    Unit label (optional)
+                  </Label>
+                  <Input
+                    id={`${prefix}-unit`}
+                    maxLength={60}
+                    className="min-h-11 text-base"
+                    placeholder="e.g. m/s"
+                    value={q.numericUnit}
+                    onChange={(e) => update({ numericUnit: e.target.value })}
+                  />
+                </div>
+                <p className="text-base text-sub sm:col-span-3">
+                  Answers within ±{q.numericTolerance} of the correct number earn full
+                  marks. Units are displayed, not converted.
+                </p>
+              </fieldset>
+            )}
+            {q.questionType === "essay" && (
+              <p className="text-base text-sub">
+                The teacher awards marks after submission. Results stay pending until
+                grading is complete and an Admin releases them.
+              </p>
+            )}
+            <div className="flex items-center justify-between border-t border-line pt-2">
+              <Button
+                type="button"
+                variant="ghost"
+                className={actionClass + " text-ruby"}
+                aria-label={`Delete question ${number}`}
+                onClick={onDelete}
+              >
+                <Trash2 className="size-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="min-h-11 text-base"
+                aria-expanded={more}
+                onClick={() => setMore(!more)}
+              >
+                More <ChevronDown className={more ? "size-4 rotate-180" : "size-4"} />
+              </Button>
+            </div>
+            {more && (
+              <div className="space-y-4 rounded-xl border border-line bg-canvas p-3">
+                {(q.questionType === "options" || q.questionType === "multi_answer") && (
+                  <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 text-base">
+                    <span>Shuffle options for this question</span>
+                    <span className="flex size-11 items-center justify-center">
+                      <Switch
+                        checked={q.shuffleOptions}
+                        onCheckedChange={(shuffleOptions) => update({ shuffleOptions })}
+                        aria-label={`Shuffle options for question ${number}`}
+                      />
+                    </span>
+                  </label>
+                )}
+                <label className="flex min-h-11 cursor-pointer items-center gap-2 text-base">
+                  <Checkbox
+                    checked={selected}
+                    onCheckedChange={onSelect}
+                    aria-label={"Select question " + number}
+                  />
+                  Select for bulk delete
+                </label>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="min-h-11 text-base">
+                      Change position
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="[&_[role=menuitem]]:min-h-11 [&_[role=menuitem]]:text-base">
+                    <DropdownMenuItem disabled={!canMoveUp} onSelect={() => onMove(-1)}>
+                      Move up
+                    </DropdownMenuItem>
+                    <DropdownMenuItem disabled={!canMoveDown} onSelect={() => onMove(1)}>
+                      Move down
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <RichTextEditor
+                  id={`${prefix}-reason`}
+                  label="Reason / explanation (optional)"
+                  value={q.reasonRichText ?? ""}
+                  readOnly={readOnly}
+                  onChange={(reasonRichText) => update({ reasonRichText })}
+                  uploadImage={uploadImage}
+                />
+                <p className="text-base text-sub">
+                  Shown after the attempt when answers are revealed.
+                </p>
+                <div className="max-w-40 space-y-1">
+                  <Label htmlFor={`${prefix}-marks`} className="text-base">
+                    Marks
+                  </Label>
+                  <Input
+                    id={`${prefix}-marks`}
+                    type="number"
+                    min={0}
+                    max={1000}
+                    step={1}
+                    className="min-h-11 text-base"
+                    value={Number.isNaN(q.marks) ? "" : q.marks}
+                    onChange={(e) =>
+                      update({
+                        marks: e.target.value === "" ? 0 : Number(e.target.value),
+                      })
+                    }
+                    aria-invalid={errors.some((e) => e.path.endsWith(".marks"))}
+                  />
+                  {fieldErrors("marks")}
                 </div>
               </div>
-            ))}
-            <Button
-              type="button"
-              variant="outline"
-              className="min-h-11 border-line text-ink"
-              onClick={() =>
-                update({ blanks: [...(q.blanks ?? []), { acceptedAnswer: "" }] })
-              }
-            >
-              <Plus className="size-4" />
-              Add gap answer
-            </Button>
-            {fieldErrors("blanks")}
+            )}
           </fieldset>
-        )}
-        {q.questionType === "essay" && (
-          <p className="text-base text-sub">
-            The teacher awards marks after submission. Results stay pending until grading
-            is complete and an Admin releases them.
-          </p>
-        )}
-        <RichTextEditor
-          id={`${prefix}-reason`}
-          label="Reason / explanation (optional)"
-          value={q.reasonRichText ?? ""}
-          onChange={(reasonRichText) => update({ reasonRichText })}
-          uploadImage={uploadImage}
-        />
-        <p className="text-base text-sub">
-          Shown after the attempt when answers are revealed.
-        </p>
-        <div className="max-w-40 space-y-1">
-          <Label htmlFor={`${prefix}-marks`} className="text-base">
-            Marks
-          </Label>
-          <Input
-            id={`${prefix}-marks`}
-            type="number"
-            min={0}
-            max={1000}
-            step={1}
-            className="min-h-11 text-base"
-            value={Number.isNaN(q.marks) ? "" : q.marks}
-            onChange={(e) =>
-              update({ marks: e.target.value === "" ? 0 : Number(e.target.value) })
-            }
-            aria-invalid={errors.some((e) => e.path.endsWith(".marks"))}
-          />
-          {fieldErrors("marks")}
-        </div>
+        </RichTextToolbarProvider>
       </CollapsibleContent>
       {!open && errors.length > 0 && (
         <p role="alert" className="p-3 text-base text-ruby">
@@ -450,13 +680,27 @@ export function QuizQuestionBuilder({
   onChange,
   errors = [],
   uploadImage,
+  collapseSavedQuestions = false,
+  onOpenBank,
+  onOpenBulk,
+  readOnly = false,
+  reserveBottomNav = false,
 }: {
   questions: BuilderQuestion[];
+  collapseSavedQuestions?: boolean;
+  readOnly?: boolean;
   passages: BuilderPassage[];
   onChange: (questions: BuilderQuestion[], passages: BuilderPassage[]) => void;
   errors?: QuizPublishBlocker[];
   uploadImage?: QuizImageUploader;
+  onOpenBank?: () => void;
+  onOpenBulk?: () => void;
+  /** Lift the floating add button above the phone bottom tab bar (Teacher shell). */
+  reserveBottomNav?: boolean;
 }) {
+  const [expandedKey, setExpandedKey] = useState<string | null>(
+    collapseSavedQuestions ? null : (questions[0]?.clientKey ?? null),
+  );
   const [chooser, setChooser] = useState<{ passageKey: string | null } | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [deleting, setDeleting] = useState<{
@@ -465,6 +709,7 @@ export function QuizQuestionBuilder({
   } | null>(null);
   const [total, setTotal] = useState("");
   const [marksError, setMarksError] = useState<string | null>(null);
+  const [marksHelp, setMarksHelp] = useState(false);
   const [announcement, setAnnouncement] = useState("");
   const blocks = builderBlocks(questions, passages);
   const flat = blocks.flatMap((b) => b.questions);
@@ -484,11 +729,19 @@ export function QuizQuestionBuilder({
         ],
         [...passages, { clientKey: key, title: "", bodyRichText: "" }],
       );
-    } else
+    } else {
+      const key = crypto.randomUUID();
+      setExpandedKey(key);
       changeQuestions([
         ...questions,
-        newBuilderQuestion(type, crypto.randomUUID(), chooser?.passageKey ?? null),
+        newBuilderQuestion(type, key, chooser?.passageKey ?? null),
       ]);
+      requestAnimationFrame(() =>
+        document
+          .getElementById(`question-${key}`)
+          ?.scrollIntoView({ block: "center", behavior: "smooth" }),
+      );
+    }
   };
   const reorderBlocks = (active: string, over: string) => {
     const next = reorderByKey(blocks, active, over);
@@ -525,6 +778,9 @@ export function QuizQuestionBuilder({
   ) => (
     <QuestionCard
       question={q}
+      expanded={expandedKey === q.clientKey}
+      onExpandedChange={(open) => setExpandedKey(open ? q.clientKey : null)}
+      readOnly={readOnly}
       number={flat.findIndex((s) => s.clientKey === q.clientKey) + 1}
       handle={handle}
       selected={selected.includes(q.clientKey)}
@@ -540,9 +796,11 @@ export function QuizQuestionBuilder({
       }
       onDuplicate={() => {
         const position = questions.findIndex((s) => s.clientKey === q.clientKey);
+        const key = crypto.randomUUID();
+        setExpandedKey(key);
         changeQuestions([
           ...questions.slice(0, position + 1),
-          duplicateBuilderQuestion(q, crypto.randomUUID()),
+          duplicateBuilderQuestion(q, key),
           ...questions.slice(position + 1),
         ]);
       }}
@@ -568,76 +826,83 @@ export function QuizQuestionBuilder({
         <h2 id="question-builder-heading" className="text-xl font-semibold text-ink">
           Questions <span className="text-sub">({questions.length})</span>
         </h2>
-        <Button
-          type="button"
-          className="min-h-11 bg-brand text-primary-foreground hover:bg-brand-hover"
-          onClick={() => setChooser({ passageKey: null })}
-        >
-          <Plus className="size-4" />
-          Add new question
-        </Button>
       </div>
-      <div className="space-y-2 rounded-xl border border-line bg-panel p-3 sm:p-4">
-        <p className="text-base font-semibold text-ink">
-          Total marks: {sumMarks(questions.map((q) => q.marks))}
-        </p>
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="w-40 space-y-1">
-            <Label htmlFor="quiz-total-marks" className="text-base">
-              Set total marks
-            </Label>
+      {questions.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="mr-auto text-base font-semibold text-ink">
+              Total marks: {sumMarks(questions.map((q) => q.marks))}
+            </p>
             <Input
               id="quiz-total-marks"
+              aria-label="Set total marks"
+              placeholder="Set total"
+              disabled={readOnly}
               type="number"
               min={questions.length || 1}
               step={1}
-              className="min-h-11 text-base"
+              className="min-h-11 w-28 text-base"
               value={total}
               onChange={(e) => setTotal(e.target.value)}
             />
+            <Button
+              type="button"
+              disabled={readOnly}
+              variant="outline"
+              className="min-h-11 border-line text-ink"
+              onClick={() => {
+                const result = distributeMarks(Number(total), questions.length);
+                if (!result.ok) {
+                  setMarksError(
+                    result.reason === "no-questions"
+                      ? "Add questions before distributing marks."
+                      : result.reason === "total-below-count"
+                        ? "Use at least one mark per question."
+                        : "Enter a positive whole number.",
+                  );
+                  return;
+                }
+                if (result.marks.some((mark) => mark > 1000)) {
+                  setMarksError("Each question can have at most 1000 marks.");
+                  return;
+                }
+                setMarksError(null);
+                changeQuestions(flat.map((q, i) => ({ ...q, marks: result.marks[i] })));
+              }}
+            >
+              Apply
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-11 text-sub"
+              aria-label="How Apply works"
+              aria-expanded={marksHelp}
+              onClick={() => setMarksHelp((open) => !open)}
+            >
+              <Info className="size-5" />
+            </Button>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            className="min-h-11 border-line text-ink"
-            onClick={() => {
-              const result = distributeMarks(Number(total), questions.length);
-              if (!result.ok) {
-                setMarksError(
-                  result.reason === "no-questions"
-                    ? "Add questions before distributing marks."
-                    : result.reason === "total-below-count"
-                      ? "Use at least one mark per question."
-                      : "Enter a positive whole number.",
-                );
-                return;
-              }
-              if (result.marks.some((mark) => mark > 1000)) {
-                setMarksError("Each question can have at most 1000 marks.");
-                return;
-              }
-              setMarksError(null);
-              changeQuestions(flat.map((q, i) => ({ ...q, marks: result.marks[i] })));
-            }}
-          >
-            Apply
-          </Button>
+          {marksHelp && (
+            <p className="text-base text-sub">
+              Apply distributes whole marks evenly across questions and their correct
+              answers. Any remainder goes to the earliest questions. Each gap question is
+              graded as a whole.
+            </p>
+          )}
+          {marksError && (
+            <p role="alert" className="text-base text-ruby">
+              {marksError}
+            </p>
+          )}
         </div>
-        <p className="text-base text-sub">
-          Apply distributes whole marks evenly across questions and their correct answers.
-          Any remainder goes to the earliest questions. Each gap question is graded as a
-          whole.
-        </p>
-        {marksError && (
-          <p role="alert" className="text-base text-ruby">
-            {marksError}
-          </p>
-        )}
-      </div>
+      )}
       {questions.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-2">
           <label className="flex min-h-11 cursor-pointer items-center gap-2 text-base text-ink">
             <Checkbox
+              disabled={readOnly}
               checked={questions.every((q) => selected.includes(q.clientKey))}
               onCheckedChange={(checked) =>
                 setSelected(checked ? questions.map((q) => q.clientKey) : [])
@@ -649,7 +914,10 @@ export function QuizQuestionBuilder({
             type="button"
             variant="outline"
             className="min-h-11 border-line text-ruby"
-            disabled={!selected.some((key) => questions.some((q) => q.clientKey === key))}
+            disabled={
+              readOnly ||
+              !selected.some((key) => questions.some((q) => q.clientKey === key))
+            }
             onClick={() => setDeleting({ questionKeys: selected })}
           >
             <Trash2 className="size-4" />
@@ -666,15 +934,12 @@ export function QuizQuestionBuilder({
           <p className="mt-2 text-base text-sub">
             Add a question, a passage, or a manually graded essay.
           </p>
-          <Button
-            type="button"
-            variant="outline"
-            className="mt-4 min-h-11 border-line text-ink"
-            onClick={() => setChooser({ passageKey: null })}
-          >
-            <Plus className="size-4" />
-            Add your first question
-          </Button>
+          {!readOnly && (
+            <p className="mt-4 inline-flex items-center gap-2 text-base font-medium text-brand">
+              <Plus className="size-4" />
+              Use the Add question button, bottom right
+            </p>
+          )}
         </div>
       ) : (
         <SortableRows keys={blocks.map((b) => b.key)} onReorder={reorderBlocks}>
@@ -880,6 +1145,84 @@ export function QuizQuestionBuilder({
           </div>
         </SortableRows>
       )}
+      {!readOnly &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            className={cn(
+              "fixed right-[max(1rem,env(safe-area-inset-right))] z-40 flex justify-end",
+              reserveBottomNav
+                ? "bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-[calc(1rem+env(safe-area-inset-bottom))]"
+                : "bottom-[calc(1rem+env(safe-area-inset-bottom))]",
+            )}
+          >
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  className="size-14 gap-2 rounded-full p-0 text-base shadow-lg md:w-auto md:px-5"
+                  aria-label="Add question"
+                >
+                  <Plus className="size-5" />
+                  <span className="hidden md:inline">Add question</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                side="top"
+                align="end"
+                className="max-h-[55dvh] w-[min(18rem,calc(100vw-2rem))] overflow-y-auto border-line bg-panel text-ink [&_[role=menuitem]]:min-h-11 [&_[role=menuitem]]:text-base"
+              >
+                <DropdownMenuLabel>New question</DropdownMenuLabel>
+                {(
+                  [
+                    "true_false",
+                    "options",
+                    "multi_answer",
+                    "fill_in_gap",
+                    "numeric",
+                    "passage",
+                    "essay",
+                  ] as const
+                ).map((type) => (
+                  <DropdownMenuItem
+                    key={type}
+                    onSelect={() => {
+                      setChooser(null);
+                      choose(type);
+                    }}
+                  >
+                    {
+                      {
+                        true_false: "True / False",
+                        options: "Multiple choice",
+                        multi_answer: "Multi-answer",
+                        fill_in_gap: "Fill in the gap",
+                        numeric: "Numeric",
+                        passage: "Passage",
+                        essay: "Essay · manually graded",
+                      }[type]
+                    }
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => setChooser({ passageKey: null })}>
+                  Choose question type…
+                </DropdownMenuItem>
+                {onOpenBank && (
+                  <DropdownMenuItem onSelect={onOpenBank}>
+                    From question bank
+                  </DropdownMenuItem>
+                )}
+                {onOpenBulk && (
+                  <DropdownMenuItem onSelect={onOpenBulk}>
+                    Bulk paste questions
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>,
+          document.body,
+        )}
       <QuestionTypeDialog
         open={chooser !== null}
         onOpenChange={(open) => {

@@ -7,7 +7,7 @@ Index of every screen in the app, one entry per route from `DESIGN.md` §9. Each
 | File | Screens |
 |---|---|
 | `screens-auth.md` | Login, Register (Student/Aspirant), Onboarding, Change password, Login details (Student identifiers) |
-| `screens-admin.md` | All 12 Admin screens |
+| `screens-admin.md` | Admin screens (dashboard, structure, people, content authoring, leaderboard, score release, settings) |
 | `screens-teacher.md` | All 6 Teacher screens |
 | `screens-student.md` | Student dashboard, quiz attempt, history, resources |
 | `screens-aspirant.md` | Aspirant dashboard, quiz attempt, history, resources |

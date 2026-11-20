@@ -16,8 +16,23 @@ export const blankInputSchema = z.object({
   acceptedAnswer: z.string().max(255),
 });
 
+export const questionTypeSchema = z.enum([
+  "fill_in_gap",
+  "options",
+  "essay",
+  "multi_answer",
+  "numeric",
+]);
+export const numericQuestionFields = {
+  numericAnswer: z.number().finite().nullable().default(null),
+  numericTolerance: z.number().finite().min(0).default(0),
+  numericUnit: z.string().trim().max(60).default(""),
+  shuffleOptions: z.boolean().default(false),
+};
+
 const questionFields = {
-  questionType: z.enum(["fill_in_gap", "options"]),
+  questionType: questionTypeSchema,
+  ...numericQuestionFields,
   courseId: nullableInt.optional(),
   jambSubjectId: nullableInt.optional(),
   topicId: nullableInt.optional(),
@@ -34,7 +49,7 @@ const questionFields = {
   blanks: z.array(blankInputSchema).optional(),
 };
 
-function requireSingleTrack(
+export function requireSingleTrack(
   data: { courseId?: number | null; jambSubjectId?: number | null },
   ctx: z.RefinementCtx,
 ) {
@@ -59,7 +74,8 @@ function requireSingleTrack(
 // with exactly the same rules instead of a second copy (AGENTS.md §1).
 export function checkAnswerPayload(
   data: {
-    questionType: "fill_in_gap" | "options" | "essay";
+    questionType: z.infer<typeof questionTypeSchema>;
+    numericAnswer?: number | null;
     options?: { optionText: string; isCorrect: boolean }[];
     blanks?: { acceptedAnswer: string }[];
   },
@@ -68,7 +84,7 @@ export function checkAnswerPayload(
   const options = data.options ?? [];
   const blanks = data.blanks ?? [];
 
-  if (data.questionType === "options") {
+  if (data.questionType === "options" || data.questionType === "multi_answer") {
     if (options.length < 2) {
       ctx.addIssue({
         code: "custom",
@@ -93,13 +109,24 @@ export function checkAnswerPayload(
         path: ["options"],
         message: "Mark one option as correct before publishing",
       });
-    } else if (correctCount > 1) {
+    } else if (correctCount > 1 && data.questionType === "options") {
       ctx.addIssue({
         code: "custom",
         path: ["options"],
         message: "Only one option may be marked correct (single-select questions)",
       });
     }
+  }
+
+  if (
+    data.questionType === "numeric" &&
+    (data.numericAnswer == null || !Number.isFinite(data.numericAnswer))
+  ) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["numericAnswer"],
+      message: "Enter a finite numeric answer before publishing",
+    });
   }
 
   if (data.questionType === "fill_in_gap") {

@@ -33,6 +33,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   db = makeDbMock();
   db.transaction.mockImplementation(async (callback) => callback(db));
+  stubUpdate(db, { id: 1 });
 });
 
 function stubHappyPath(overrides: Record<string, unknown> = {}) {

@@ -32,6 +32,33 @@ beforeEach(() => {
 });
 
 describe("GET /api/teacher/quizzes", () => {
+  it("returns 422 with field details for invalid filter values", async () => {
+    const res = await GET(
+      jsonRequest("http://localhost/api/teacher/quizzes?status=live"),
+    );
+    expect(res.status).toBe(422);
+    expect((await res.json()).error.details).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: "status" })]),
+    );
+    expect(db.select).not.toHaveBeenCalled();
+  });
+
+  it("accepts combined title, draft, course and type filters before paginating", async () => {
+    stubSelect(db, [
+      [{ id: 3, title: "Engineering", status: "draft", quizType: "course" }],
+    ]);
+    const res = await GET(
+      jsonRequest(
+        "http://localhost/api/teacher/quizzes?search=engineering&status=draft&courseId=2&type=course&pageSize=1",
+      ),
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data).toEqual([
+      { id: 3, title: "Engineering", status: "draft", quizType: "course" },
+    ]);
+    expect(body.meta.total).toBe(1);
+  });
   it("returns 401 when unauthenticated", async () => {
     requireAuth.mockRejectedValue(new UnauthorizedError());
     const res = await GET(jsonRequest("http://localhost/api/teacher/quizzes"));

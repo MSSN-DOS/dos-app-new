@@ -6,7 +6,8 @@ import type {
 
 export type BuilderQuestion = QuizQuestionDraftInput & { clientKey: string };
 export type BuilderPassage = z.infer<typeof builderPassageDraftSchema>;
-export type QuestionPreset = "true_false" | "options" | "fill_in_gap" | "essay";
+export type QuestionPreset =
+  "true_false" | "options" | "fill_in_gap" | "essay" | "multi_answer" | "numeric";
 export type BuilderBlock = {
   key: string;
   passage: BuilderPassage | null;
@@ -25,13 +26,17 @@ export function newBuilderQuestion(
     bodyRichText: "",
     reasonRichText: "",
     marks: 1,
+    numericAnswer: null,
+    numericTolerance: 0,
+    numericUnit: "",
+    shuffleOptions: false,
     options:
       preset === "true_false"
         ? [
             { optionText: "<p>True</p>", isCorrect: false },
             { optionText: "<p>False</p>", isCorrect: false },
           ]
-        : preset === "options"
+        : preset === "options" || preset === "multi_answer"
           ? [
               { optionText: "", isCorrect: false },
               { optionText: "", isCorrect: false },
@@ -98,6 +103,8 @@ export function duplicateBuilderQuestion(
 }
 
 export function questionTypeLabel(q: BuilderQuestion): string {
+  if (q.questionType === "multi_answer") return "Multi-answer";
+  if (q.questionType === "numeric") return "Numeric";
   if (q.questionType === "essay") return "Essay";
   if (q.questionType === "fill_in_gap") return "Fill in the gap";
   const labels = q.options?.map((o) =>

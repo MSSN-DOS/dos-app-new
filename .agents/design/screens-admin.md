@@ -1,6 +1,8 @@
 # Screen Specs — Admin
 
-All screens in this file: **Guard:** `role = admin`. All live under an `(admin)` layout with a persistent left-nav (Dashboard, Structure, Teachers, Students, Aspirants, Content, Leaderboard, Score Release, Settings) — build that shell once (P2-1) and every screen below renders inside it.
+All screens in this file: **Guard:** `role = admin`. All live under an `(admin)` layout with a persistent left-nav (Dashboard, Structure, Teachers, Students, Aspirants, Topics, Questions, Quizzes, Content, Leaderboard, Score Release, Settings) — build that shell once (P2-1) and every screen below renders inside it.
+
+> **Shared authoring screens.** `/admin/topics`, `/admin/questions`, `/admin/quizzes` and `/admin/quizzes/[id]` render the same components as their `/teacher/*` counterparts (`components/teaching/`), because those API routes are guarded `admin + teacher`. Their page specs are the teacher entries (`screens-teacher.md`); this file only adds the admin-specific differences. An Admin stays inside the admin shell — the admin nav never links into `/teacher/*`.
 
 ---
 
@@ -198,6 +200,50 @@ FRAME: Content — Existing
 **Data / API:** `POST /api/admin/content` (multipart for PDF), writes to Supabase Storage at the path from `DESIGN.md` §6, then `content_items`. `GET/DELETE /api/admin/content`.
 
 **States:** loading · uploading (progress, PDFs can be large) · empty · error (file too large / wrong type) · scope-required-error (must pick exactly one of Course or JAMB Subject, not both, not neither).
+
+---
+
+### `/admin/quizzes`
+- **Task:** P3-4 (shared view); create-flow rebuilt in P12-10 (2026-11-19 pass)
+- **Purpose:** The Admin's list + create entry point for Topic and Course quizzes. Renders the shared `QuizzesView`/`NewQuizDialog`, so the admin and teacher screens cannot drift apart. The builder lives at `/admin/quizzes/[id]` — the `/teacher/quizzes/[id]` spec plus the Admin-only availability panel (P9-1).
+
+**Wireframe**
+```
+FRAME: Quizzes
+  HEADER: eyebrow "Quizzes" | title "Quizzes"
+          note: Topic quizzes are ad-hoc. Course quizzes run weekly (Sat-Sun) and
+                feed CGPA / Post-UTME. Drafts unlock the builder.
+  ACTION: [New quiz]
+  STAT ROW: [ Total: N ] [ Topic: n in view ] [ Course: n in view ]
+  FILTER BAR: [ Type: All / Course / Topic ] [ Course select ]
+  LIST ROW: Title | Course Quiz pill | MAT 101 | 12 questions | Draft pill | [Edit]
+  PAGINATION: [ Prev ] page x of y [ Next ]
+
+FRAME: New Quiz — phone bottom sheet, centred dialog from md up
+  HEADER: brand mark | "New quiz" eyebrow | "Create a draft"
+          note: set the essentials now - questions, settings and preview come next
+  SECTION 1 "Quiz basics"
+    FIELD: Title -> [ text, max 200, live counter ]
+    FIELD: Quiz type -> [ Course: weekly, official score | Topic: ad-hoc, practice ]
+  SECTION 2 "Scope & schedule"
+    FIELD (Course Quiz only): For -> [ Students: university course | Aspirants: JAMB subject ]
+    FIELD: Course select (Student) or JAMB subject select (Aspirant)
+    FIELD (Topic Quiz only): Topic -> [ select, loaded for the chosen course ]
+    FIELD (Course Quiz only): Week -> [ date, prefilled to the next Saturday ]
+    NOTE (Topic Quiz): "Topic quizzes are course-scoped practice, so JAMB subjects are not offered here."
+  SUMMARY CARD: title (or "Untitled quiz") | scope line | "Question builder opens next"
+  ACTION ROW (sticky footer): [Cancel] [Create & continue ->]
+```
+
+**Business rules**
+- Topic Quiz is always course-scoped: choosing Topic hides the Students/Aspirants choice, forces the track back to `course` and clears any selected JAMB subject. Topic + JAMB is unreachable in the UI, not just rejected by the API.
+- JAMB subjects are offered for Course Quizzes only (`DESIGN.md` §5 Post-UTME).
+- The common path is preselected: Course Quiz → Students → `weekStart` = next Saturday. Title + course + create is the whole flow.
+- Form readiness is the shared `quizCreateSchema` (the same schema the POST route validates), not a hand-written parallel check. The primary button stays disabled until it passes; if it fails, the first issue message is shown inside the sheet.
+
+**Data / API:** `GET /api/teacher/quizzes?type=&courseId=&page=&pageSize=`, `POST /api/teacher/quizzes` → `{ id }`, then route to `/admin/quizzes/{id}`; `GET /api/teacher/topics?courseId=` for the Topic options. Routes are guarded `admin + teacher`, so the admin shell uses them unchanged. The builder adds `PATCH /api/admin/quizzes/[id]/window`.
+
+**States:** catalogue loading (form controls disabled behind a skeleton) · catalogue error + Retry · topic list loading · topic list error + Retry · topic list empty ("no topics for this course yet") · validation error (`role=alert`, inline) · submitting (`Spinner` + "Creating…", button disabled, Cancel still available) · success (toast, then the builder) · server error (message in the sheet and a toast) · list loading / empty / error with retry. Mobile: sheet anchored to the bottom with a sticky footer, every input and choice ≥44px, body text ≥16px, no horizontal scroll; desktop: centred dialog.
 
 ---
 

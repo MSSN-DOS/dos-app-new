@@ -1,4 +1,5 @@
 import type { questionTypeEnum } from "@/lib/db/schema/enums";
+import { numericAnswerIsCorrect } from "./numeric-answer";
 
 type QuestionType = (typeof questionTypeEnum.enumValues)[number];
 
@@ -17,6 +18,8 @@ export interface GradingQuestion {
   questionType: QuestionType;
   options: GradingOption[];
   blanks: GradingBlank[];
+  numericAnswer?: number | null;
+  numericTolerance?: number;
 }
 
 /** One submitted answer as received from the client on attempt submit. */
@@ -24,6 +27,8 @@ export interface SubmittedAnswer {
   questionId: number;
   /** For `options` questions: exactly one selected option id. */
   selectedOptionId: number | null;
+  selectedOptionIds?: number[] | null;
+  numericAnswer?: string | null;
   /** For `fill_in_gap` questions: submitted text keyed by blank index. */
   blankAnswers: Record<number, string>;
 }
@@ -48,7 +53,7 @@ function normalize(text: string): string {
 
 function gradeOptionsQuestion(
   question: GradingQuestion,
-  answer: SubmittedAnswer
+  answer: SubmittedAnswer,
 ): boolean {
   if (answer.selectedOptionId === null || answer.selectedOptionId === undefined) {
     return false;
@@ -64,7 +69,7 @@ function gradeOptionsQuestion(
 
 function gradeFillInGapQuestion(
   question: GradingQuestion,
-  answer: SubmittedAnswer
+  answer: SubmittedAnswer,
 ): boolean {
   // Every blank must be answered correctly for the question to count — no partial credit.
   if (question.blanks.length === 0) {
@@ -80,6 +85,22 @@ function gradeFillInGapQuestion(
   });
 }
 
+function gradeMultiAnswerQuestion(
+  question: GradingQuestion,
+  answer: SubmittedAnswer,
+): boolean {
+  const correct = question.options
+    .filter((option) => option.isCorrect)
+    .map((option) => option.id);
+  const selected = answer.selectedOptionIds ?? [];
+  return (
+    correct.length > 0 &&
+    selected.length === correct.length &&
+    new Set(selected).size === selected.length &&
+    correct.every((id) => selected.includes(id))
+  );
+}
+
 /**
  * Grade a full set of submitted answers against their questions.
  * Pure function — no DB access; the caller fetches questions with their
@@ -87,7 +108,7 @@ function gradeFillInGapQuestion(
  */
 export function gradeAttempt(
   questions: GradingQuestion[],
-  answers: SubmittedAnswer[]
+  answers: SubmittedAnswer[],
 ): GradeResult {
   const byQuestionId = new Map(answers.map((answer) => [answer.questionId, answer]));
 
@@ -95,10 +116,18 @@ export function gradeAttempt(
     const answer = byQuestionId.get(question.id);
     let isCorrect = false;
     if (answer) {
-      isCorrect =
-        question.questionType === "options"
-          ? gradeOptionsQuestion(question, answer)
-          : gradeFillInGapQuestion(question, answer);
+      if (question.questionType === "options")
+        isCorrect = gradeOptionsQuestion(question, answer);
+      else if (question.questionType === "multi_answer")
+        isCorrect = gradeMultiAnswerQuestion(question, answer);
+      else if (question.questionType === "numeric")
+        isCorrect = numericAnswerIsCorrect(
+          answer.numericAnswer,
+          question.numericAnswer,
+          question.numericTolerance ?? 0,
+        );
+      else if (question.questionType === "fill_in_gap")
+        isCorrect = gradeFillInGapQuestion(question, answer);
     }
     return { questionId: question.id, isCorrect };
   });

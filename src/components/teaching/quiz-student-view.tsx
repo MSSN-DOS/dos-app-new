@@ -6,6 +6,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { QuizInlineGaps } from "./quiz-inline-gaps";
 import { formatDurationSeconds } from "@/lib/quizzes/duration";
 import { renderRichText } from "@/lib/rich-text";
 import type { QuizIntroductionData, StudentQuizQuestion } from "@/lib/quizzes/student";
@@ -74,7 +76,7 @@ export function QuizIntroduction({
       )}
       <p className="text-base text-sub">
         {quiz.allowMultipleAttempts
-          ? "You may make multiple attempts. Your best released score counts."
+          ? `You may make ${quiz.maxAttempts ?? "unlimited"} attempts${quiz.completedAttempts === undefined ? "" : ` (${quiz.completedAttempts} completed)`}. Your best released score counts.`
           : "You may make one attempt."}{" "}
         Results appear after grading and Admin release.
       </p>
@@ -143,7 +145,17 @@ export function QuizQuestionView({
           {question.marks} mark{question.marks === 1 ? "" : "s"}
         </Badge>
       </div>
-      <QuizRichText value={question.bodyRichText.replaceAll("[gap]", "_____ ")} />
+      {question.questionType === "fill_in_gap" ? (
+        <QuizInlineGaps
+          key={question.bodyRichText}
+          body={question.bodyRichText}
+          blankIndexes={question.blankIndexes}
+          answer={answer}
+          onChange={onChange}
+        />
+      ) : (
+        <QuizRichText value={question.bodyRichText} />
+      )}
       {question.questionType === "options" && (
         <RadioGroup
           aria-label="Choose one answer"
@@ -178,31 +190,52 @@ export function QuizQuestionView({
           ))}
         </RadioGroup>
       )}
-      {question.questionType === "fill_in_gap" && (
-        <div className="space-y-3">
-          {question.blankIndexes.map((index) => (
-            <div key={index} className="space-y-1">
-              <Label htmlFor={`${prefix}-blank-${index}`} className="text-base">
-                Gap {index}
-              </Label>
-              <Input
-                id={`${prefix}-blank-${index}`}
-                className="min-h-11 text-base"
-                maxLength={255}
-                autoComplete="off"
-                value={answer.blankAnswers?.[String(index)] ?? ""}
-                onChange={(e) =>
+      {question.questionType === "multi_answer" && (
+        <fieldset className="space-y-3">
+          <legend className="text-base text-sub">Select all correct answers</legend>
+          {question.options.map((option, index) => (
+            <label
+              key={option.id}
+              className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border border-line bg-canvas p-3 focus-within:ring-2 focus-within:ring-ring"
+            >
+              <Checkbox
+                aria-label={`Option ${String.fromCharCode(65 + index)}`}
+                checked={answer.selectedOptionIds?.includes(option.id) ?? false}
+                onCheckedChange={(checked) =>
                   onChange({
                     questionId: question.id,
-                    blankAnswers: {
-                      ...answer.blankAnswers,
-                      [String(index)]: e.target.value,
-                    },
+                    selectedOptionIds: checked
+                      ? [...(answer.selectedOptionIds ?? []), option.id]
+                      : (answer.selectedOptionIds ?? []).filter((id) => id !== option.id),
                   })
                 }
               />
-            </div>
+              <span>{String.fromCharCode(65 + index)}.</span>
+              <QuizRichText value={option.optionText} className="flex-1" />
+            </label>
           ))}
+        </fieldset>
+      )}
+      {question.questionType === "numeric" && (
+        <div className="space-y-2">
+          <Label htmlFor={`${prefix}-numeric`} className="text-base">
+            Numeric answer {question.numericUnit && `(${question.numericUnit})`}
+          </Label>
+          <Input
+            id={`${prefix}-numeric`}
+            inputMode="decimal"
+            maxLength={100}
+            autoComplete="off"
+            className="min-h-11 text-base"
+            placeholder="Enter a number, e.g. 3.14 or 1e-3"
+            value={answer.numericAnswer ?? ""}
+            onChange={(e) =>
+              onChange({ questionId: question.id, numericAnswer: e.target.value })
+            }
+          />
+          <p className="text-base text-sub">
+            Enter the number only. Scientific notation is accepted.
+          </p>
         </div>
       )}
       {question.questionType === "essay" && (

@@ -26,7 +26,9 @@ describe("isCourseQuizWindowOpen", () => {
   });
 
   it("blocks Friday 23:59:59, one second before the window", () => {
-    expect(isCourseQuizWindowOpen("course", WEEK, at(2026, 8, 21, 23, 59, 59))).toBe(false);
+    expect(isCourseQuizWindowOpen("course", WEEK, at(2026, 8, 21, 23, 59, 59))).toBe(
+      false,
+    );
   });
 
   it("opens exactly at Saturday 00:00:00 local", () => {
@@ -34,7 +36,9 @@ describe("isCourseQuizWindowOpen", () => {
   });
 
   it("stays open Sunday 23:59:59", () => {
-    expect(isCourseQuizWindowOpen("course", WEEK, at(2026, 8, 23, 23, 59, 59))).toBe(true);
+    expect(isCourseQuizWindowOpen("course", WEEK, at(2026, 8, 23, 23, 59, 59))).toBe(
+      true,
+    );
   });
 
   it("closes at Monday 00:00:00 and stays closed Monday 00:00:01", () => {
@@ -79,7 +83,10 @@ describe("isCourseQuizWindowOpen", () => {
     it("restores the default window when both overrides are null", () => {
       const tuesday = at(2026, 8, 25, 12);
       expect(
-        isCourseQuizWindowOpen("course", WEEK, tuesday, { opensAt: null, closesAt: null }),
+        isCourseQuizWindowOpen("course", WEEK, tuesday, {
+          opensAt: null,
+          closesAt: null,
+        }),
       ).toBe(false);
     });
 

@@ -47,9 +47,30 @@ function Harness({ passage = false }: { passage?: boolean }) {
 }
 
 describe("quiz builder editing interactions", () => {
+  it("has one floating add button, fixed to the screen corner outside the page flow", () => {
+    const { container } = render(<Harness />);
+    expect(screen.queryByRole("button", { name: "Add new question" })).toBeNull();
+    expect(screen.getAllByRole("button", { name: "Add question" })).toHaveLength(1);
+    const fab = screen.getByRole("button", { name: "Add question" });
+    // Portalled to <body>, so no transformed ancestor can reposition it.
+    expect(container.contains(fab)).toBe(false);
+    expect(fab.parentElement).toHaveClass("fixed", "z-40");
+    expect(fab.parentElement?.className).toContain(
+      "right-[max(1rem,env(safe-area-inset-right))]",
+    );
+  });
+  it("shows the total-marks row only once there are questions", () => {
+    render(<Harness />);
+    expect(screen.getByLabelText("Set total marks")).toBeInTheDocument();
+  });
   it("provides a keyboard-accessible reorder alternative", () => {
     render(<Harness />);
-    fireEvent.click(screen.getByRole("button", { name: "Move question 1 down" }));
+    fireEvent.click(screen.getByRole("button", { name: /^More/ }));
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Change position" }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    fireEvent.click(screen.getByRole("menuitem", { name: "Move down" }));
     expect(screen.getByTestId("order")).toHaveTextContent("b,a");
   });
   it("applies marks and confirms bulk deletion before changing the quiz", () => {

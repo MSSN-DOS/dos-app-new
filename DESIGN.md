@@ -120,6 +120,61 @@ Rules that apply to both:
 - Teachers may enable a start time and optional end time in Africa/Lagos. An enabled schedule uses the same `opens_at`/`closes_at` columns as the Admin availability override and replaces the week-derived window; without scheduling, Course Quizzes retain their existing default/override window. Duration is optional and stored in seconds; null is untimed.
 - Per-user setting defaults and pins are stored in `user_preferences`. New quizzes apply the current user's defaults, with fresh schedule dates and a default pass mark of 60.
 
+### Question-bank authoring amendment (2026-11-15)
+
+The bank exposes True/False, Multiple choice, Fill in the gap, Passage and Essay
+to Teachers/Admins. True/False reuses two fixed single-select options; Passage
+saves a shared text and its child questions together; Essay remains manually
+graded when used in a quiz. Gap grading stays trimmed, case-insensitive exact
+match, with all blanks required. Draft and publish schemas remain distinct.
+
+Bank document writes enforce subject assignment, ownership, revision conflicts
+and existing quiz/attempt references. New quizzes receive independent copies of
+bank documents, passage children and images. Bank images use private Storage
+paths `question-bank/{authorId}/{uuid}.{png|jpg|webp}` and authenticated signed
+links; no guest authoring or direct Storage writes. PNG/JPEG/WebP uploads are
+limited to 5 MB and checked against their file signatures. Referenced images
+cannot be deleted. `questions.bank_revision` and RLS-protected `question_images`
+are additive schema deltas shipped in generated migration 0012.
+
+### Quizboot completion amendment (P12-11, 2026-11-16)
+
+The supplied `QUIZBOOT_SPEC.md` updates the authoring layout: editable header title,
+Questions/Settings/Results tabs, one expanded question card, a shared toolbar for
+the focused rich field, a floating Add question dropdown, and More/Advanced panels.
+Keep the standalone bank and its existing functionality. New quiz creation still
+requires DOS academic scope; imported bank questions remain independent copies.
+
+- Multi-answer is a distinct type. Its selected option IDs must equal the correct
+  set exactly; extra or missing selections earn no marks. Ordinary Multiple choice
+  and True/False remain single-select.
+- Numeric questions store a finite value, nonnegative absolute tolerance, and an
+  optional unit label. Inclusive tolerance grading performs no unit conversion.
+- Inline gap boxes serialize to `[gap]` plus separate accepted answers. Every gap
+  uses trimmed, case-insensitive exact matching; pipe-separated alternatives are
+  deliberately excluded by the confirmed Board answer.
+- Questions may shuffle their own options independently of the global setting.
+  Resume restores the deterministic order of the original attempt. Attempts may be
+  single, limited (2–100), or unlimited; the server enforces the limit.
+- Draft autosave uses authenticated builder writes and revision conflicts. It
+  preserves edits typed during a request and reconciles persistence IDs by client
+  key. Failed saves retain local edits and offer explicit retry.
+- Unpublish hides new access while allowing started attempts to finish. The first
+  attempt permanently locks questions and settings, even after attempts are deleted.
+  Republish restores access to the same content. No editable quiz versions are added.
+- Tiptap and KaTeX remain the shared editor/rendering stack, with mhchem reactions,
+  editable science templates, plain-text paste, and resized private Storage images.
+- Charts use actual released attempts only: score distribution, durations, and
+  question outcomes. Admin release remains mandatory; no instant score release.
+- Teachers/Admins can preview paginated A4 papers, optionally include a marking
+  scheme on fresh pages, print, and download a multipage PDF. Oversized blocks scale
+  together rather than splitting. Papers use paper-specific light tokens in both
+  themes. PDF is a raster export; its text is not selectable.
+
+Generated migrations 0013 and 0014 add the two types, numeric fields, per-question
+shuffle, selected option sets, maximum attempts and persistent lifecycle metadata.
+They are additive and retain the existing RLS policies.
+
 ## 5. Performance tracking
 
 ### CGPA (Students)
@@ -314,7 +369,7 @@ Primary: blue. Accent: orange. Full scale, both themes — don't hand-pick singl
 
 These are HSL triplets for shadcn/ui's CSS-variable convention — drop them straight into `globals.css` under `:root` / `.dark`, don't reformat to hex. Logo: Vercel's default triangle mark as a placeholder until MSSN supplies a real logo — track replacing it in `STATE.md`, don't build any custom logo component around it in the meantime.
 
-Typography: system font stack (`font-sans` default from Tailwind/shadcn) — no custom webfont for MVP, one less thing to load/license. Personality comes from weight and tracking, not the face:
+Typography: `Plus Jakarta Sans` is the body face (`layout.tsx` sets it on `body`), with the system stack as fallback; `font-mono` stays the system mono stack. Personality comes from weight and tracking, not from face-swapping. One exception: the brand wordmark uses Fraunces via `--font-brand` — it is the one serif in the product, and it is deliberately the *only* place a display face appears (docs headers stay Jakarta).
 
 - **Display** (page heroes, `h1`): `text-4xl md:text-5xl font-bold tracking-tight`, leading-tight.
 - **Card/section titles**: `text-xl font-semibold tracking-tight` (auth cards) / `text-base font-semibold` (inline cards).
@@ -336,9 +391,19 @@ Icons: **lucide-react only** — the one sanctioned icon library (shadcn uses it
 
 **Mobile-first is mandatory** (audience is overwhelmingly on phones — Nigerian students/aspirants). Author every screen at the narrow viewport first and enhance upward: Tailwind breakpoints are used mobile-first (`base`/`sm`/`md`/`lg`), never a desktop-default `md:*` that collapses badly below it. Non-negotiables: interactive targets ≥44×44px, body text ≥16px (the auth card body copy uses `text-base`), no horizontal scroll at any width, and responsive nav is the shadcn `sidebar` primitive (off-canvas Sheet on mobile via `SidebarTrigger`, fixed rail on desktop) — not a custom toggle. Touch/responsive behavior is verified (resize + device emulation), not assumed.
 
+**Loading and motion** (Phase 15, 2026-11-15): the app has exactly three loading states, ported from the Board's reference file (`DOS Site Loader.html`, kept out of the repo). Nothing else animates for decoration.
+
+- **Page loader** (`components/shell/page-loader.tsx` + the `.dos-*` classes in `globals.css`): brand wordmark in `--font-brand` (the already-loaded Fraunces face, matching the reference's serif brand), optional role pill, 176×112 book whose halves are `--primary` and whose spark is `--accent`, sliding progress bar, and a status line cycling every 1800 ms inside a `role="status" aria-live="polite"` region. Used by the `loading.tsx` route segments and by the client auth gates (`RequireRole`, `NotFoundShell`). `fullScreen` owns the viewport; a route segment renders at `min-h-[60dvh]` so it doesn't shove the shell's chrome around.
+- **Skeleton**: the shared `Skeleton` primitive carries `.dos-shimmer` (left-to-right sweep tinted by `--dos-shimmer`), so no page defines its own shimmer.
+- **Busy button**: `components/ui/spinner.tsx` (`Spinner`, a ring drawn in `currentColor`) replaces the ad-hoc lucide `Loader2` busy icons; the label stays, the button is disabled.
+- **Tokens**: `--dos-shimmer` exists in both `:root` and `.dark`; every other colour in these states is an existing token from above. No raw hex, no gradient text.
+- **Reduced motion**: `prefers-reduced-motion: reduce` stills all three states (third leaf pre-flipped, bar held at 60%, sweep and ring stopped) while keeping the layout identical — a loader frozen at 0% reads as a hang, not as calm. The loader rules are deliberately unlayered so they beat the global `@layer base` duration reset; if you re-layer them, the fallback silently stops working.
+- **Scoped exception**: `.dos-page-loader`'s radial wash is the only gradient background outside the khatam lattice. It comes from the supplied reference and exists only inside the loader — don't copy it onto any other surface.
+
 ## 13. Changelog against original docs
 
 - Added `quiz_attempts.released_at` and `semester_settings` — not in `DOS-Site-Database-Schema.sql`, both needed to implement resolved decisions #10 and #11 above.
 - Post-UTME conversion formula (`raw / 2`) is a placeholder pending explicit Board confirmation — everything else in this document is resolved and final for MVP scope.
 - Added §7a (Student deactivate / hard delete, Board decision 2026-11-15) and tightened §7 step 6: `requireAuth()` now re-reads the account row, so a deactivated or deleted account is rejected on its next request instead of continuing to work until token expiry.
+- Added the §12 "Loading and motion" subsection (Phase 15, 2026-11-15): three loading states only — page loader, skeleton shimmer, busy-button spinner — with `--dos-shimmer` as the single new token, `--font-brand` (Fraunces) for the wordmark, and a `prefers-reduced-motion` fallback that keeps layout while stopping motion. Records the loader's radial wash as the one scoped exception to the "no competing gradients" identity rule.
 - Added `quizzes.opens_at` / `quizzes.closes_at` (nullable, plus a `quizzes_window_check` CHECK constraint) — not in `DOS-Site-Database-Schema.sql`. Needed to implement the 2026-09-28 Board amendment to resolved decision #6, which made the weekly Course Quiz window Admin-overridable instead of fixed. Resolution lives in `lib/quizzes/window.ts` (`resolveCourseQuizWindow`); the API is `PATCH /api/admin/quizzes/[id]/window`, Admin-only, Course Quizzes only (Topic Quizzes have no window → 409).

@@ -1,5 +1,13 @@
 import { z } from "zod";
 
+export const quizListFiltersSchema = z.object({
+  search: z.string().trim().max(200).default(""),
+  type: z.enum(["topic", "course"]).optional(),
+  status: z.enum(["draft", "published"]).optional(),
+  courseId: z.coerce.number().int().positive().optional(),
+});
+export type QuizListFilters = z.infer<typeof quizListFiltersSchema>;
+
 const nullableInt = z.union([z.coerce.number().int().min(1), z.null()]);
 
 export const quizCreateSchema = z

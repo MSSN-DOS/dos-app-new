@@ -26,11 +26,3 @@ export function AuthCard({ title, children }: { title: string; children: ReactNo
     </main>
   );
 }
-
-export function FullPageLoading() {
-  return (
-    <main className="flex min-h-dvh items-center justify-center bg-background">
-      <p className="text-muted-foreground">Loading…</p>
-    </main>
-  );
-}

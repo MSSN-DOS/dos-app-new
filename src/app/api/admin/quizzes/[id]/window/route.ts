@@ -5,6 +5,7 @@ import { ZodError } from "zod";
 import { errorResponse } from "@/lib/api/response";
 import { requireAuth } from "@/lib/auth/guard";
 import { getDb } from "@/lib/db";
+import { quizHasAttempts } from "@/lib/db/quiz-builder";
 import { quizzes } from "@/lib/db/schema";
 import { resolveCourseQuizWindow } from "@/lib/quizzes/window";
 import { quizWindowSchema, type QuizWindowInput } from "@/lib/validation/quizzes";
@@ -28,12 +29,18 @@ function validationError(err: ZodError): NextResponse {
 
 class NotFoundError extends Error {}
 class NotACourseQuizError extends Error {}
+class AttemptedQuizError extends Error {}
 
 async function setWindow(
   db: ReturnType<typeof getDb>,
   id: number,
   input: QuizWindowInput,
-): Promise<{ id: number; opensAt: Date | null; closesAt: Date | null; effective: { opensAt: string; closesAt: string } | null }> {
+): Promise<{
+  id: number;
+  opensAt: Date | null;
+  closesAt: Date | null;
+  effective: { opensAt: string; closesAt: string } | null;
+}> {
   const existing = await db
     .select({
       id: quizzes.id,
@@ -47,12 +54,14 @@ async function setWindow(
   const quiz = existing[0];
   if (!quiz) throw new NotFoundError();
   if (quiz.quizType !== "course") throw new NotACourseQuizError();
+  if (await quizHasAttempts(db, quiz)) throw new AttemptedQuizError();
 
   const [updated] = await db
     .update(quizzes)
     .set({ opensAt: input.opensAt, closesAt: input.closesAt, scheduleEnabled: false })
-    .where(and(eq(quizzes.id, id)))
+    .where(and(eq(quizzes.id, id), eq(quizzes.attemptsStarted, false)))
     .returning({ id: quizzes.id, opensAt: quizzes.opensAt, closesAt: quizzes.closesAt });
+  if (!updated) throw new AttemptedQuizError();
 
   const effective = quiz.weekStart
     ? resolveCourseQuizWindow(quiz.weekStart, {
@@ -66,7 +75,10 @@ async function setWindow(
     opensAt: updated?.opensAt ?? null,
     closesAt: updated?.closesAt ?? null,
     effective: effective
-      ? { opensAt: effective.opensAt.toISOString(), closesAt: effective.closesAt.toISOString() }
+      ? {
+          opensAt: effective.opensAt.toISOString(),
+          closesAt: effective.closesAt.toISOString(),
+        }
       : null,
   };
 }
@@ -88,7 +100,12 @@ export async function PATCH(
     const id = Number.parseInt((await params).id, 10);
     if (!Number.isInteger(id) || id < 1) {
       return NextResponse.json(
-        { error: { code: "VALIDATION_ERROR", message: "Quiz id must be a positive integer" } },
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Quiz id must be a positive integer",
+          },
+        },
         { status: 422 },
       );
     }

@@ -4,7 +4,8 @@ import { QuizAuthoringError } from "@/lib/api/quiz-authoring";
 import type { AuthContext } from "@/lib/auth/guard";
 import { getDb } from "@/lib/db";
 import { quizImages } from "@/lib/db/schema";
-import { editableQuiz, readQuizBuilder } from "./quiz-builder";
+import { editableQuiz, ownedQuiz, readQuizBuilder } from "./quiz-builder";
+import { getTeachingScope, isTrackAllowed } from "@/lib/auth/teaching-scope";
 import { MAX_QUIZ_IMAGE_BYTES, quizImageExtension, quizImagePaths } from "@/lib/quizzes/images";
 import { createQuizImageSignedUrl, removeQuizImageObject, uploadQuizImageObject } from "@/lib/storage/supabase-storage";
 
@@ -19,8 +20,14 @@ export async function uploadBuilderImage(id: number, auth: AuthContext, file: Bl
   catch (error) { await removeQuizImageObject(path); throw error; }
   return { path, url: await createQuizImageSignedUrl(path) };
 }
+export async function builderImageLinks(id: number, auth: AuthContext) {
+  const db = getDb(); await ownedQuiz(db, id, auth);
+  const rows = await db.select({ path: quizImages.objectPath }).from(quizImages).where(eq(quizImages.quizId, id)).orderBy(asc(quizImages.id));
+  return Promise.all(rows.map(async ({ path }) => ({ path, url: await createQuizImageSignedUrl(path) })));
+}
 export async function removeBuilderImage(id: number, auth: AuthContext, path: string) {
-  const db = getDb(); await editableQuiz(db, id, auth);
+  const db = getDb(); const quiz = await ownedQuiz(db, id, auth);
+  if (!isTrackAllowed(await getTeachingScope(db, auth), quiz)) throw new QuizAuthoringError(403, "This quiz is outside your teaching assignments");
   const rows = await db.select().from(quizImages).where(eq(quizImages.quizId, id)).orderBy(asc(quizImages.id));
   const image = rows.find((r) => r.objectPath === path);
   if (!image) throw new QuizAuthoringError(404, "Quiz image not found");

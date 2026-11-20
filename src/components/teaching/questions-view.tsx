@@ -3,18 +3,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
-  AlignLeft,
   Beaker,
-  FlaskConical,
   Calculator,
   Atom,
-  Check,
   ChevronLeft,
   ChevronRight,
-  ListChecks,
   Pencil,
   Trash2,
-  Sparkles,
   SearchX,
   Library,
   Filter,
@@ -48,7 +43,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -60,6 +54,9 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { BankTypeDialog, BANK_TYPE_LABELS } from "./bank-type-dialog";
+import { BankEditorDialog } from "./bank-editor-dialog";
+import type { BankQuestionKind } from "@/lib/validation/question-bank";
 import { useAuthoringSubjects } from "@/components/teaching/use-authoring-subjects";
 
 // ── types ────────────────────────────────────────────────────────────────────
@@ -68,7 +65,9 @@ interface QuestionRow {
   courseId: number | null;
   jambSubjectId: number | null;
   topicId: number | null;
-  questionType: "fill_in_gap" | "options";
+  questionType: "fill_in_gap" | "options" | "essay";
+  passageId?: number | null;
+  kind?: BankQuestionKind;
   bodyRichText: string;
   status: "draft" | "published";
 }
@@ -78,13 +77,11 @@ interface QuestionDetail extends QuestionRow {
 }
 interface TopicOptionRow { id: number; title: string }
 type QuestionType = "fill_in_gap" | "options";
-type TrackMode = "course" | "jamb";
 
 const TYPE_LABEL: Record<QuestionType, string> = { fill_in_gap: "Fill-in-gap", options: "Options" };
 const NONE = "__none__";
 const ALL = "__all__";
 const PAGE_SIZE = 10;
-const OPTION_LETTERS = ["A", "B", "C", "D", "E", "F", "G", "H"];
 type PageMeta = { page: number; pageSize: number; total: number; totalPages: number };
 type PaginatedQuestions = { data: QuestionRow[]; meta: PageMeta };
 
@@ -161,7 +158,6 @@ export function QuestionsView() {
 
   const {
     courses,
-    jambSubjects: subjects,
     isPending: subjectsLoading,
     isError: subjectsError,
   } = useAuthoringSubjects();
@@ -173,6 +169,7 @@ export function QuestionsView() {
       if (filterType !== ALL) params.set("type", filterType);
       if (filterStatus !== ALL) params.set("status", filterStatus);
       if (unattachedOnly) params.set("unattachedOnly", "1");
+      params.set("groupPassages", "1");
       params.set("page", String(page));
       params.set("pageSize", String(PAGE_SIZE));
       const qs = params.toString();
@@ -273,137 +270,18 @@ export function QuestionsView() {
     },
   });
 
-  // ── editor state ─────────────────────────────────────────────────────────
+  // Question-bank creation and editing use the shared typed document editor.
   const [typePickerOpen, setTypePickerOpen] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [formType, setFormType] = useState<QuestionType>("fill_in_gap");
-  const [bodyRef] = useState(() => ({ current: null as HTMLDivElement | null }));
-  const [pendingBodyRef] = useState(() => ({ current: null as string | null }));
-  const [bodyText, setBodyText] = useState("");
-  const [blanks, setBlanks] = useState<string[]>([""]);
-  const [options, setOptions] = useState<{ text: string; correct: boolean }[]>([
-    { text: "", correct: true },
-    { text: "", correct: false },
-  ]);
-  const [track, setTrack] = useState<TrackMode>("course");
-  const [formCourseId, setFormCourseId] = useState("");
-  const [formTopicId, setFormTopicId] = useState(NONE);
-  const [formSubjectId, setFormSubjectId] = useState("");
-  const [formError, setFormError] = useState<string | null>(null);
-  const [activeToolbar, setActiveToolbar] = useState<"chemistry" | "physics" | "mathematics">("chemistry");
-
-  const topicsQuery = useQuery({
-    queryKey: ["teacher", "topics", formCourseId],
-    queryFn: async () => {
-      const res = await apiFetch<{ data: TopicOptionRow[] }>(`/teacher/topics?courseId=${encodeURIComponent(formCourseId)}`);
-      return [...res.data].sort((a, b) => a.title.localeCompare(b.title));
-    },
-    enabled: editorOpen && track === "course" && formCourseId !== "",
-  });
-
-  const runExec = (command: "bold" | "italic" | "underline" | "subscript" | "superscript" | "insertUnorderedList") => {
-    bodyRef.current?.focus();
-    document.execCommand(command);
-    setBodyText(bodyRef.current?.innerText ?? "");
-  };
-  const insertSymbol = (text: string) => {
-    bodyRef.current?.focus();
-    // insertText respects caret; fallback to insertHTML for safety
-    const ok = document.execCommand("insertText", false, text);
-    if (!ok) document.execCommand("insertHTML", false, text);
-    setBodyText(bodyRef.current?.innerText ?? "");
-  };
-
-  const resetEditor = () => {
-    setEditingId(null);
-    setFormType("fill_in_gap");
-    setBodyText("");
-    setBlanks([""]);
-    setOptions([{ text: "", correct: true }, { text: "", correct: false }]);
-    setTrack("course");
-    setFormCourseId("");
-    setFormTopicId(NONE);
-    setFormSubjectId("");
-    setFormError(null);
-    setActiveToolbar("chemistry");
-  };
-  const openAdd = () => {
-    resetEditor();
-    if (bodyRef.current) bodyRef.current.innerHTML = "";
-    setBodyText("");
-    setTypePickerOpen(true);
-  };
-  const pickType = (t: QuestionType) => {
-    setFormType(t);
-    setTypePickerOpen(false);
-    setEditorOpen(true);
-  };
-  const openEdit = async (q: QuestionRow) => {
-    setFormError(null);
-    try {
-      const detail = await apiFetch<QuestionDetail>(`/teacher/questions/${q.id}`);
-      setEditingId(q.id);
-      setFormType(q.questionType);
-      setBlanks(detail.blanks.length > 0 ? detail.blanks.map((b) => b.acceptedAnswer) : [""]);
-      setOptions(
-        detail.options.length > 0
-          ? detail.options.map((o) => ({ text: o.optionText, correct: o.isCorrect }))
-          : [{ text: "", correct: true }, { text: "", correct: false }],
-      );
-      if (detail.jambSubjectId !== null) {
-        setTrack("jamb");
-        setFormSubjectId(String(detail.jambSubjectId));
-        setFormCourseId("");
-        setFormTopicId(NONE);
-      } else {
-        setTrack("course");
-        setFormCourseId(detail.courseId !== null ? String(detail.courseId) : "");
-        setFormTopicId(detail.topicId !== null ? String(detail.topicId) : NONE);
-        setFormSubjectId("");
-      }
-      setEditorOpen(true);
-      pendingBodyRef.current = detail.bodyRichText ?? "";
-    } catch (err) {
-      setFormError(null);
-      setActionError(err instanceof ApiError ? err.message : "Could not load the question.");
-    }
-  };
-
-  const buildBody = (status: "draft" | "published") =>
-    JSON.stringify({
-      questionType: formType,
-      bodyRichText: sanitizeRichText(bodyRef.current?.innerHTML ?? ""),
-      courseId: track === "course" && formCourseId !== "" ? Number(formCourseId) : null,
-      jambSubjectId: track === "jamb" && formSubjectId !== "" ? Number(formSubjectId) : null,
-      topicId: track === "course" && formTopicId !== NONE ? Number(formTopicId) : null,
-      status,
-      options: formType === "options" ? options.map((o) => ({ optionText: o.text, isCorrect: o.correct })) : [],
-      blanks: formType === "fill_in_gap" ? blanks.map((b) => ({ acceptedAnswer: b })) : [],
-    });
-
-  const saveMutation = useMutation({
-    mutationFn: async (input: { status: "draft" | "published" }) => {
-      const body = buildBody(input.status);
-      if (editingId === null) return apiFetch<QuestionDetail>("/teacher/questions", { method: "POST", body });
-      return apiFetch<QuestionDetail>(`/teacher/questions/${editingId}`, { method: "PATCH", body });
-    },
-    onSuccess: (_data, input) => {
-      void queryClient.invalidateQueries({ queryKey: ["teacher", "questions"] });
-      setEditorOpen(false);
-      toast.success(input.status === "published" ? "Question published" : "Question saved as draft");
-    },
-    onError: (err: unknown) => {
-      const msg = err instanceof ApiError ? err.message : "Could not save the question.";
-      setFormError(msg);
-      toast.error(msg);
-    },
-  });
+  const [editingId, setEditingId] = useState<number | undefined>();
+  const [bankPreset, setBankPreset] = useState<BankQuestionKind>("fill_in_gap");
+  const openAdd = () => { setEditingId(undefined); setTypePickerOpen(true); };
+  const openEdit = (question: QuestionRow) => { setEditingId(question.id); setBankPreset(question.kind ?? (question.passageId ? "passage" : question.questionType)); setEditorOpen(true); };
 
   const [deleteTarget, setDeleteTarget] = useState<QuestionRow | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const deleteMutation = useMutation({
-    mutationFn: async (id: number) => apiFetch<void>(`/teacher/questions/${id}`, { method: "DELETE" }),
+    mutationFn: async (id: number) => apiFetch<void>(`/teacher/questions/${id}/document`, { method: "DELETE" }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["teacher", "questions"] });
       setDeleteTarget(null);
@@ -415,19 +293,6 @@ export function QuestionsView() {
       toast.error(msg);
     },
   });
-
-  const hasTrack = (track === "course" && formCourseId !== "") || (track === "jamb" && formSubjectId !== "");
-  const blockers: string[] = [];
-  if (!hasTrack) blockers.push("Pick a course or a JAMB subject.");
-  if (bodyText.trim() === "") blockers.push("Write the question text.");
-  if (formType === "options") {
-    if (options.length < 2) blockers.push("Options questions need at least two options.");
-    if (options.some((o) => o.text.trim() === "")) blockers.push("Every option needs text.");
-    if (options.filter((o) => o.correct).length !== 1) blockers.push("Mark exactly one option as correct.");
-  } else {
-    if (blanks.length < 1) blockers.push("Fill-in-gap needs at least one blank.");
-    if (blanks.some((b) => b.trim() === "")) blockers.push("Every blank needs an accepted answer.");
-  }
 
   const filtersActive = filterCourse !== ALL || filterType !== ALL || filterStatus !== ALL;
   const paginated = questionsQuery.data;
@@ -514,8 +379,11 @@ export function QuestionsView() {
             </SelectTrigger>
             <SelectContent className="border-line bg-panel text-ink">
               <SelectItem value={ALL}>All types</SelectItem>
-              <SelectItem value="fill_in_gap">Fill-in-gap</SelectItem>
-              <SelectItem value="options">Options</SelectItem>
+              <SelectItem value="true_false">True or False</SelectItem>
+              <SelectItem value="options">Multiple choice</SelectItem>
+              <SelectItem value="fill_in_gap">Fill in the gap</SelectItem>
+              <SelectItem value="passage">Passage</SelectItem>
+              <SelectItem value="essay">Essay</SelectItem>
             </SelectContent>
           </Select>
           <Select value={filterStatus} onValueChange={(v) => { setFilterStatus(v); setPage(1); }}>
@@ -597,7 +465,7 @@ export function QuestionsView() {
                     <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${q.status === "published" ? "bg-brand text-white" : "border border-line bg-canvas text-sub"}`}>{q.status}</span>
                   </div>
                   <div className="mt-3 flex items-center justify-between">
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-canvas px-2.5 py-1 text-[11px] font-medium text-sub">{TYPE_LABEL[q.questionType]}</span>
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-canvas px-2.5 py-1 text-[11px] font-medium text-sub">{BANK_TYPE_LABELS[q.kind ?? (q.passageId ? "passage" : q.questionType)]}</span>
                     <span className="flex gap-1">
                       <Button variant="ghost" size="sm" className="min-h-9 rounded-xl bg-canvas text-ink hover:bg-line hover:text-white" onClick={() => void openEdit(q)}><Pencil className="size-3.5" />Edit</Button>
                       <Button variant="ghost" size="sm" className="min-h-9 rounded-xl text-ruby hover:bg-ruby/10 hover:text-ruby" onClick={() => { setActionError(null); setDeleteTarget(q); }}><Trash2 className="size-3.5" />Delete</Button>
@@ -621,7 +489,7 @@ export function QuestionsView() {
                   {paginated!.data.map((q) => (
                     <TableRow key={q.id} className="border-line hover:bg-canvas/40">
                       <TableCell className="max-w-[34rem] truncate text-[14px] font-medium text-ink">{stripTags(q.bodyRichText) || "(empty draft)"}</TableCell>
-                      <TableCell><span className="rounded-full border border-line bg-canvas px-2.5 py-1 text-xs font-medium text-sub">{TYPE_LABEL[q.questionType]}</span></TableCell>
+                      <TableCell><span className="rounded-full border border-line bg-canvas px-2.5 py-1 text-xs font-medium text-sub">{BANK_TYPE_LABELS[q.kind ?? (q.passageId ? "passage" : q.questionType)]}</span></TableCell>
                       <TableCell><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${q.status === "published" ? "bg-brand text-white" : "border border-line bg-canvas text-sub"}`}>{q.status === "published" ? "Published" : "Draft"}</span></TableCell>
                       <TableCell className="text-right">
                         <span className="inline-flex gap-1">
@@ -646,301 +514,8 @@ export function QuestionsView() {
         </div>
       )}
 
-      {/* ── type picker ───────────────────────────────────────────────── */}
-      <Dialog open={typePickerOpen} onOpenChange={setTypePickerOpen}>
-        <DialogContent className="w-[calc(100vw-1.5rem)] border-line bg-panel text-ink sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="text-base font-bold text-ink" style={{ fontFamily: "var(--font-fraunces), serif" }}>Choose question type</DialogTitle>
-            <DialogDescription className="text-xs leading-relaxed text-sub">How should the student answer? This is fixed once the question is saved.</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <button
-              type="button"
-              onClick={() => pickType("fill_in_gap")}
-              className="group flex flex-col items-start gap-2 rounded-2xl border border-line bg-canvas p-4 text-left transition-colors hover:border-brand/50 hover:bg-brand/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-            >
-              <span className="inline-flex size-10 items-center justify-center rounded-xl bg-brand/10 text-brand transition-colors group-hover:bg-brand group-hover:text-white"><AlignLeft className="size-5" /></span>
-              <span className="text-sm font-bold text-ink">Fill in the gap</span>
-              <span className="text-[11px] leading-relaxed text-sub">A sentence with one or more blanks. Graded on an exact, case-insensitive match.</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => pickType("options")}
-              className="group flex flex-col items-start gap-2 rounded-2xl border border-line bg-canvas p-4 text-left transition-colors hover:border-brand/50 hover:bg-brand/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-            >
-              <span className="inline-flex size-10 items-center justify-center rounded-xl bg-brand/10 text-brand transition-colors group-hover:bg-brand group-hover:text-white"><ListChecks className="size-5" /></span>
-              <span className="text-sm font-bold text-ink">Multiple choice</span>
-              <span className="text-[11px] leading-relaxed text-sub">One question with two or more options. Exactly one is marked correct.</span>
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── editor dialog ─────────────────────────────────────────────── */}
-      <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
-        <DialogContent className="flex max-h-[92vh] w-[calc(100vw-1.5rem)] flex-col gap-0 overflow-hidden border-line bg-panel p-0 text-ink sm:max-w-3xl">
-          <DialogHeader className="shrink-0 gap-3 border-b border-line px-4 pb-3.5 pr-12 pt-4 text-left sm:px-5">
-            <div className="flex items-start gap-3">
-              <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl bg-brand font-mono text-xs font-bold text-white">
-                {editingId === null ? <Plus className="size-4" /> : `#${editingId}`}
-              </span>
-              <div className="min-w-0 flex-1">
-                <DialogTitle className="text-base font-bold leading-tight text-ink" style={{ fontFamily: "var(--font-fraunces), serif" }}>
-                  {editingId === null ? "Add a question" : `Question #${editingId}`}
-                </DialogTitle>
-                <DialogDescription className="mt-1 text-[11px] leading-relaxed text-sub">
-                  Drafts save anytime. Publishing enforces every required field.
-                </DialogDescription>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-brand/30 bg-brand/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-brand">
-                {formType === "fill_in_gap" ? <AlignLeft className="size-3" /> : <ListChecks className="size-3" />}
-                {TYPE_LABEL[formType]}
-              </span>
-              {editingId === null && (
-                <button
-                  type="button"
-                  onClick={() => setTypePickerOpen(true)}
-                  className="inline-flex min-h-7 items-center rounded-full border border-line bg-canvas px-2.5 text-[10px] font-semibold text-sub transition-colors hover:border-brand/40 hover:text-brand"
-                >
-                  Change type
-                </button>
-              )}
-            </div>
-          </DialogHeader>
-
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
-          <div className="grid gap-5">
-            {/* rich text + toolbar */}
-            <div className="grid gap-2">
-              <Label htmlFor="question-body" className="text-xs font-semibold uppercase tracking-wide text-sub" style={{ fontFamily: "JetBrains Mono, monospace" }}>Question text</Label>
-
-              {/* toolbar */}
-              <div className="overflow-hidden rounded-2xl border border-line bg-canvas">
-                {/* format row */}
-                <div className="flex flex-wrap items-center gap-1 border-b border-line bg-sunk px-2 py-2">
-                  <span className="mr-1 hidden text-[10px] font-bold uppercase tracking-[0.12em] text-faint sm:inline" style={{ fontFamily: "JetBrains Mono, monospace" }}>Format</span>
-                  <div className="flex gap-1">
-                    <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => runExec("bold")} aria-label="Bold" className="inline-flex size-8 items-center justify-center rounded-lg border border-line bg-panel text-sm font-bold text-ink hover:border-brand/40 hover:bg-line">B</button>
-                    <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => runExec("italic")} aria-label="Italic" className="inline-flex size-8 items-center justify-center rounded-lg border border-line bg-panel text-sm italic text-ink hover:border-brand/40 hover:bg-line">I</button>
-                    <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => runExec("underline")} aria-label="Underline" className="inline-flex size-8 items-center justify-center rounded-lg border border-line bg-panel text-sm underline text-ink hover:border-brand/40 hover:bg-line">U</button>
-                    <span className="mx-1 h-8 w-px bg-line" />
-                    <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => runExec("subscript")} aria-label="Subscript" className="inline-flex size-8 items-center justify-center rounded-lg border border-line bg-panel text-xs font-semibold text-ink hover:border-brand/40 hover:bg-line">X₂</button>
-                    <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => runExec("superscript")} aria-label="Superscript" className="inline-flex size-8 items-center justify-center rounded-lg border border-line bg-panel text-xs font-semibold text-ink hover:border-brand/40 hover:bg-line">X²</button>
-                    <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => runExec("insertUnorderedList")} aria-label="Bullet list" className="hidden size-8 items-center justify-center rounded-lg border border-line bg-panel text-xs text-ink hover:border-brand/40 hover:bg-line sm:inline-flex">• ≡</button>
-                  </div>
-                </div>
-
-                {/* grouped science toolbars */}
-                <div className="space-y-3 p-3">
-                  {/* group tabs */}
-                  <div className="flex gap-1.5 overflow-x-auto pb-1">
-                    {(Object.keys(toolbarGroups) as Array<ToolbarKey>).map((k) => {
-                      const active = activeToolbar === k;
-                      return (
-                        <button
-                          key={k}
-                          type="button"
-                          onClick={() => setActiveToolbar(k)}
-                          className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${active ? "border-brand bg-brand text-white" : "border-line bg-panel text-sub hover:border-brand/30 hover:text-ink"}`}
-                        >
-                          {toolbarGroups[k].icon}
-                          {toolbarGroups[k].title}
-                          <span className={`hidden text-[10px] font-normal sm:inline ${active ? "text-white/70" : "text-faint"}`}>· {toolbarGroups[k].desc}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* active group palette */}
-                  <div className="rounded-xl border border-line bg-panel/70 p-2.5">
-                    <div className="mb-2 flex items-center gap-2">
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-canvas px-2 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-gold" style={{ fontFamily: "JetBrains Mono, monospace" }}>
-                        {toolbarGroups[activeToolbar].icon}
-                        {toolbarGroups[activeToolbar].title}
-                      </span>
-                      <span className="text-[11px] text-faint">{toolbarGroups[activeToolbar].desc} — tap to insert at caret</span>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {toolbarGroups[activeToolbar].glyphs.map((g) => (
-                        <button
-                          key={`${activeToolbar}-${g.label}-${g.hint}`}
-                          type="button"
-                          title={`${g.hint} — ${g.label}`}
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => insertSymbol(g.insert)}
-                          className="inline-flex min-h-8 min-w-8 items-center justify-center rounded-lg border border-line bg-canvas px-2.5 py-1 font-mono text-sm font-medium text-ink hover:border-brand/40 hover:bg-line hover:text-white active:scale-95"
-                        >
-                          {g.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* quick access: other two groups as compact rows */}
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {(Object.keys(toolbarGroups) as Array<ToolbarKey>)
-                      .filter((k) => k !== activeToolbar)
-                      .map((k) => (
-                        <div key={`compact-${k}`} className="rounded-xl border border-dashed border-line bg-canvas/50 px-2.5 py-2">
-                          <div className="mb-1.5 flex items-center justify-between">
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.1em] text-faint" style={{ fontFamily: "JetBrains Mono, monospace" }}>
-                              {toolbarGroups[k].icon} {toolbarGroups[k].title}
-                            </span>
-                            <button type="button" onClick={() => setActiveToolbar(k)} className="text-[10px] font-semibold text-brand hover:text-brand-soft">Open →</button>
-                          </div>
-                          <div className="flex flex-wrap gap-1">
-                            {toolbarGroups[k].glyphs.slice(0, 6).map((g) => (
-                              <button key={`mini-${k}-${g.label}`} type="button" title={g.hint} onMouseDown={(e) => e.preventDefault()} onClick={() => insertSymbol(g.insert)} className="inline-flex size-7 items-center justify-center rounded-md border border-line bg-panel font-mono text-xs text-sub hover:border-brand/30 hover:text-ink">{g.label}</button>
-                            ))}
-                            <span className="inline-flex size-7 items-center justify-center text-[10px] text-faint">+{toolbarGroups[k].glyphs.length - 6}</span>
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-
-                  <p className="flex items-center gap-1.5 text-[11px] leading-relaxed text-faint">
-                    <FlaskConical className="size-3 shrink-0" />
-                    Tip: highlight text then hit <span className="rounded bg-line px-1 py-0.5 font-mono text-ink">X₂</span> / <span className="rounded bg-line px-1 py-0.5 font-mono text-ink">X²</span> for sub/superscript — e.g. H<span className="text-[10px]">2</span>O, CO<span className="text-[10px]">3</span><sup className="text-[10px]">2−</sup>, x<span className="text-[10px]">2</span>.
-                  </p>
-                </div>
-              </div>
-
-              <div
-                ref={(el) => {
-                  bodyRef.current = el;
-                  if (el && pendingBodyRef.current !== null) {
-                    el.innerHTML = sanitizeRichText(pendingBodyRef.current);
-                    setBodyText(el.innerText);
-                    pendingBodyRef.current = null;
-                  }
-                }}
-                id="question-body"
-                role="textbox"
-                aria-multiline="true"
-                aria-label="Question text"
-                contentEditable
-                suppressContentEditableWarning
-                onInput={() => setBodyText(bodyRef.current?.innerText ?? "")}
-                data-placeholder="Write the stem… e.g. Balance: Fe + O₂ → Fe₂O₃"
-                className="min-h-[108px] w-full rounded-xl border border-line bg-canvas px-3 py-3 text-[15px] leading-6 text-ink placeholder:text-faint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand empty:before:text-faint empty:before:content-[attr(data-placeholder)]"
-              />
-              <p className="text-[11px] text-faint">{bodyText.length} characters · rich text (bold, sub/sup, lists) is preserved. Paste from Word/Google Docs is sanitized.</p>
-            </div>
-
-            {formType === "fill_in_gap" ? (
-              <section className="grid gap-2.5">
-                <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
-                  <Label className="text-xs font-bold uppercase tracking-[0.1em] text-sub" style={{ fontFamily: "JetBrains Mono, monospace" }}>Accepted answers</Label>
-                  <span className="text-[10px] text-faint">One per blank · exact match, case-insensitive</span>
-                </div>
-                {blanks.map((b, i) => (
-                  <div key={i} className="flex items-center gap-2 rounded-xl border border-line bg-panel p-2 transition-colors focus-within:border-brand/50">
-                    <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-line font-mono text-sm font-bold text-sub">{i + 1}</span>
-                    <Input type="text" maxLength={255} value={b} onChange={(e) => setBlanks(blanks.map((v, j) => (j === i ? e.target.value : v)))} placeholder={`Answer for blank ${i + 1} — e.g. ${i === 0 ? "H₂O" : "photosynthesis"}`} aria-label={`Accepted answer ${i + 1}`} className="min-h-11 flex-1 rounded-lg border-line bg-canvas text-ink placeholder:text-faint" />
-                    {blanks.length > 1 && <Button type="button" variant="ghost" size="sm" className="shrink-0 rounded-lg text-sub hover:bg-ruby/10 hover:text-ruby" onClick={() => setBlanks(blanks.filter((_, j) => j !== i))} aria-label={`Remove answer ${i + 1}`}><X className="size-4" /></Button>}
-                  </div>
-                ))}
-                <button type="button" onClick={() => setBlanks([...blanks, ""])} className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-line bg-transparent text-xs font-semibold text-sub transition-colors hover:border-brand/40 hover:bg-brand/5 hover:text-brand">
-                  <Plus className="size-3.5" /> Add another accepted answer
-                </button>
-              </section>
-            ) : (
-              <section className="grid gap-2.5">
-                <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
-                  <Label className="text-xs font-bold uppercase tracking-[0.1em] text-sub" style={{ fontFamily: "JetBrains Mono, monospace" }}>Options</Label>
-                  <span className="text-[10px] text-faint">Exactly one is correct</span>
-                </div>
-                {options.map((o, i) => (
-                  <div key={i} className={`flex flex-col gap-2 rounded-xl border p-2 transition-colors sm:flex-row sm:items-center ${o.correct ? "border-brand/50 bg-brand/5" : "border-line bg-panel"}`}>
-                    <div className="flex min-w-0 flex-1 items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setOptions(options.map((v, j) => ({ ...v, correct: j === i })))}
-                        aria-pressed={o.correct}
-                        aria-label={`Mark option ${OPTION_LETTERS[i] ?? i + 1} correct`}
-                        className={`inline-flex size-9 shrink-0 items-center justify-center rounded-lg font-mono text-sm font-bold transition-colors ${o.correct ? "bg-brand text-white" : "bg-line text-sub hover:bg-edge hover:text-ink"}`}
-                      >
-                        {OPTION_LETTERS[i] ?? i + 1}
-                      </button>
-                      <Input type="text" maxLength={1000} value={o.text} onChange={(e) => setOptions(options.map((v, j) => (j === i ? { ...v, text: e.target.value } : v)))} placeholder={`Option ${OPTION_LETTERS[i] ?? i + 1}`} aria-label={`Option ${OPTION_LETTERS[i] ?? i + 1}`} className="min-h-11 flex-1 rounded-lg border-line bg-canvas text-ink placeholder:text-faint" />
-                    </div>
-                    <div className="flex items-center gap-1 pl-11 sm:pl-0">
-                      {o.correct ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-brand px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-white"><Check className="size-3" /> Correct</span>
-                      ) : (
-                        <button type="button" onClick={() => setOptions(options.map((v, j) => ({ ...v, correct: j === i })))} className="inline-flex min-h-9 items-center rounded-lg px-2 text-[10px] font-bold uppercase tracking-[0.08em] text-faint transition-colors hover:bg-brand/10 hover:text-brand">Select as answer</button>
-                      )}
-                      {options.length > 2 && <Button type="button" variant="ghost" size="sm" className="shrink-0 rounded-lg text-sub hover:bg-ruby/10 hover:text-ruby" onClick={() => setOptions(options.filter((_, j) => j !== i))} aria-label={`Remove option ${OPTION_LETTERS[i] ?? i + 1}`}><X className="size-4" /></Button>}
-                    </div>
-                  </div>
-                ))}
-                <button type="button" onClick={() => setOptions([...options, { text: "", correct: false }])} className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-line bg-transparent text-xs font-semibold text-sub transition-colors hover:border-brand/40 hover:bg-brand/5 hover:text-brand">
-                  <Plus className="size-3.5" /> Add new option
-                </button>
-              </section>
-            )}
-
-            <div className="grid gap-3 rounded-2xl border border-line bg-canvas p-4">
-              <Label className="text-xs font-bold uppercase tracking-[0.1em] text-sub" style={{ fontFamily: "JetBrains Mono, monospace" }}>Belongs to</Label>
-              <div className="grid grid-cols-2 gap-2 rounded-xl bg-panel p-1">
-                <button type="button" onClick={() => setTrack("course")} aria-pressed={track === "course"} className={`min-h-10 rounded-lg text-sm font-semibold transition-colors ${track === "course" ? "bg-brand text-white" : "text-sub hover:text-ink"}`}>Course / Topic</button>
-                <button type="button" onClick={() => setTrack("jamb")} aria-pressed={track === "jamb"} className={`min-h-10 rounded-lg text-sm font-semibold transition-colors ${track === "jamb" ? "bg-brand text-white" : "text-sub hover:text-ink"}`}>JAMB subject</button>
-              </div>
-              {track === "course" ? (
-                <div className="grid gap-2">
-                  <Select value={formCourseId} onValueChange={(v) => { setFormCourseId(v); setFormTopicId(NONE); }}>
-                    <SelectTrigger aria-label="Course" className="min-h-11 w-full rounded-xl border-line bg-panel text-ink"><SelectValue placeholder="Select a course" /></SelectTrigger>
-                    <SelectContent className="border-line bg-panel text-ink">
-                      {courses.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.code} — {c.title}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  <Select value={formTopicId} onValueChange={setFormTopicId} disabled={formCourseId === ""}>
-                    <SelectTrigger aria-label="Topic (optional)" className="min-h-11 w-full rounded-xl border-line bg-panel text-ink"><SelectValue placeholder="Topic (optional)" /></SelectTrigger>
-                    <SelectContent className="border-line bg-panel text-ink">
-                      <SelectItem value={NONE}>No topic</SelectItem>
-                      {(topicsQuery.data ?? []).map((t) => <SelectItem key={t.id} value={String(t.id)}>{t.title}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              ) : (
-                <Select value={formSubjectId} onValueChange={setFormSubjectId}>
-                  <SelectTrigger aria-label="JAMB subject" className="min-h-11 w-full rounded-xl border-line bg-panel text-ink"><SelectValue placeholder="Select a JAMB subject" /></SelectTrigger>
-                  <SelectContent className="border-line bg-panel text-ink">
-                    {subjects.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
-
-            {formError && <p role="alert" className="rounded-xl border border-ruby/30 bg-ruby/10 px-3 py-2 text-sm text-ruby">{formError}</p>}
-          </div>
-          </div>
-
-          <DialogFooter className="mx-0 mb-0 shrink-0 flex-col gap-2 rounded-none border-t border-line bg-canvas/60 px-4 py-3 sm:flex-row sm:justify-between sm:px-5">
-            <div className="min-w-0 flex-1">
-              {blockers.length > 0 ? (
-                <div>
-                  <p className="flex items-center gap-1.5 text-[11px] font-bold text-gold">
-                    <AlertCircle className="size-3.5 shrink-0" />
-                    {blockers.length} thing{blockers.length === 1 ? "" : "s"} needed before publishing
-                  </p>
-                  <ul className="mt-1 max-h-20 space-y-0.5 overflow-y-auto pl-5 text-[11px] leading-relaxed text-gold/90">
-                    {blockers.map((r) => <li key={r} className="list-disc">{r}</li>)}
-                  </ul>
-                </div>
-              ) : (
-                <p className="flex items-center gap-1.5 text-[11px] font-semibold text-brand"><Check className="size-3.5 shrink-0" /> Ready to publish</p>
-              )}
-            </div>
-            <div className="flex w-full shrink-0 gap-2 sm:w-auto">
-              <Button variant="outline" onClick={() => saveMutation.mutate({ status: "draft" })} disabled={saveMutation.isPending} className="min-h-11 flex-1 rounded-xl border-line bg-panel text-ink hover:bg-line sm:min-h-10 sm:flex-none">{saveMutation.isPending ? "Saving…" : "Save as draft"}</Button>
-              <Button onClick={() => saveMutation.mutate({ status: "published" })} disabled={saveMutation.isPending || blockers.length > 0} className="min-h-11 flex-1 rounded-xl bg-brand text-white hover:bg-brand-hover disabled:opacity-40 sm:min-h-10 sm:flex-none"><Sparkles className="size-4" /> Publish</Button>
-            </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <BankTypeDialog open={typePickerOpen} onOpenChange={setTypePickerOpen} onChoose={kind => { setBankPreset(kind); setEditingId(undefined); setEditorOpen(true); }} />
+      <BankEditorDialog open={editorOpen} onOpenChange={setEditorOpen} preset={bankPreset} questionId={editingId} onSaved={() => { setEditorOpen(false); void queryClient.invalidateQueries({ queryKey: ["teacher", "questions"] }); void queryClient.invalidateQueries({ queryKey: ["bank-document"] }); }} />
 
       {/* ── bulk add dialog ───────────────────────────────────────────── */}
       <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
@@ -1133,7 +708,7 @@ export function QuestionsView() {
       <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent className="border-line bg-panel text-ink">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-ink">Delete this question?</AlertDialogTitle>
+            <AlertDialogTitle className="text-ink">{deleteTarget?.passageId ? "Delete this passage and its sub-questions?" : "Delete this question?"}</AlertDialogTitle>
             <AlertDialogDescription className="text-sub">This cannot be undone. Deletion is blocked if any quiz or recorded answer still references this question.</AlertDialogDescription>
           </AlertDialogHeader>
           {actionError && <p role="alert" className="rounded-lg border border-ruby/30 bg-ruby/10 px-3 py-2 text-sm text-ruby">{actionError}</p>}

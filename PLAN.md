@@ -75,6 +75,60 @@ PDF/article resource uploads.
 - **P12-8** Wire Teacher/Admin pages, quiz details, sticky draft/publish actions with
   inline errors and blocker summary, student preview and runtime behavior. Update
   the page specs and verify mobile layout, keyboard access and both themes.
+- **P12-9** Complete functional integration on the confirmed development database:
+  verify draft/publish persistence, private Storage, defaults, attempts, weighted
+  grading, manual essays and Admin release. Fix failures with regression tests.
+  Use isolated synthetic records and exact-ID cleanup. Do not deploy production.
+- **P12-10** Mobile-first quiz authoring UI (scope expanded by the Board, 2026-11-16).
+  Preserve the verified shadcn switch correction with separate 44px clickable labels.
+  Apply the supplied Quizboot.html layout to the Teacher/Admin quiz list and builder:
+  compact rows, search/filter chips, Questions/Settings/Results tabs, a summary panel
+  and compact question cards. Make the shared Add Question chooser a scrollable phone
+  sheet and centered desktop dialog. Reuse the five supported types, private images,
+  grading/release rules, DOS theme tokens and existing APIs. No auto-save claim,
+  unpublish, multi-answer/numeric types or print/PDF functionality is added.
+  Correct the existing Teacher header's tablet overflow with compact, accessible
+  navigation labels; keep the current shell and routes.
+  Restore known-clean tooling configs and quarantine detected auto-run artifacts as
+  a prerequisite for safe verification. Test meaningful interactions first, then run
+  lint/typecheck and the full suite once; verify mobile/tablet/desktop and both themes.
+  This explicitly requested follow-up is independent of deployment and logo tasks.
+
+- **P12-11** Complete the reference's authoring features (Board expansion, 2026-11-16).
+  This explicit follow-up may proceed independently of deployment/logo tasks.
+  Add Multi-answer and Numeric questions end to end, exact-set objective grading,
+  finite numeric answers with absolute tolerance and display units, question-level
+  option shuffling, limited/unlimited attempts, the floating Add question dropdown,
+  bank multi-selection and validated bulk paste, reliable draft autosave and editable
+  header title, math/chemistry palettes, released-data result charts, question-paper
+  Print/PDF with optional answer key, and Unpublish. Keep the five previous authoring
+  types, private images, DOS tokens, phone-first layouts and Admin score release.
+  The latest Board answers supersede earlier exclusions and single-select-only rules
+  for the new Multi-answer type; ordinary Multiple choice stays single-select.
+  Use additive generated migrations, shared Zod, existing JWT/Drizzle/TanStack APIs,
+  colocated endpoint tests and meaningful grading/autosave/export tests. Track the
+  detailed work in QUIZ-UI-TODO.md. Unpublish with recorded attempts requires the
+  confirmed lifecycle: hide new access, finish started attempts, permanently lock
+  attempted content. The later QUIZBOOT_SPEC.md corrects the UI: simplify settings,
+  progressive More/Advanced panels, single expanded card, inline gaps, structured
+  science templates, resized pasted images, and paginated A4 preview/direct PDF.
+  Keep DOS tokens/accessibility and previously confirmed release/history rules.
+
+## Phase 14 — Question-bank types and private images (2026-11-15)
+
+The Board explicitly requests the reference type modal in the question bank only,
+with all five types and private images functional. This work may proceed independently
+of Phase 13 and deployment. Reuse the existing question/passage models, shared
+validation, Tiptap/KaTeX, shadcn primitives and Teacher/Admin ownership rules.
+
+- **P14-1** Shared bank draft/publish document schemas, private image schema and
+  generated migration, with validation tests.
+- **P14-2** Transactional bank document APIs and private image upload/renew/delete
+  APIs; preserve legacy bank endpoints and test auth, scope, validation and conflicts.
+- **P14-3** Reference card modal and functional bank editor for True/False, Multiple
+  choice, Fill in the gap, Passage and manual Essay; images and draft/publish actions.
+- **P14-4** Verify persistence, image access, editing and quiz reuse, mobile layout,
+  keyboard/modal behavior, both themes, lint/typecheck/tests; update tracking/docs.
 
 ## Phase 3 — Question bank & quizzes (Teacher)
 
@@ -149,6 +203,33 @@ nothing, so their records are deleted with them.
   that historical leaderboard rows for past weeks will change because rankings are computed live.
 - **P13-5** Endpoint tests for the two new handlers plus the status filter: 401, 403, happy paths,
   Zod → 422 with `error.details`, 404 for an unknown or non-Student id.
+
+---
+
+## Phase 15 — Loading states (2026-11-15)
+
+Board supplied a reference file (`DOS Site Loader.html`) showing three loading states — a page
+loader (turning book, bobbing spark, sliding progress bar, cycling status line), a left-to-right
+shimmer skeleton, and a busy button with an inline spinner. This phase ports exactly those three
+states; it does not invent new motion beyond what the reference shows. All colour resolves to
+`DESIGN.md` §12 tokens and every animation is switched off under `prefers-reduced-motion: reduce`.
+
+- **P15-1** Motion foundation in `globals.css`: `--dos-shimmer` token in `:root` and `.dark`, the
+  `--font-brand` family, keyframes (`dos-flip`, `dos-bob`, `dos-slide`, `dos-sweep`, `dos-rot`) and
+  the unlayered `.dos-*` classes, with an explicit reduced-motion override (third leaf pre-flipped,
+  progress bar held at 60%, shimmer sweep hidden).
+- **P15-2** `PageLoader` in `components/shell/` — brand + optional role pill, book, progress bar and
+  status line cycling every 1800 ms inside a `role="status" aria-live="polite"` region, with
+  `fullScreen` for gates and a shorter block height for route segments.
+- **P15-3** Route-transition `loading.tsx` files for the root, Admin, Teacher and Student/Aspirant
+  segments, and replace the client-side auth-gate placeholders (`RequireRole`, `NotFoundShell`) with
+  `PageLoader`. Delete the unused `FullPageLoading` export rather than keeping two loaders.
+- **P15-4** Switch the shared `Skeleton` primitive to the shimmer sweep so every existing skeleton
+  caller gets it without per-page work.
+- **P15-5** `Spinner` atom in `components/ui/` and swap the ad-hoc lucide `Loader2` busy icons on the
+  submit buttons (login, register, onboarding, password, identifiers) for it.
+- **P15-6** Unit tests for the pure status-message rotation and the loader render (live region, tick
+  advance, role pill, `fullScreen` height), plus `DESIGN.md` §12 motion notes.
 
 ---
 

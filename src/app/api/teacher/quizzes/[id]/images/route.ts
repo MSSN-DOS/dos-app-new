@@ -1,9 +1,15 @@
 import { NextResponse } from "next/server";
 import { QuizAuthoringError, quizAuthoringErrorResponse, quizAuthoringId, requestJson } from "@/lib/api/quiz-authoring";
 import { requireAuth } from "@/lib/auth/guard";
-import { removeBuilderImage, uploadBuilderImage } from "@/lib/db/quiz-images";
+import { builderImageLinks, removeBuilderImage, uploadBuilderImage } from "@/lib/db/quiz-images";
 // Path validation is shared by the persisted cover field; ownership is checked in the DB layer.
-import { quizImageRemovalSchema, quizImageUploadSchema } from "@/lib/validation/quiz-images";
+import { quizImageLinksSchema, quizImageRemovalSchema, quizImageUploadSchema } from "@/lib/validation/quiz-images";
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const auth = await requireAuth(request, ["admin", "teacher"]);
+    return NextResponse.json({ data: quizImageLinksSchema.parse(await builderImageLinks(quizAuthoringId((await params).id), auth)) });
+  } catch (error) { return quizAuthoringErrorResponse(error); }
+}
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const auth = await requireAuth(request, ["admin", "teacher"]);
