@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { issueLabel, issueTarget, questionProgress } from "./publish-issues";
+import { issueLabel, issueTarget, questionProgress } from "../../components/teaching/publish-issues";
 
 describe("issueTarget", () => {
   it("routes question and passage paths to their index", () => {
