@@ -12,3 +12,4 @@ node_modules/
 .DS_Store
 .freebuff/
 config.bat
+.env.*
