@@ -192,8 +192,16 @@ describe("quiz authoring integration", () => {
   }, 30000);
   it("saves incomplete drafts with the revision while publishing remains blocked", async () => {
     mount();
-    expect(screen.getAllByRole("button", { name: "Publish" })[0]).toBeDisabled();
     expect(screen.getByText(/What blocks publishing/)).toBeInTheDocument();
+    // Publish stays tappable: it explains what to fix instead of being a dead button.
+    const publish = screen.getByRole("button", { name: /^Publish \(\d+ to fix\)$/ });
+    expect(publish).toBeEnabled();
+    fireEvent.click(publish);
+    const dialog = within(await screen.findByRole("dialog"));
+    expect(dialog.getByText(/to fix|thing first|things first/i)).toBeInTheDocument();
+    expect(dialog.queryByRole("button", { name: "Publish quiz" })).toBeNull();
+    fireEvent.click(dialog.getByRole("button", { name: /Add at least one question/i }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
     await waitFor(() =>
       expect(apiFetch.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(true),
@@ -210,8 +218,11 @@ describe("quiz authoring integration", () => {
   }, 30000);
   it("publishes a complete essay without inventing an automatic answer", async () => {
     mount(true);
-    expect(screen.getAllByRole("button", { name: "Publish" })[0]).toBeEnabled();
-    fireEvent.click(screen.getAllByRole("button", { name: "Publish" })[0]);
+    expect(screen.getByRole("button", { name: "Publish" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+    const confirm = within(await screen.findByRole("dialog"));
+    expect(confirm.getByText(/Scores stay hidden/)).toBeInTheDocument();
+    fireEvent.click(confirm.getByRole("button", { name: "Publish quiz" }));
     await waitFor(() =>
       expect(apiFetch.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(true),
     );
