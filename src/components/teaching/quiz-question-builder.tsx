@@ -25,7 +25,7 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
   AlertDialog,
@@ -133,6 +133,7 @@ function SortableFrame({
   return (
     <div
       ref={setNodeRef}
+      data-block-key={id}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={isDragging ? "relative z-20 opacity-80" : "min-w-0"}
     >
@@ -685,6 +686,7 @@ export function QuizQuestionBuilder({
   onOpenBulk,
   readOnly = false,
   reserveBottomNav = false,
+  focusRequest = null,
 }: {
   questions: BuilderQuestion[];
   collapseSavedQuestions?: boolean;
@@ -697,10 +699,39 @@ export function QuizQuestionBuilder({
   onOpenBulk?: () => void;
   /** Lift the floating add button above the phone bottom tab bar (Teacher shell). */
   reserveBottomNav?: boolean;
+  /** Ask the list to open and scroll to a question or passage (used by publish blockers). */
+  focusRequest?: { kind: "question" | "passage"; index: number; nonce: number } | null;
 }) {
   const [expandedKey, setExpandedKey] = useState<string | null>(
     collapseSavedQuestions ? null : (questions[0]?.clientKey ?? null),
   );
+  const [handledFocus, setHandledFocus] = useState(0);
+  if (focusRequest && focusRequest.nonce !== handledFocus) {
+    // Adjusting state while rendering is the sanctioned way to react to a changed prop.
+    setHandledFocus(focusRequest.nonce);
+    const target =
+      focusRequest.kind === "question" ? questions[focusRequest.index] : undefined;
+    if (target) setExpandedKey(target.clientKey);
+  }
+  useEffect(() => {
+    if (!focusRequest) return;
+    const question =
+      focusRequest.kind === "question" ? questions[focusRequest.index] : undefined;
+    const passage =
+      focusRequest.kind === "passage" ? passages[focusRequest.index] : undefined;
+    const frame = requestAnimationFrame(() => {
+      const el =
+        (question && document.getElementById(`question-${question.clientKey}`)) ||
+        (question?.passageKey &&
+          document.querySelector(`[data-block-key="${question.passageKey}"]`)) ||
+        (passage && document.querySelector(`[data-block-key="${passage.clientKey}"]`));
+      const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      el?.scrollIntoView?.({ block: "center", behavior: calm ? "auto" : "smooth" });
+    });
+    return () => cancelAnimationFrame(frame);
+    // Only a new request should scroll; later edits to the lists must not.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusRequest?.nonce]);
   const [chooser, setChooser] = useState<{ passageKey: string | null } | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [deleting, setDeleting] = useState<{

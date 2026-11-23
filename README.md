@@ -132,17 +132,15 @@ thirty seconds.
 
 ## Folder structure
 
-The question bank at `/teacher/questions` and `/admin/questions` supports
-True/False, Multiple choice, Fill in the gap, Passage and manually graded Essay.
-Choose **New question**, select a type, choose its academic subject and write the
-content. Incomplete content can be saved as a draft; publishing lists required
-fixes. Passage questions share text and save their children together.
+Teachers and admins create and edit questions inside **Quizzes**. In a draft
+quiz, choose **Add question** to write a question, paste questions in bulk, or
+choose **From question bank** to reuse existing published questions. The former
+standalone Questions URLs redirect to the appropriate Quizzes list.
 
 The shared rich-text toolbar supports equations and private image uploads
-(PNG/JPEG/WebP, up to 5 MB). Remove an image from saved content before deleting
-its upload under **Uploaded images**. Copying from the bank into a quiz creates
-independent question and image copies. Migration `0012_common_talos.sql` adds
-revision checking and the RLS-protected image registry.
+(PNG/JPEG/WebP, up to 5 MB). Copying from the bank into a quiz creates independent
+question and image copies. Migration `0012_common_talos.sql` adds revision checking
+and the RLS-protected bank image registry.
 
 Development-only API/Storage verification: `pnpm exec tsx
 src/lib/db/verify-question-bank.ts --development`. It creates synthetic fixtures

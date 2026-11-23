@@ -13,9 +13,11 @@ export interface DbMock {
 
 export type Row = Record<string, unknown>;
 
+type LimitedSelect = Promise<Row[]> & { for: (lock: "update") => Promise<Row[]> };
+
 interface SelectChain {
   orderBy: () => Promise<Row[]> & { limit: () => Promise<Row[]> };
-  where: () => { limit: () => Promise<Row[]>; orderBy: () => Promise<Row[]> & { limit: () => Promise<Row[]> } };
+  where: () => { limit: () => LimitedSelect; orderBy: () => Promise<Row[]> & { limit: () => Promise<Row[]> } };
   innerJoin: () => SelectChain;
   leftJoin: () => SelectChain;
 }
@@ -38,7 +40,10 @@ export function stubSelect(db: DbMock, results: Row[][]): void {
     call += 1;
     // Recursive so join chains (.innerJoin/.leftJoin) keep the same terminal methods.
     // orderBy() must resolve to the rows itself while still exposing .limit(1) afterwards.
-    const limit = async (): Promise<Row[]> => result.slice(0, 1);
+    const limit = (): LimitedSelect => {
+      const rows = Promise.resolve(result.slice(0, 1));
+      return Object.assign(rows, { for: () => rows });
+    };
     const orderedRows = (): Promise<Row[]> & { limit: () => Promise<Row[]> } => {
       const promise = Promise.resolve(result) as Promise<Row[]> & { limit: () => Promise<Row[]> };
       promise.limit = limit;

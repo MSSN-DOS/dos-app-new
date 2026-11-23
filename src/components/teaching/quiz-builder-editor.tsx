@@ -1,6 +1,7 @@
 "use client";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -10,6 +11,7 @@ import {
   ImagePlus,
   Save,
   Printer,
+  Trash2,
   Upload,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -51,6 +53,9 @@ import {
 } from "@/lib/quizzes/autosave";
 import { resizeQuizImage } from "@/lib/quizzes/resize-image";
 import { QuizBulkDialog } from "./quiz-bulk-dialog";
+import { DeleteQuizDialog } from "./delete-quiz-dialog";
+import { QuizPublishDialog, PublishIssueList } from "./quiz-publish-dialog";
+import { issueTarget, questionProgress } from "@/lib/quizzes/publish-issues";
 import { QuizPrintDialog } from "./quiz-print-dialog";
 import {
   AlertDialog,
@@ -84,10 +89,6 @@ function errorIssues(error: unknown): QuizPublishBlocker[] {
         : [],
     );
   return [];
-}
-function issueLabel(issue: QuizPublishBlocker): string {
-  const path = issue.path.split(".");
-  return `${path[0] === "questions" && /^\d+$/.test(path[1] ?? "") ? `Question ${Number(path[1]) + 1}: ` : path[0] === "passages" && /^\d+$/.test(path[1] ?? "") ? `Passage ${Number(path[1]) + 1}: ` : ""}${issue.message}`;
 }
 export function QuizBuilderEditor({
   document,
@@ -125,6 +126,16 @@ export function QuizBuilderEditor({
   const [bulk, setBulk] = useState(false);
   const [print, setPrint] = useState(false);
   const [unpublish, setUnpublish] = useState(false);
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const router = useRouter();
+  const isAdmin = basePath.startsWith("/admin");
+  const [focusRequest, setFocusRequest] = useState<{
+    kind: "question" | "passage";
+    index: number;
+    nonce: number;
+  } | null>(null);
+  const titleInput = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState(document.status);
   const [hasAttempts, setHasAttempts] = useState(document.hasAttempts);
   const [saveStatus, setSaveStatus] = useState("All changes saved");
@@ -135,7 +146,10 @@ export function QuizBuilderEditor({
   const [savedVersion, setSavedVersion] = useState(() => draftFingerprint(document));
   const inFlight = useRef(false);
   const [saveTick, setSaveTick] = useState(0);
-  const [serverIssues, setServerIssues] = useState<QuizPublishBlocker[]>([]);
+  const [serverIssues, setServerIssues] = useState<{
+    fingerprint: string;
+    issues: QuizPublishBlocker[];
+  } | null>(null);
   const [formError, setFormError] = useState("");
   const coverInput = useRef<HTMLInputElement>(null);
   const discardedCovers = useRef(new Set<string>());
@@ -208,7 +222,6 @@ export function QuizBuilderEditor({
       setAutosavePaused(true);
       setSaveStatus("Save failed — your edits remain here. Retry Save draft.");
       setFormError(error.message);
-      setServerIssues(errorIssues(error));
     },
   });
   const lifecycle = useMutation({
@@ -239,27 +252,67 @@ export function QuizBuilderEditor({
       path: "questions",
       message: `Course quizzes require exactly 50 questions (${payload.questions.length} currently).`,
     });
-  const issues = [...blockers, ...serverIssues];
+  const fingerprint = draftFingerprint(payload);
+  const issues = [
+    ...blockers,
+    ...(serverIssues?.fingerprint === fingerprint ? serverIssues.issues : []),
+  ];
+  const goToIssue = (issue: QuizPublishBlocker) => {
+    const target = issueTarget(issue.path);
+    setPublishOpen(false);
+    if (target.kind === "title") {
+      titleInput.current?.focus();
+      titleInput.current?.scrollIntoView?.({ block: "center" });
+      return;
+    }
+    if (target.kind === "settings") {
+      setActiveTab("settings");
+      window.setTimeout(() => {
+        const first = globalThis.document.querySelector(
+          '[data-slot="tabs-content"][data-state="active"] [role="alert"]',
+        );
+        first?.scrollIntoView?.({ block: "center" });
+      }, 60);
+      return;
+    }
+    setActiveTab("questions");
+    if (target.kind === "list") {
+      window.setTimeout(
+        () =>
+          globalThis.document
+            .getElementById("question-builder-heading")
+            ?.scrollIntoView?.({ block: "start" }),
+        60,
+      );
+      return;
+    }
+    setFocusRequest({ ...target, nonce: Date.now() });
+  };
+  const requiredCount = document.quizType === "course" ? 50 : null;
   const save = async (action: "draft" | "publish") => {
     if (inFlight.current || uploadMutation.isPending || locked) return;
     inFlight.current = true;
     setAutosavePaused(false);
     setSaveStatus("Saving…");
     setFormError("");
-    setServerIssues([]);
+    setServerIssues(null);
+    const submittedPayload = latestPayload.current;
     try {
       await saveMutation.mutateAsync(
         quizBuilderSaveSchema.parse({
           action,
           revision: revision.current,
-          payload: latestPayload.current,
+          payload: submittedPayload,
         }),
       );
     } catch (error) {
       setFormError(
         error instanceof Error ? error.message : "Review the highlighted fields.",
       );
-      setServerIssues(errorIssues(error));
+      setServerIssues({
+        fingerprint: draftFingerprint(submittedPayload),
+        issues: errorIssues(error),
+      });
       setAutosavePaused(true);
       setSaveStatus("Unsaved changes — review errors and retry Save draft.");
     } finally {
@@ -272,7 +325,6 @@ export function QuizBuilderEditor({
     latestPayload.current = payload;
     saveLatest.current = save;
   });
-  const fingerprint = draftFingerprint(payload);
   useEffect(() => {
     if (
       locked ||
@@ -328,6 +380,7 @@ export function QuizBuilderEditor({
         </Link>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <Input
+            ref={titleInput}
             aria-label="Quiz header title"
             maxLength={200}
             disabled={locked}
@@ -372,25 +425,41 @@ export function QuizBuilderEditor({
                 </span>
               </Button>
             )}
+            {isAdmin && (
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-11 min-w-11 text-base text-ruby hover:text-ruby"
+                aria-label="Delete quiz"
+                disabled={saveMutation.isPending || lifecycle.isPending || uploadMutation.isPending}
+                onClick={() => setDeleteOpen(true)}
+              >
+                <Trash2 className="size-5" />
+                <span className="sr-only lg:not-sr-only">Delete</span>
+              </Button>
+            )}
             {!published && (
               <Button
                 className="ml-auto min-h-11 px-5 text-base sm:ml-0"
+                aria-label={
+                  blockers.length ? `Publish (${blockers.length} to fix)` : "Publish"
+                }
                 disabled={
                   saveMutation.isPending ||
                   uploadMutation.isPending ||
-                  lifecycle.isPending ||
-                  blockers.length > 0
+                  lifecycle.isPending
                 }
-                title={
-                  blockers.length > 0
-                    ? "Fix the items in the checklist before publishing"
-                    : undefined
-                }
-                onClick={() =>
-                  hasAttempts ? lifecycle.mutate("republish") : void save("publish")
-                }
+                onClick={() => setPublishOpen(true)}
               >
                 {hasAttempts ? "Republish" : "Publish"}
+                {blockers.length > 0 && (
+                  <span
+                    aria-hidden
+                    className="ml-1 rounded-full bg-primary-foreground/20 px-2 text-sm tabular-nums"
+                  >
+                    {blockers.length}
+                  </span>
+                )}
               </Button>
             )}
           </div>
@@ -590,6 +659,7 @@ export function QuizBuilderEditor({
                 onOpenBulk={() => setBulk(true)}
                 collapseSavedQuestions
                 reserveBottomNav={!basePath.startsWith("/admin")}
+                focusRequest={focusRequest}
                 readOnly={
                   locked ||
                   lifecycle.isPending ||
@@ -639,6 +709,40 @@ export function QuizBuilderEditor({
                   </div>
                 ))}
               </dl>
+              {requiredCount !== null && !published && (
+                <div className="mt-3 border-t border-line pt-3">
+                  {(() => {
+                    const progress = questionProgress(questions.length, requiredCount);
+                    return (
+                      <>
+                        <div className="flex items-baseline justify-between text-base">
+                          <span className="font-medium text-ink">{progress.label}</span>
+                          <span className="text-sm text-sub">
+                            {progress.over
+                              ? `Remove ${progress.over}`
+                              : progress.remaining
+                                ? `${progress.remaining} to go`
+                                : "Complete"}
+                          </span>
+                        </div>
+                        <div
+                          role="progressbar"
+                          aria-label="Questions added"
+                          aria-valuemin={0}
+                          aria-valuemax={requiredCount}
+                          aria-valuenow={Math.min(questions.length, requiredCount)}
+                          className="mt-2 h-2 overflow-hidden rounded-full bg-line"
+                        >
+                          <div
+                            className={`h-full rounded-full ${progress.over ? "bg-warning" : "bg-brand"}`}
+                            style={{ width: `${progress.percent}%` }}
+                          />
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
               <div className="mt-3 border-t border-line pt-3 text-base">
                 {published ? (
                   <p>Published · editing locked</p>
@@ -650,20 +754,13 @@ export function QuizBuilderEditor({
                     >
                       What blocks publishing ({issues.length})
                     </h2>
-                    <ul
-                      aria-labelledby="publish-blockers-heading"
-                      className="mt-2 max-h-48 space-y-1 overflow-y-auto text-sub"
-                    >
-                      {issues.map((issue, i) => (
-                        <li key={`${issue.path}-${i}`} className="flex items-start gap-2">
-                          <span
-                            aria-hidden
-                            className="mt-2 size-2 shrink-0 rounded-full bg-warning"
-                          />
-                          {issueLabel(issue)}
-                        </li>
-                      ))}
-                    </ul>
+                    <div className="mt-1 max-h-56 overflow-y-auto">
+                      <PublishIssueList
+                        issues={issues}
+                        onSelect={goToIssue}
+                        labelledBy="publish-blockers-heading"
+                      />
+                    </div>
                   </>
                 ) : (
                   <p className="flex items-center gap-2 text-ink">
@@ -739,11 +836,13 @@ export function QuizBuilderEditor({
           >
             What blocks publishing ({issues.length})
           </h2>
-          <ul className="mt-2 max-h-48 list-disc space-y-1 overflow-y-auto pl-5 text-base text-sub">
-            {issues.map((issue, i) => (
-              <li key={`${issue.path}-${i}`}>{issueLabel(issue)}</li>
-            ))}
-          </ul>
+          <div className="mt-1 max-h-48 overflow-y-auto">
+            <PublishIssueList
+              issues={issues}
+              onSelect={goToIssue}
+              labelledBy="publish-blockers-tab-heading"
+            />
+          </div>
         </section>
       )}
       {hasAttempts && (
@@ -775,6 +874,38 @@ export function QuizBuilderEditor({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {isAdmin && (
+        <DeleteQuizDialog
+          quiz={
+            deleteOpen
+              ? { id: document.id, title: payload.details.title.trim() || "Untitled quiz", status, hasAttempts }
+              : null
+          }
+          onOpenChange={setDeleteOpen}
+          onDeleted={() => router.push(basePath)}
+        />
+      )}
+      <QuizPublishDialog
+        open={publishOpen}
+        onOpenChange={setPublishOpen}
+        issues={issues}
+        pending={saveMutation.isPending || lifecycle.isPending}
+        onGoToIssue={goToIssue}
+        summary={{
+          questions: questions.length,
+          marks: sumMarks(questions.map((q) => q.marks)),
+          time: payload.details.durationSeconds
+            ? formatDurationSeconds(payload.details.durationSeconds)
+            : "No limit",
+          quizType: document.quizType,
+          republish: hasAttempts,
+        }}
+        onConfirm={() => {
+          setPublishOpen(false);
+          if (hasAttempts) lifecycle.mutate("republish");
+          else void save("publish");
+        }}
+      />
       <QuizBulkDialog
         open={bulk}
         onOpenChange={setBulk}
