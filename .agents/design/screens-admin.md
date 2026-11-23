@@ -2,7 +2,7 @@
 
 All screens in this file: **Guard:** `role = admin`. All live under an `(admin)` layout with a persistent left-nav (Dashboard, Structure, Teachers, Students, Aspirants, Topics, Questions, Quizzes, Content, Leaderboard, Score Release, Settings) — build that shell once (P2-1) and every screen below renders inside it.
 
-> **Shared authoring screens.** `/admin/topics`, `/admin/questions`, `/admin/quizzes` and `/admin/quizzes/[id]` render the same components as their `/teacher/*` counterparts (`components/teaching/`), because those API routes are guarded `admin + teacher`. Their page specs are the teacher entries (`screens-teacher.md`); this file only adds the admin-specific differences. An Admin stays inside the admin shell — the admin nav never links into `/teacher/*`.
+> **Shared authoring screens.** `/admin/topics`, `/admin/quizzes` and `/admin/quizzes/[id]` share components with their teacher counterparts. See `screens-teacher.md` for those specs. The former `/admin/questions` page redirects to `/admin/quizzes`, keeping admins in their own shell.
 
 ---
 

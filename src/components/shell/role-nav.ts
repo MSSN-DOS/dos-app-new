@@ -1,4 +1,4 @@
-import { BarChart3, BookOpen, ClipboardList, FileQuestion, FolderOpen, History, LayoutDashboard, Video } from "lucide-react";
+import { BarChart3, BookOpen, ClipboardList, FolderOpen, History, LayoutDashboard, Video } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export interface AppNavItemConfig {
@@ -10,7 +10,6 @@ export interface AppNavItemConfig {
 export const TEACHER_NAV_ITEMS: AppNavItemConfig[] = [
   { label: "Dashboard", href: "/teacher", icon: LayoutDashboard },
   { label: "Topics", href: "/teacher/topics", icon: BookOpen },
-  { label: "Questions", href: "/teacher/questions", icon: FileQuestion },
   { label: "Quizzes", href: "/teacher/quizzes", icon: ClipboardList },
   // Distinct icons: Results and Quizzes both used ClipboardList before.
   { label: "Results", href: "/teacher/results", icon: BarChart3 },

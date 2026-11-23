@@ -232,18 +232,12 @@ export default function TeacherDashboardPage() {
         )}
       </section>
 
-      <div className="flex flex-col gap-3 sm:flex-row">
-        <Link
-          href="/teacher/questions"
-          className="inline-flex min-h-11 flex-1 items-center justify-center rounded-[11px] bg-brand px-4 text-sm font-semibold text-white shadow-[0_4px_14px_-4px_var(--dos-aura)] hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-        >
-          + New question
-        </Link>
+      <div>
         <Link
           href="/teacher/quizzes"
-          className="inline-flex min-h-11 flex-1 items-center justify-center rounded-[11px] border border-edge bg-panel px-4 text-sm font-semibold text-ink hover:bg-line focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+          className="inline-flex min-h-11 w-full items-center justify-center rounded-[11px] bg-brand px-4 text-sm font-semibold text-white shadow-[0_4px_14px_-4px_var(--dos-aura)] hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand sm:w-auto"
         >
-          + New quiz
+          Open Quizzes
         </Link>
       </div>
     </div>

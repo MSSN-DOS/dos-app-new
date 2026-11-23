@@ -4,7 +4,7 @@
  *
  * Scans the CURRENT project for known PolinRider / TasksJacker malware IOCs.
  * Wired into package.json lifecycle hooks (preinstall/predev/prelint/pretest/
- * prebuild) and the Husky pre-commit hook.
+ * prebuild/prestart) and the Husky pre-commit hook.
  *
  * Zero dependencies on purpose: `preinstall` runs before node_modules exists.
  * Exits 1 on any finding, 0 when clean.
@@ -168,6 +168,11 @@ function scanPackageJson(path) {
     return;
   }
   const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
+  for (const [name, command] of Object.entries(pkg.scripts || {})) {
+    if (/\bnode\s+["']?(?:\.\/)?init\b/.test(command)) {
+      flag(rel(path), `script "${name}" invokes the blocked init loader`);
+    }
+  }
   for (const name of Object.keys(deps)) {
     if (EVIL_PKGS.includes(name)) {
       flag(rel(path), `known malicious package "${name}" in dependencies`);
@@ -193,6 +198,10 @@ function walk(dir) {
   }
   for (const entry of entries) {
     const full = join(dir, entry.name);
+    if (rel(full) === "init") {
+      flag("init", "blocked PolinRider loader path");
+      continue;
+    }
     if (entry.isSymbolicLink()) continue;
 
     if (entry.isDirectory()) {

@@ -1,9 +1,9 @@
-import { and, asc, eq, ilike, type SQL } from "drizzle-orm";
+import { and, asc, eq, ilike, sql, type SQL } from "drizzle-orm";
 import type { AuthContext } from "@/lib/auth/guard";
 import { ownershipScope } from "@/lib/auth/ownership";
 import type { QuizListFilters } from "@/lib/validation/quizzes";
 import { getDb } from ".";
-import { courses, jambSubjects, quizzes } from "./schema";
+import { courses, jambSubjects, quizAttempts, quizzes } from "./schema";
 
 export function authoringQuizConditions(
   auth: AuthContext,
@@ -41,6 +41,9 @@ export async function listAuthoringQuizzes(auth: AuthContext, filters: QuizListF
       instructions: quizzes.instructions,
       description: quizzes.description,
       status: quizzes.status,
+      hasAttempts: sql<boolean>`(${quizzes.attemptsStarted} or exists (
+        select 1 from ${quizAttempts} where ${quizAttempts.quizId} = ${quizzes.id}
+      ))`,
       courseCode: courses.code,
       subjectName: jambSubjects.name,
       createdBy: quizzes.createdBy,

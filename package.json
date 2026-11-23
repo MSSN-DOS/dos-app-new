@@ -11,6 +11,7 @@
     "build": "next build",
     "prebuild": "node scripts/guard.mjs",
     "start": "next start",
+    "prestart": "node scripts/guard.mjs",
     "lint": "eslint",
     "prelint": "node scripts/guard.mjs",
     "typecheck": "tsc --noEmit",

@@ -142,8 +142,10 @@ are additive schema deltas shipped in generated migration 0012.
 The supplied `QUIZBOOT_SPEC.md` updates the authoring layout: editable header title,
 Questions/Settings/Results tabs, one expanded question card, a shared toolbar for
 the focused rich field, a floating Add question dropdown, and More/Advanced panels.
-Keep the standalone bank and its existing functionality. New quiz creation still
-requires DOS academic scope; imported bank questions remain independent copies.
+Question authoring lives in the quiz builder for both roles. The standalone
+Questions screens are retired, and their URLs redirect to each role's Quizzes
+list. New quiz creation still requires DOS academic scope. Existing published
+bank questions and images remain available as independent copies in draft quizzes.
 
 - Multi-answer is a distinct type. Its selected option IDs must equal the correct
   set exactly; extra or missing selections earn no marks. Ordinary Multiple choice
@@ -256,7 +258,6 @@ Deletion is not blocked by held/unreleased attempts: with the attempt gone, an u
 ### Teacher (`/teacher/*`, guarded, `role = teacher`)
 - `/teacher` — dashboard
 - `/teacher/topics` — create topics under a course
-- `/teacher/questions` — question bank CRUD (Fill-in-gap / Options)
 - `/teacher/quizzes` — list/create Topic + Course quizzes
 - `/teacher/quizzes/[id]` — edit/build a quiz, attach questions
 - `/teacher/results/[quizId]` — performance of students who took a specific quiz
@@ -286,6 +287,7 @@ Deletion is not blocked by held/unreleased attempts: with the attempt gone, an u
 - `/api/admin/leaderboard`
 - `/api/admin/scores/release`
 - `/api/admin/quizzes/[id]/window` — PATCH the Course Quiz availability override (decision 6)
+- `/api/admin/quizzes/[id]` — DELETE an unattempted quiz (published quizzes require title confirmation), or PATCH `{ action: "archive" }` to stop new attempts while retaining existing attempts, released scores and grading history. Archiving uses the existing unpublish state and lets in-progress attempts finish. A quiz with attempt history is never permanently deleted through this endpoint.
 - `/api/admin/settings/semester`
 - `/api/teacher/topics`, `/api/teacher/questions`, `/api/teacher/quizzes`, `/api/teacher/quizzes/[id]`, `/api/teacher/results/[quizId]`
 - `/api/quizzes` (list, scoped server-side to the caller's role/structure — Student/Aspirant), `/api/quizzes/[id]/attempt` (POST to submit)
