@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Pencil, Trash2, SearchX, Layers, GraduationCap, Plus, Filter, Calendar, X } from "lucide-react";
+import { Archive, ChevronLeft, ChevronRight, Pencil, Trash2, SearchX, Layers, GraduationCap, Plus, Filter, Calendar, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -30,6 +30,7 @@ type QuizRow = {
   weekStart: string | null;
   questionCount: number;
   status: "draft" | "published";
+  hasAttempts: boolean;
   courseCode: string | null;
   subjectName: string | null;
 };
@@ -58,8 +59,16 @@ export function QuizzesView({ basePath }: { basePath: string }) {
   const isAdmin = basePath.startsWith("/admin");
   const [deleting, setDeleting] = useState<DeleteQuizTarget | null>(null);
   const deleteBtn = (quiz: DeleteQuizTarget) =>
-    isAdmin ? (
-      <Button variant="ghost" size="sm" className="min-h-11 min-w-11 rounded-xl text-ruby hover:bg-ruby/10 hover:text-ruby" aria-label={`Delete ${quiz.title}`} onClick={() => setDeleting(quiz)}><Trash2 className="size-4" /></Button>
+    isAdmin && (quiz.status === "published" || !quiz.hasAttempts) ? (
+      <Button
+        variant="ghost"
+        size="sm"
+        className={`min-h-11 min-w-11 rounded-xl ${quiz.hasAttempts ? "" : "text-ruby hover:bg-ruby/10 hover:text-ruby"}`}
+        aria-label={`${quiz.hasAttempts ? "Archive" : "Delete"} ${quiz.title}`}
+        onClick={() => setDeleting(quiz)}
+      >
+        {quiz.hasAttempts ? <Archive className="size-4" /> : <Trash2 className="size-4" />}
+      </Button>
     ) : null;
   const { courses } = useAuthoringSubjects();
 
@@ -198,7 +207,7 @@ export function QuizzesView({ basePath }: { basePath: string }) {
                         <span className="truncate">{quiz.courseCode ?? quiz.subjectName ?? "—"}</span>
                       </p>
                     </div>
-                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${quiz.status === "published" ? "bg-brand text-white" : "border border-line bg-canvas text-sub"}`}>{quiz.status}</span>
+                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${quiz.status === "published" ? "bg-brand text-white" : "border border-line bg-canvas text-sub"}`}>{quiz.status === "published" ? "Published" : quiz.hasAttempts ? "Archived" : "Draft"}</span>
                   </div>
                   <div className="mt-3 flex items-center justify-between text-xs text-faint" style={{ fontFamily: "JetBrains Mono, monospace" }}>
                     <span className="inline-flex items-center gap-1.5"><Calendar className="size-3" />{quiz.weekStart ? quiz.weekStart : "No week"} · {quiz.questionCount} Qs</span>
@@ -227,7 +236,7 @@ export function QuizzesView({ basePath }: { basePath: string }) {
                         <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${quiz.quizType === "course" ? "border-brand/30 bg-brand/12 text-brand-soft" : "border-gold/30 bg-gold/12 text-gold"}`}>{TYPE_LABEL[quiz.quizType]}</span>
                       </TableCell>
                       <TableCell className="text-sm text-sub">{quiz.courseCode ?? quiz.subjectName ?? "—"}<span className="text-faint">{quiz.weekStart ? ` · ${quiz.weekStart}` : ""} · {quiz.questionCount} Qs</span></TableCell>
-                      <TableCell><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${quiz.status === "published" ? "bg-brand text-white" : "border border-line bg-canvas text-sub"}`}>{quiz.status === "published" ? "Published" : "Draft"}</span></TableCell>
+                      <TableCell><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${quiz.status === "published" ? "bg-brand text-white" : "border border-line bg-canvas text-sub"}`}>{quiz.status === "published" ? "Published" : quiz.hasAttempts ? "Archived" : "Draft"}</span></TableCell>
                       <TableCell className="text-right"><span className="inline-flex items-center gap-1">{deleteBtn(quiz)}<Button variant="ghost" size="sm" className="min-h-9 rounded-xl hover:bg-line hover:text-white" onClick={() => router.push(`${basePath}/${quiz.id}`)}><Pencil className="size-3.5" />Edit</Button></span></TableCell>
                     </TableRow>
                   ))}
@@ -251,8 +260,8 @@ export function QuizzesView({ basePath }: { basePath: string }) {
         <DeleteQuizDialog
           quiz={deleting}
           onOpenChange={(o) => !o && setDeleting(null)}
-          onDeleted={() => {
-            if (page > 1 && quizzes.length <= 1) setPage(page - 1);
+          onCompleted={(archived) => {
+            if (!archived && page > 1 && quizzes.length <= 1) setPage(page - 1);
           }}
         />
       ) : null}
