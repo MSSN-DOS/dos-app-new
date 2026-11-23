@@ -1,11 +1,12 @@
 node_modules/
 .next/
-.env
-.env.*
 !.env.example
 *.tsbuildinfo
 .DS_Store
 .freebuff/
 .tmp/
-.vscode/
 config.bat
+<<<<<<< Updated upstream
+=======
+*.patch
+>>>>>>> Stashed changes

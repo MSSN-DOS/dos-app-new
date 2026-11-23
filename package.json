@@ -11,7 +11,10 @@
     "build": "next build",
     "prebuild": "node scripts/guard.mjs",
     "start": "next start",
+<<<<<<< Updated upstream
     "prestart": "node scripts/guard.mjs",
+=======
+>>>>>>> Stashed changes
     "lint": "eslint",
     "prelint": "node scripts/guard.mjs",
     "typecheck": "tsc --noEmit",

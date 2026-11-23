@@ -1,6 +1,7 @@
 "use client";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -10,6 +11,7 @@ import {
   ImagePlus,
   Save,
   Printer,
+  Trash2,
   Upload,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -51,6 +53,7 @@ import {
 } from "@/lib/quizzes/autosave";
 import { resizeQuizImage } from "@/lib/quizzes/resize-image";
 import { QuizBulkDialog } from "./quiz-bulk-dialog";
+import { DeleteQuizDialog } from "./delete-quiz-dialog";
 import { QuizPublishDialog, PublishIssueList } from "./quiz-publish-dialog";
 import { issueTarget, questionProgress } from "@/lib/quizzes/publish-issues";
 import { QuizPrintDialog } from "./quiz-print-dialog";
@@ -124,6 +127,9 @@ export function QuizBuilderEditor({
   const [print, setPrint] = useState(false);
   const [unpublish, setUnpublish] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const router = useRouter();
+  const isAdmin = basePath.startsWith("/admin");
   const [focusRequest, setFocusRequest] = useState<{
     kind: "question" | "passage";
     index: number;
@@ -408,6 +414,18 @@ export function QuizBuilderEditor({
                 <span className="sr-only lg:not-sr-only">
                   {saveMutation.isPending ? "Saving…" : "Save draft"}
                 </span>
+              </Button>
+            )}
+            {isAdmin && (
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-11 min-w-11 text-base text-ruby hover:text-ruby"
+                aria-label="Delete quiz"
+                onClick={() => setDeleteOpen(true)}
+              >
+                <Trash2 className="size-5" />
+                <span className="sr-only lg:not-sr-only">Delete</span>
               </Button>
             )}
             {!published && (
@@ -846,6 +864,17 @@ export function QuizBuilderEditor({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {isAdmin && (
+        <DeleteQuizDialog
+          quiz={
+            deleteOpen
+              ? { id: document.id, title: payload.details.title || "Untitled quiz", status }
+              : null
+          }
+          onOpenChange={setDeleteOpen}
+          onDeleted={() => router.push(basePath)}
+        />
+      )}
       <QuizPublishDialog
         open={publishOpen}
         onOpenChange={setPublishOpen}

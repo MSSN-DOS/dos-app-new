@@ -6,6 +6,7 @@ import { initialQuizSettings } from "@/lib/validation/quiz-settings";
 import { QuizBuilderEditor } from "./quiz-builder-editor";
 
 const { apiFetch } = vi.hoisted(() => ({ apiFetch: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("@/lib/auth/client-fetch", async (original) => ({
   ...(await original<typeof import("@/lib/auth/client-fetch")>()),
   apiFetch,

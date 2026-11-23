@@ -1,11 +1,12 @@
 ﻿"use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Pencil, SearchX, Layers, GraduationCap, Plus, Filter, Calendar, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Pencil, Trash2, SearchX, Layers, GraduationCap, Plus, Filter, Calendar, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { DeleteQuizDialog, type DeleteQuizTarget } from "./delete-quiz-dialog";
 import {
   Select,
   SelectContent,
@@ -54,6 +55,12 @@ export function QuizzesView({ basePath }: { basePath: string }) {
   const [page, setPage] = useState(1);
 
   const [editorOpen, setEditorOpen] = useState(false);
+  const isAdmin = basePath.startsWith("/admin");
+  const [deleting, setDeleting] = useState<DeleteQuizTarget | null>(null);
+  const deleteBtn = (quiz: DeleteQuizTarget) =>
+    isAdmin ? (
+      <Button variant="ghost" size="sm" className="min-h-11 min-w-11 rounded-xl text-ruby hover:bg-ruby/10 hover:text-ruby" aria-label={`Delete ${quiz.title}`} onClick={() => setDeleting(quiz)}><Trash2 className="size-4" /></Button>
+    ) : null;
   const { courses } = useAuthoringSubjects();
 
   const quizzesQuery = useQuery({
@@ -195,7 +202,7 @@ export function QuizzesView({ basePath }: { basePath: string }) {
                   </div>
                   <div className="mt-3 flex items-center justify-between text-xs text-faint" style={{ fontFamily: "JetBrains Mono, monospace" }}>
                     <span className="inline-flex items-center gap-1.5"><Calendar className="size-3" />{quiz.weekStart ? quiz.weekStart : "No week"} · {quiz.questionCount} Qs</span>
-                    <Button variant="ghost" size="sm" className="min-h-9 rounded-xl bg-canvas text-ink hover:bg-line hover:text-white" onClick={() => router.push(`${basePath}/${quiz.id}`)}><Pencil className="size-3.5" />Open builder</Button>
+                    <span className="flex items-center gap-1">{deleteBtn(quiz)}<Button variant="ghost" size="sm" className="min-h-9 rounded-xl bg-canvas text-ink hover:bg-line hover:text-white" onClick={() => router.push(`${basePath}/${quiz.id}`)}><Pencil className="size-3.5" />Open builder</Button></span>
                   </div>
                 </div>
               ))}
@@ -221,7 +228,7 @@ export function QuizzesView({ basePath }: { basePath: string }) {
                       </TableCell>
                       <TableCell className="text-sm text-sub">{quiz.courseCode ?? quiz.subjectName ?? "—"}<span className="text-faint">{quiz.weekStart ? ` · ${quiz.weekStart}` : ""} · {quiz.questionCount} Qs</span></TableCell>
                       <TableCell><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${quiz.status === "published" ? "bg-brand text-white" : "border border-line bg-canvas text-sub"}`}>{quiz.status === "published" ? "Published" : "Draft"}</span></TableCell>
-                      <TableCell className="text-right"><Button variant="ghost" size="sm" className="min-h-9 rounded-xl hover:bg-line hover:text-white" onClick={() => router.push(`${basePath}/${quiz.id}`)}><Pencil className="size-3.5" />Edit</Button></TableCell>
+                      <TableCell className="text-right"><span className="inline-flex items-center gap-1">{deleteBtn(quiz)}<Button variant="ghost" size="sm" className="min-h-9 rounded-xl hover:bg-line hover:text-white" onClick={() => router.push(`${basePath}/${quiz.id}`)}><Pencil className="size-3.5" />Edit</Button></span></TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -240,6 +247,13 @@ export function QuizzesView({ basePath }: { basePath: string }) {
       )}
 
       <NewQuizDialog open={editorOpen} onOpenChange={setEditorOpen} basePath={basePath} />
+      {isAdmin ? (
+        <DeleteQuizDialog
+          quiz={deleting}
+          onOpenChange={(o) => !o && setDeleting(null)}
+          onDeleted={() => setDeleting(null)}
+        />
+      ) : null}
     </div>
   );
 }
