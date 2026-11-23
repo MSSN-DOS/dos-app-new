@@ -30,7 +30,8 @@ export interface RecomputeResult {
  * attempt time), so every eligible row is inherently in-scope for its owner.
  */
 export async function recomputeWeeklyScores(
-  db: Db,
+  // Narrow on purpose: a transaction handle works here too (quiz deletion recomputes inside one).
+  db: Pick<Db, "select" | "insert">,
   userIds: number[],
   weekStart: string,
 ): Promise<RecomputeResult> {
