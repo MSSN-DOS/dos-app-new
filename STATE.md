@@ -482,6 +482,15 @@ Board request (2026-11-15): port the three loading states from the supplied refe
   - `page-loader.test.tsx` covers the rotation helper (order, wrap, negative/fractional ticks, empty array) and the rendered loader (polite live region, 1800 ms advance, role pill, `fullScreen` height, custom messages).
   - `DESIGN.md` §12 gained a motion subsection recording the three states, the token mapping and the reduced-motion contract.
 
+## Phase 16 — Sync cleanup and quiz-only question authoring
+
+- [x] P16-1 — Remove the init loader and config remnants, restore secret ignores,
+  and enforce the project guard for start and sync-branch CI. Verified the
+  updated guard rejects the original loader and its lifecycle entries.
+- [x] P16-2 — Retire both standalone Questions screens and redirect old links to
+  the matching Quizzes list. Preserve quiz authoring and existing bank imports.
+  Typecheck passed, lint had one existing warning, and all 1,196 tests passed.
+
 ## Open items still needing a real answer from the Board (not blocking dev, but don't let these go silently forgotten)
 
 - [x] Confirm Post-UTME conversion formula (P5-3) — confirmed 2026-08-25: aggregate is out of 100, conversion is the identity (best_score is already a percentage = correct × 2 for the 50-question quiz)

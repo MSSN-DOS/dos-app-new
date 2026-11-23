@@ -233,6 +233,14 @@ states; it does not invent new motion beyond what the reference shows. All colou
 
 ---
 
+## Phase 16 — Sync cleanup and quiz-only question authoring (2026-11-23)
+
+- **P16-1** Remove the obfuscated loader and its config changes. Reinstate secret
+  ignores and cover the loader and script references in local and CI guards.
+- **P16-2** Retire the standalone Questions screens for admins and teachers.
+  Remove navigation, tours and page-only editors, redirect old URLs to Quizzes,
+  and retain bank data and quiz import.
+
 ## Explicitly out of scope for MVP (don't build these unless `PLAN.md` is updated to add them)
 
 - Email/SMS notifications

@@ -42,47 +42,7 @@ const TEACHER_DASH_STEPS: DriveStep[] = [
     popover: {
       title: "Where it all happens",
       description:
-        "Open the Question bank to write questions, then Quizzes to group published questions into a Course or Topic quiz.",
-    },
-  },
-];
-
-const TEACHER_QUESTIONS_STEPS: DriveStep[] = [
-  {
-    popover: {
-      title: "The question bank",
-      description:
-        "Write rich questions with science symbols — one at a time, or paste many at once with Bulk add.",
-    },
-  },
-  {
-    element: "main h1",
-    popover: {
-      title: "Questions",
-      description:
-        "Every question you author lives here. Drafts stay private; publishing runs the strict validation.",
-    },
-  },
-  {
-    element: '[aria-label="Filter by course"]',
-    popover: {
-      title: "Narrow the list",
-      description:
-        "Filter by course, question type and status. The hide-used switch keeps questions already attached to a quiz out of your way.",
-    },
-  },
-  {
-    popover: {
-      title: "Paste many at once",
-      description:
-        "On Bulk add, one row per question: type the text, press Tab, then type the accepted answer. Extra Tab columns become extra blanks.",
-    },
-  },
-  {
-    popover: {
-      title: "Drafts vs published",
-      description:
-        "Only published questions can be attached to a quiz, so keep drafts until you are happy with them.",
+        "Open Quizzes to create a Course or Topic quiz and write or import its questions.",
     },
   },
 ];
@@ -179,7 +139,7 @@ const TEACHER_TOPICS_STEPS: DriveStep[] = [
     popover: {
       title: "Ready when you are",
       description:
-        "The sidebar always lists Dashboard, Topics, Questions, Quizzes, Results and Videos.",
+        "Use the navigation to switch between Dashboard, Topics, Quizzes, Results and Videos.",
     },
   },
 ];
@@ -187,8 +147,6 @@ const TEACHER_TOPICS_STEPS: DriveStep[] = [
 function teacherStepsFor(pathname: string): { key: string; steps: DriveStep[] } | null {
   if (pathname === "/teacher")
     return { key: "teacher.dashboard", steps: TEACHER_DASH_STEPS };
-  if (pathname === "/teacher/questions")
-    return { key: "teacher.questions", steps: TEACHER_QUESTIONS_STEPS };
   if (pathname === "/teacher/quizzes")
     return { key: "teacher.quizzes", steps: TEACHER_QUIZZES_STEPS };
   if (pathname.startsWith("/teacher/quizzes/"))

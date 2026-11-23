@@ -41,65 +41,11 @@ FRAME: Topics
 
 ---
 
-### `/teacher/questions`
-- **Task:** P3-3 (UI), built on P3-2's draft/publish validation split.
-- **Purpose:** Question bank editor — five authoring types, rich text, draft-vs-publish gating.
+### Former Questions page
 
-**P14 amendment (2026-11-15, supersedes the two-type wireframe below):** shared
-with `/admin/questions`. New question opens the supplied rounded icon-card chooser:
-True or False, Multiple choice, Fill in the gap, Passage and Essay. Two columns
-on larger screens with Essay spanning both; one scrollable column on phones.
-All choices are enabled; Essay is labelled "Manually graded". No Audio type.
-
-The editor reuses Tiptap/KaTeX for stems, options, explanations and shared passage
-text. Passage children are collapsible, support the four individual types and
-require confirmation before removal. True/False has two fixed options; other
-options are editable rich text with one correct answer. Gap answers use `[gap]`
-and trimmed, case-insensitive exact matching. Essays are graded by teachers in
-the quiz grading screen. The footer lists strict publishing blockers and offers
-Save as draft / Publish. Existing bulk entry and science symbol palettes remain.
-
-**P14 APIs:** `POST /api/teacher/questions/documents`,
-`GET/PUT/DELETE /api/teacher/questions/[id]/document`,
-`GET/POST/DELETE /api/teacher/question-images`. Document saves carry a revision;
-stale saves and referenced-question changes return conflicts. Images are private,
-author-owned PNG/JPEG/WebP uploads up to 5 MB, with signed-link renewal and
-reference-aware removal. List requests use `groupPassages=1` to show a passage
-once and distinguish True/False. `POST /api/teacher/quizzes/[id]/bank-copy` copies
-the whole group and images independently into a draft quiz. All requests use
-TanStack Query and `apiFetch`; server guards enforce role, ownership and subject
-assignment. Both themes use the existing tokens and controls have 44px targets.
-
-**Wireframe**
-```
-FRAME: Questions — List
-  FIELD: Filter -> [ Course/Topic or JAMB Subject select ] [ Type: Fill-in-gap / Options ] [ Status: Draft / Published ]
-  ACTION ROW: [+ New question]
-  LIST ROW: "The powerhouse of the cell is the ____." | Fill-in-gap | Draft pill
-  LIST ROW: "Salah is performed how many times daily?" | Options | Published pill
-
-FRAME: Type chooser (dialog, shown first when adding — skipped when editing an existing question)
-  ACTION CARD: [Fill in the gap]  "A sentence with one or more blanks. Graded on an exact, case-insensitive match."
-  ACTION CARD: [Multiple choice]  "One question with two or more options. Exactly one is marked correct."
-  NOTE: Question type is fixed after save — hence it's chosen before the editor opens, not toggled inside it.
-
-FRAME: Question Editor (single scroll region + sticky footer)
-  HEADER: [ ordinal badge: "+" for new / "#{id}" when editing ] · "Add a question" | "Question #{id}"
-          · type chip [Fill-in-gap | Options] · [Change type] (new questions only — reopens the chooser)
-  FIELD: Question text -> [ rich text area: Bold / Italic / Underline / Sub / Sup / bullet + grouped science symbol toolbars ]
-  FIELD (Fill-in-gap): Accepted answers -> [ numbered badge + input per blank, dashed "Add another accepted answer" ]
-  FIELD (Options): Options -> [ letter-badged A–H row + input; correct row is brand-tinted with a filled "CORRECT" chip,
-          every other row shows "SELECT AS ANSWER"; dashed "Add new option", min 2 ]
-  FIELD: Belongs to -> [ Course / Topic | JAMB subject ] toggle, then the matching select(s)
-  FOOTER (sticky): blocker summary -> ["N things needed before publishing" + the list | "Ready to publish"] · [Save as draft] [Publish]
-  NOTE: Publishing is blocked until question text and all required options/blanks are filled in. Publish stays disabled for the whole time a blocker exists, and the blocker list is always visible next to it — the reason is never hidden in a tooltip.
-```
-
-**Data / API:** `GET/POST/PATCH/DELETE /api/teacher/questions`. Two Zod schemas per `AGENTS.md` §3 — lenient for draft-save, strict for publish. The "Publish" button's disabled state should reflect the *strict* schema's validity in real time, not just reject on click.
-
-**States:** loading · empty · error · save-as-draft-always-available (even with an empty body — draft has no requirements) · publish-blocked (the sticky footer names each missing item in a list; no tooltip-only reason).
-
-**Visual reference:** question authoring follows the QuizBoot authoring flow (type chooser first, letter-badged options with an explicit "select as answer" affordance, dashed add-row, sticky action footer). Expressed in the existing `--dos-*` tokens only — no new palette, no raw colour values.
+`/teacher/questions` and `/admin/questions` redirect to the respective Quizzes list.
+Create or bulk-add questions inside the quiz builder. The builder can still copy
+existing published bank questions, passages and private images into drafts.
 
 ---
 

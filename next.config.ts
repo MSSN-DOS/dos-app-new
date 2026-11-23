@@ -7,6 +7,12 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ["lucide-react", "radix-ui"],
   },
+  async redirects() {
+    return [
+      { source: "/admin/questions", destination: "/admin/quizzes", permanent: false },
+      { source: "/teacher/questions", destination: "/teacher/quizzes", permanent: false },
+    ];
+  },
   async headers() {
     return [
       {
