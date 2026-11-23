@@ -1,28 +1,32 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z, ZodError } from "zod";
 
 import { errorResponse } from "@/lib/api/response";
 import { requireAuth } from "@/lib/auth/guard";
-import { getDb } from "@/lib/db";
+import { getDb, type Db } from "@/lib/db";
 import { quizHasAttempts } from "@/lib/db/quiz-builder";
 import {
-  bestScores,
-  cgpaRecords,
   passages,
-  postUtmeScores,
   questions,
-  quizAttempts,
   quizImages,
   quizQuestions,
   quizzes,
 } from "@/lib/db/schema";
-import { recomputeWeeklyScores } from "@/lib/scoring/apply-release";
 import { removeQuizImageObject } from "@/lib/storage/supabase-storage";
 
 const quizDeleteSchema = z.object({
   title: z.string().trim().min(1).max(200).optional(),
 });
+const quizArchiveSchema = z.object({ action: z.literal("archive") });
+
+const findLockedQuiz = (db: Pick<Db, "select">, id: number) =>
+  db.select({
+    id: quizzes.id,
+    title: quizzes.title,
+    status: quizzes.status,
+    attemptsStarted: quizzes.attemptsStarted,
+  }).from(quizzes).where(eq(quizzes.id, id)).limit(1).for("update");
 
 function parseId(raw: string): number | null {
   const id = Number(raw);
@@ -32,17 +36,8 @@ function parseId(raw: string): number | null {
 /**
  * DELETE /api/admin/quizzes/[id]
  *
- * Admin-only hard delete of a draft or published quiz. A draft nobody has attempted deletes on a
- * plain request. A published quiz, or any quiz that has recorded attempts, also needs its exact
- * title in the body, because the delete takes real student data with it: every attempt, answer
- * and best score for the quiz.
- *
- * One transaction removes everything that references the quiz without a cascade, in FK order:
- * attempts (their answers cascade), best scores, quiz-question links, the quiz's private builder
- * questions and passages, then the quiz (its image rows cascade). Weekly CGPA and Post-UTME
- * rows for the affected students and week are then rebuilt from what is left, so a deleted
- * quiz stops counting instead of leaving stale aggregates. Image files are removed from storage
- * after the commit, best-effort, since an orphaned file is harmless and a failed commit is not.
+ * Delete an unattempted quiz and its private content. Published quizzes require
+ * title confirmation. Attempt history always blocks permanent deletion.
  */
 export async function DELETE(
   request: Request,
@@ -62,18 +57,7 @@ export async function DELETE(
     const db = getDb();
     const result = await db.transaction(async (tx) => {
       // Serialize confirmation and cleanup with publication and new attempts.
-      const [quiz] = await tx
-        .select({
-          id: quizzes.id,
-          title: quizzes.title,
-          status: quizzes.status,
-          weekStart: quizzes.weekStart,
-          attemptsStarted: quizzes.attemptsStarted,
-        })
-        .from(quizzes)
-        .where(eq(quizzes.id, id))
-        .limit(1)
-        .for("update");
+      const [quiz] = await findLockedQuiz(tx, id);
       if (!quiz) {
         return NextResponse.json(
           { error: { code: "NOT_FOUND", message: "Quiz not found" } },
@@ -81,8 +65,13 @@ export async function DELETE(
         );
       }
 
-      const needsTitle = quiz.status === "published" || (await quizHasAttempts(tx, quiz));
-      if (needsTitle) {
+      if (await quizHasAttempts(tx, quiz)) {
+        return NextResponse.json(
+          { error: { code: "QUIZ_HAS_ATTEMPTS", message: "Archive this quiz to preserve its student attempts and scores." } },
+          { status: 409 },
+        );
+      }
+      if (quiz.status === "published") {
         const body = quizDeleteSchema.parse(rawBody);
         if (!body.title) {
           return NextResponse.json(
@@ -114,41 +103,10 @@ export async function DELETE(
         .where(eq(quizImages.quizId, id))
         .orderBy(asc(quizImages.id));
 
-      // Answers cascade. Wait for any in-flight attempt finalization before reading best scores.
-      await tx.delete(quizAttempts).where(eq(quizAttempts.quizId, id));
-      const affected = await tx
-        .select({ userId: bestScores.userId })
-        .from(bestScores)
-        .where(eq(bestScores.quizId, id))
-        .orderBy(asc(bestScores.userId));
-      const userIds = [...new Set(affected.map((row) => row.userId))];
-
-      await tx.delete(bestScores).where(eq(bestScores.quizId, id));
       await tx.delete(quizQuestions).where(eq(quizQuestions.quizId, id));
-      // Builder-owned questions are private to this quiz; options and blanks cascade.
       await tx.delete(questions).where(eq(questions.builderQuizId, id));
       await tx.delete(passages).where(eq(passages.builderQuizId, id));
       await tx.delete(quizzes).where(eq(quizzes.id, id));
-
-      if (quiz.weekStart && userIds.length > 0) {
-        await tx
-          .delete(cgpaRecords)
-          .where(
-            and(
-              inArray(cgpaRecords.userId, userIds),
-              eq(cgpaRecords.weekStart, quiz.weekStart),
-            ),
-          );
-        await tx
-          .delete(postUtmeScores)
-          .where(
-            and(
-              inArray(postUtmeScores.userId, userIds),
-              eq(postUtmeScores.weekStart, quiz.weekStart),
-            ),
-          );
-        await recomputeWeeklyScores(tx, userIds, quiz.weekStart);
-      }
       return { images, status: quiz.status };
     });
 
@@ -183,6 +141,54 @@ export async function DELETE(
         { status: 422 },
       );
     }
+    return errorResponse(err);
+  }
+}
+
+/** Archive by reusing the existing unpublish lifecycle. In-flight attempts can finish. */
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+): Promise<NextResponse> {
+  try {
+    const actor = await requireAuth(request, ["admin"]);
+    const id = parseId((await params).id);
+    if (id === null) {
+      return NextResponse.json(
+        { error: { code: "BAD_REQUEST", message: "Invalid id" } },
+        { status: 400 },
+      );
+    }
+    const input = quizArchiveSchema.safeParse(await request.json().catch(() => null));
+    if (!input.success) {
+      return NextResponse.json(
+        { error: { code: "VALIDATION_ERROR", message: "Invalid action", details: input.error.issues } },
+        { status: 422 },
+      );
+    }
+    const archived = await getDb().transaction(async (tx) => {
+      const [quiz] = await findLockedQuiz(tx, id);
+      if (!quiz) return null;
+      if (quiz.status === "draft") return false;
+
+      const hasAttempts = await quizHasAttempts(tx, quiz);
+      await tx.update(quizzes).set({
+        status: "draft",
+        unpublishedAt: new Date(),
+        attemptsStarted: hasAttempts,
+        builderRevision: sql`${quizzes.builderRevision} + 1`,
+      }).where(eq(quizzes.id, id));
+      return true;
+    });
+    if (archived === null) {
+      return NextResponse.json(
+        { error: { code: "NOT_FOUND", message: "Quiz not found" } },
+        { status: 404 },
+      );
+    }
+    if (archived) console.log(`[audit] quiz archived: actor=${actor.userId} quiz=${id}`);
+    return new NextResponse(null, { status: 204 });
+  } catch (err) {
     return errorResponse(err);
   }
 }

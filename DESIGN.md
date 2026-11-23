@@ -287,6 +287,7 @@ Deletion is not blocked by held/unreleased attempts: with the attempt gone, an u
 - `/api/admin/leaderboard`
 - `/api/admin/scores/release`
 - `/api/admin/quizzes/[id]/window` — PATCH the Course Quiz availability override (decision 6)
+- `/api/admin/quizzes/[id]` — DELETE an unattempted quiz (published quizzes require title confirmation), or PATCH `{ action: "archive" }` to stop new attempts while retaining existing attempts, released scores and grading history. Archiving uses the existing unpublish state and lets in-progress attempts finish. A quiz with attempt history is never permanently deleted through this endpoint.
 - `/api/admin/settings/semester`
 - `/api/teacher/topics`, `/api/teacher/questions`, `/api/teacher/quizzes`, `/api/teacher/quizzes/[id]`, `/api/teacher/results/[quizId]`
 - `/api/quizzes` (list, scoped server-side to the caller's role/structure — Student/Aspirant), `/api/quizzes/[id]/attempt` (POST to submit)

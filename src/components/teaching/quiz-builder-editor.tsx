@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
+  Archive,
   ArrowLeft,
   CheckCircle2,
   Eye,
@@ -425,17 +426,17 @@ export function QuizBuilderEditor({
                 </span>
               </Button>
             )}
-            {isAdmin && (
+            {isAdmin && (published || !hasAttempts) && (
               <Button
                 type="button"
                 variant="outline"
-                className="min-h-11 min-w-11 text-base text-ruby hover:text-ruby"
-                aria-label="Delete quiz"
+                className={`min-h-11 min-w-11 text-base ${hasAttempts ? "" : "text-ruby hover:text-ruby"}`}
+                aria-label={hasAttempts ? "Archive quiz" : "Delete quiz"}
                 disabled={saveMutation.isPending || lifecycle.isPending || uploadMutation.isPending}
                 onClick={() => setDeleteOpen(true)}
               >
-                <Trash2 className="size-5" />
-                <span className="sr-only lg:not-sr-only">Delete</span>
+                {hasAttempts ? <Archive className="size-5" /> : <Trash2 className="size-5" />}
+                <span className="sr-only lg:not-sr-only">{hasAttempts ? "Archive" : "Delete"}</span>
               </Button>
             )}
             {!published && (
@@ -469,7 +470,7 @@ export function QuizBuilderEditor({
             variant="secondary"
             className={published ? "bg-success/10 text-ink" : "text-sub"}
           >
-            {published ? "Published" : "Draft"}
+            {published ? "Published" : hasAttempts ? "Archived" : "Draft"}
           </Badge>
           <span>
             {document.quizType === "course"
@@ -882,7 +883,7 @@ export function QuizBuilderEditor({
               : null
           }
           onOpenChange={setDeleteOpen}
-          onDeleted={() => router.push(basePath)}
+          onCompleted={() => router.push(basePath)}
         />
       )}
       <QuizPublishDialog
