@@ -40,6 +40,7 @@ const nullableInt = z.union([z.coerce.number().int().min(1), z.null()]);
 export const courseCreateSchema = z
   .object({
     code: z.string().trim().min(1).max(20),
+    sessionId: z.coerce.number().int().positive(),
     title: z.string().trim().min(1).max(200),
     levelId: z.coerce.number().int().min(1),
     semester: z.enum(["harmattan", "rain"]),

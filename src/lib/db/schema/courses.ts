@@ -12,6 +12,7 @@ import { semesterEnum, scopeTypeEnum } from "./enums";
 import { levels, faculties, departments } from "./academic";
 import { users } from "./auth";
 import { denyPublicPolicy } from "./rls";
+import { academicSessions } from "./academic-sessions";
 
 export const courses = pgTable(
   "courses",
@@ -19,6 +20,7 @@ export const courses = pgTable(
     id: serial("id").primaryKey(),
     code: varchar("code", { length: 20 }).notNull(),
     title: varchar("title", { length: 200 }).notNull(),
+    sessionId: integer("session_id").notNull().references(() => academicSessions.id),
     levelId: integer("level_id")
       .notNull()
       .references(() => levels.id),

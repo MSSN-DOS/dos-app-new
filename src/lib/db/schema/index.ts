@@ -11,3 +11,4 @@ export * from "./semester";
 export * from "./content";
 export * from "./teachers";
 export * from "./tours";
+export * from "./academic-sessions";

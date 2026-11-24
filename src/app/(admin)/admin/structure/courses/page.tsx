@@ -1,4 +1,5 @@
 "use client";
+import { CourseDetailsLink } from "@/components/teaching/catalog-details";
 
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -43,6 +44,7 @@ type Semester = "harmattan" | "rain";
 type ScopeType = "department" | "faculty" | "general" | "interfaculty";
 
 interface CourseRow {
+  sessionId: number;
   id: number;
   code: string;
   title: string;
@@ -137,6 +139,11 @@ export default function CoursesPage() {
   const [formCode, setFormCode] = useState("");
   const [formTitle, setFormTitle] = useState("");
   const [formLevelId, setFormLevelId] = useState("");
+  const [formSessionId, setFormSessionId] = useState("");
+  const sessionsQuery = useQuery({
+    queryKey: ["academic-sessions"],
+    queryFn: () => apiFetch<{ data: { id: number; label: string }[] }>("/admin/academic-sessions"),
+  });
   const [formSemester, setFormSemester] = useState<Semester>("harmattan");
   const [formScopeType, setFormScopeType] = useState<ScopeType>("department");
   const [formDepartmentId, setFormDepartmentId] = useState("");
@@ -218,6 +225,7 @@ export default function CoursesPage() {
     setFormCode("");
     setFormTitle("");
     setFormLevelId("");
+    setFormSessionId("");
     setFormSemester("harmattan");
     setFormScopeType("department");
     setFormDepartmentId("");
@@ -232,6 +240,7 @@ export default function CoursesPage() {
     setFormCode(course.code);
     setFormTitle(course.title);
     setFormLevelId(String(course.levelId));
+    setFormSessionId(String(course.sessionId));
     setFormSemester(course.semester);
     setFormScopeType(course.scopeType);
     setFormDepartmentId(course.departmentId === null ? "" : String(course.departmentId));
@@ -249,6 +258,7 @@ export default function CoursesPage() {
         code: formCode.trim(),
         title: formTitle.trim(),
         levelId: Number(formLevelId),
+        sessionId: Number(formSessionId),
         semester: formSemester,
         scopeType: formScopeType,
         departmentId: formScopeType === "department" ? Number(formDepartmentId) : null,
@@ -268,6 +278,7 @@ export default function CoursesPage() {
     formCode.trim() &&
       formTitle.trim() &&
       formLevelId &&
+      formSessionId &&
       (formScopeType === "general" ||
         (formScopeType === "department" && formDepartmentId) ||
         (formScopeType === "faculty" && formFacultyId) ||
@@ -387,7 +398,7 @@ export default function CoursesPage() {
                       ` · ${faculties.find((f) => f.id === course.facultyId)?.name ?? "?"}`}
                     {course.scopeType === "interfaculty" &&
                       ` · ${course.facultyIds.length} faculties`}
-                  </TableCell><TableCell className="text-right"><span className="flex justify-end gap-1"><Button variant="ghost" size="sm" className="min-h-11" onClick={() => openEdit(course)}><Pencil aria-hidden="true" />Edit</Button>
+                  </TableCell><TableCell className="text-right"><span className="flex flex-wrap justify-end gap-1"><CourseDetailsLink id={course.id} /><Button variant="ghost" size="sm" className="min-h-11" onClick={() => openEdit(course)}><Pencil aria-hidden="true" />Edit</Button>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -437,6 +448,15 @@ export default function CoursesPage() {
                 value={formTitle}
                 onChange={(e) => setFormTitle(e.target.value)}
               />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="course-session">Academic session</Label>
+              <Select value={formSessionId} onValueChange={setFormSessionId}>
+                <SelectTrigger id="course-session" className="w-full"><SelectValue placeholder="Select a session" /></SelectTrigger>
+                <SelectContent>{sessionsQuery.data?.data.map(session => <SelectItem key={session.id} value={String(session.id)}>{session.label}</SelectItem>)}</SelectContent>
+              </Select>
+              {sessionsQuery.isError && <p role="alert" className="text-base text-destructive">Could not load academic sessions. <Button variant="link" onClick={() => sessionsQuery.refetch()}>Retry</Button></p>}
+              {sessionsQuery.data?.data.length === 0 && <p role="status" className="text-base text-muted-foreground">An academic session must be configured before creating courses.</p>}
             </div>
             <div className="grid gap-2">
               <Label htmlFor="course-level">Level</Label>

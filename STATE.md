@@ -484,6 +484,17 @@ Board request (2026-11-15): port the three loading states from the supplied refe
 
 ## Phase 16 — Sync cleanup and quiz-only question authoring
 
+## Phase 17 — Course session repair and related details
+
+- [x] Explicit session selection on course create/update, matching the database's
+  existing session_id constraint. Atomic course/faculty-link saves and readable
+  foreign-key errors.
+- [x] Course details page, topic details dialog and quiz list preview actions,
+  with independent pagination, empty/error/loading states and role checks.
+- Academic-session schema was applied before this patch on the connected DB.
+  Fresh-database migration baselining remains a separate requirement documented
+  in README. No database changes were applied in this task.
+
 - [x] P16-1 — Remove the init loader and config remnants, restore secret ignores,
   and enforce the project guard for start and sync-branch CI. Verified the
   updated guard rejects the original loader and its lifecycle entries.

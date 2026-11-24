@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 
 import { errorResponse } from "@/lib/api/response";
+import { courseErrorResponse } from "@/lib/api/course-error";
 import { paginate, parsePagination } from "@/lib/api/pagination";
 import { requireAuth } from "@/lib/auth/guard";
 import { getDb } from "@/lib/db";
@@ -62,6 +63,7 @@ export async function GET(request: Request): Promise<NextResponse> {
         id: courses.id,
         code: courses.code,
         title: courses.title,
+        sessionId: courses.sessionId,
         levelId: courses.levelId,
         semester: courses.semester,
         scopeType: courses.scopeType,
@@ -110,53 +112,57 @@ export async function POST(request: Request): Promise<NextResponse> {
       data.scopeType === "interfaculty" ? [...new Set(data.facultyIds ?? [])] : [];
 
     const db = getDb();
-    // No DB uniqueness on courses — keep the same code + level + semester combination
-    // out with a readable conflict instead (same approach as departments).
-    const [existing] = await db
-      .select({ id: courses.id })
-      .from(courses)
-      .where(
-        and(
-          eq(courses.code, data.code),
-          eq(courses.levelId, data.levelId),
-          eq(courses.semester, data.semester),
-        ),
-      )
-      .limit(1);
-    if (existing) {
-      return NextResponse.json(
-        {
-          error: {
-            code: "CONFLICT",
-            message: `Course "${data.code}" already exists at this level for this semester`,
+    return await db.transaction(async (db) => {
+      // No DB uniqueness on courses — keep the same code + level + semester combination
+      // out with a readable conflict instead (same approach as departments).
+      const [existing] = await db
+        .select({ id: courses.id })
+        .from(courses)
+        .where(
+          and(
+            eq(courses.code, data.code),
+            eq(courses.sessionId, data.sessionId),
+            eq(courses.levelId, data.levelId),
+            eq(courses.semester, data.semester),
+          ),
+        )
+        .limit(1);
+      if (existing) {
+        return NextResponse.json(
+          {
+            error: {
+              code: "CONFLICT",
+              message: `Course "${data.code}" already exists at this level for this semester`,
+            },
           },
-        },
-        { status: 409 },
-      );
-    }
+          { status: 409 },
+        );
+      }
 
-    const [row] = await db
-      .insert(courses)
-      .values({
-        code: data.code,
-        title: data.title,
-        levelId: data.levelId,
-        semester: data.semester,
-        scopeType: data.scopeType,
-        ...scopeColumns(data),
-      })
-      .returning();
-
-    if (facultyIds.length > 0) {
-      await db
-        .insert(courseFaculties)
-        .values(facultyIds.map((facultyId) => ({ courseId: row.id, facultyId })))
+      const [row] = await db
+        .insert(courses)
+        .values({
+          code: data.code,
+          title: data.title,
+          sessionId: data.sessionId,
+          levelId: data.levelId,
+          semester: data.semester,
+          scopeType: data.scopeType,
+          ...scopeColumns(data),
+        })
         .returning();
-    }
 
-    return NextResponse.json({ ...row, facultyIds }, { status: 201 });
+      if (facultyIds.length > 0) {
+        await db
+          .insert(courseFaculties)
+          .values(facultyIds.map((facultyId) => ({ courseId: row.id, facultyId })))
+          .returning();
+      }
+
+      return NextResponse.json({ ...row, facultyIds }, { status: 201 });
+    });
   } catch (err) {
     if (err instanceof ZodError) return validationError(err);
-    return errorResponse(err);
+    return courseErrorResponse(err);
   }
 }

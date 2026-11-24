@@ -1,4 +1,5 @@
 "use client";
+import { TopicDetailsAction } from "./catalog-details";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Pencil, Trash2 } from "lucide-react";
@@ -252,7 +253,7 @@ export function TopicsView() {
                 <TableRow key={topic.id}>
                   <TableCell className="text-base font-medium">{topic.title}</TableCell>
                   <TableCell>{courseLabel(topic.courseId)}</TableCell>
-                  <TableCell className="text-right"><span className="flex justify-end gap-1">
+                  <TableCell className="text-right"><span className="flex flex-wrap justify-end gap-1"><TopicDetailsAction id={topic.id} />
                     <Button variant="ghost" size="sm" className="min-h-11" onClick={() => openEdit(topic)}><Pencil aria-hidden="true" />Edit</Button>
                     <Button variant="ghost" size="sm" className="min-h-11 text-destructive hover:text-destructive" onClick={() => { setActionError(null); setDeleteTarget(topic); }}><Trash2 aria-hidden="true" />Delete</Button>
                   </span></TableCell>

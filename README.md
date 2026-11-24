@@ -132,6 +132,17 @@ thirty seconds.
 
 ## Folder structure
 
+Course creation requires an academic session selection. This repair maps the
+already-applied academic-session schema from commit 09ae830 into the application
+and sends courses.session_id on create/update. It does not reapply that schema
+to the connected database. Before provisioning a fresh database from main's
+historical migrations, reconcile the academic-session migration history from
+board/ariori-merge; that baseline is not represented in main's old snapshots.
+
+Admins can open course details from Structure → Courses. Topic View displays
+the parent course and topic quizzes in a dialog. Related lists paginate
+independently. Quiz View opens the existing student preview.
+
 Teachers and admins create and edit questions inside **Quizzes**. In a draft
 quiz, choose **Add question** to write a question, paste questions in bulk, or
 choose **From question bank** to reuse existing published questions. The former
