@@ -22,13 +22,15 @@ let db: DbMock;
 beforeEach(() => {
   vi.clearAllMocks();
   db = makeDbMock();
+  stubSelect(db, [[]]);
   getDb.mockReturnValue(db);
   db.transaction.mockImplementation((callback) => callback(db));
 });
 
 const updatedRow = {
   id: 5,
-  sessionId: 1, code: "MAT 101",
+  sessionId: 1,
+  code: "MAT 101",
   title: "Mathematics",
   levelId: 10,
   semester: "harmattan" as const,
@@ -38,7 +40,8 @@ const updatedRow = {
 };
 
 const validBody = {
-  sessionId: 1, code: "MAT 101",
+  sessionId: 1,
+  code: "MAT 101",
   title: "Mathematics",
   levelId: 10,
   semester: "harmattan",
@@ -47,6 +50,16 @@ const validBody = {
 };
 
 describe("PATCH /api/admin/structure/courses/[id]", () => {
+  it("rejects a conflicting session offering before updating", async () => {
+    stubSelect(db, [[{ id: 8 }]]);
+    const res = await PATCH(jsonRequest("http://localhost/x/5", "PATCH", validBody), {
+      params: Promise.resolve({ id: "5" }),
+    });
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.message).toMatch(/already exists/);
+    expect(db.execute).toHaveBeenCalledOnce();
+    expect(db.update).not.toHaveBeenCalled();
+  });
   it("updates the course and set-replaces its interfaculty links", async () => {
     stubUpdate(db, updatedRow);
     stubDelete(db, null);
@@ -59,10 +72,9 @@ describe("PATCH /api/admin/structure/courses/[id]", () => {
         },
       }),
     }));
-    const res = await PATCH(
-      jsonRequest("http://localhost/x/5", "PATCH", validBody),
-      { params: Promise.resolve({ id: "5" }) },
-    );
+    const res = await PATCH(jsonRequest("http://localhost/x/5", "PATCH", validBody), {
+      params: Promise.resolve({ id: "5" }),
+    });
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({ ...updatedRow, facultyIds: [3, 4] });
     expect(insertedLinks).toEqual([
@@ -85,7 +97,11 @@ describe("PATCH /api/admin/structure/courses/[id]", () => {
     const insertSpy = vi.fn();
     db.insert.mockImplementation(() => ({ values: insertSpy }));
     const res = await PATCH(
-      jsonRequest("http://localhost/x/5", "PATCH", { ...validBody, scopeType: "general", facultyIds: undefined }),
+      jsonRequest("http://localhost/x/5", "PATCH", {
+        ...validBody,
+        scopeType: "general",
+        facultyIds: undefined,
+      }),
       { params: Promise.resolve({ id: "5" }) },
     );
     expect(res.status).toBe(200);
@@ -96,20 +112,18 @@ describe("PATCH /api/admin/structure/courses/[id]", () => {
 
   it("returns 404 when the course does not exist", async () => {
     stubUpdate(db, null);
-    const res = await PATCH(
-      jsonRequest("http://localhost/x/99", "PATCH", validBody),
-      { params: Promise.resolve({ id: "99" }) },
-    );
+    const res = await PATCH(jsonRequest("http://localhost/x/99", "PATCH", validBody), {
+      params: Promise.resolve({ id: "99" }),
+    });
     expect(res.status).toBe(404);
     const body = await res.json();
     expect(body.error.code).toBe("NOT_FOUND");
   });
 
   it.each(["abc", "0", "-3"])("returns 400 for invalid id %s", async (id) => {
-    const res = await PATCH(
-      jsonRequest(`http://localhost/x/${id}`, "PATCH", validBody),
-      { params: Promise.resolve({ id }) },
-    );
+    const res = await PATCH(jsonRequest(`http://localhost/x/${id}`, "PATCH", validBody), {
+      params: Promise.resolve({ id }),
+    });
     expect(res.status).toBe(400);
   });
 
@@ -131,19 +145,17 @@ describe("PATCH /api/admin/structure/courses/[id]", () => {
 
   it("returns 401 when unauthenticated", async () => {
     requireAuth.mockRejectedValueOnce(new UnauthorizedError("Missing token"));
-    const res = await PATCH(
-      jsonRequest("http://localhost/x/5", "PATCH", validBody),
-      { params: Promise.resolve({ id: "5" }) },
-    );
+    const res = await PATCH(jsonRequest("http://localhost/x/5", "PATCH", validBody), {
+      params: Promise.resolve({ id: "5" }),
+    });
     expect(res.status).toBe(401);
   });
 
   it("returns 403 when the caller is not an admin", async () => {
     requireAuth.mockRejectedValueOnce(new ForbiddenError("Admin role required"));
-    const res = await PATCH(
-      jsonRequest("http://localhost/x/5", "PATCH", validBody),
-      { params: Promise.resolve({ id: "5" }) },
-    );
+    const res = await PATCH(jsonRequest("http://localhost/x/5", "PATCH", validBody), {
+      params: Promise.resolve({ id: "5" }),
+    });
     expect(res.status).toBe(403);
   });
 });

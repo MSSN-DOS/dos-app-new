@@ -9,15 +9,22 @@ export interface DbMock {
   update: Mock;
   delete: Mock;
   transaction: Mock;
+  execute: Mock;
 }
 
 export type Row = Record<string, unknown>;
 
-type LimitedSelect = Promise<Row[]> & { for: (lock: "update") => Promise<Row[]> };
+type LimitedSelect = Promise<Row[]> & {
+  for: (lock: "update") => Promise<Row[]>;
+  offset: (offset: number) => Promise<Row[]>;
+};
 
 interface SelectChain {
-  orderBy: () => Promise<Row[]> & { limit: () => Promise<Row[]> };
-  where: () => { limit: () => LimitedSelect; orderBy: () => Promise<Row[]> & { limit: () => Promise<Row[]> } };
+  orderBy: () => Promise<Row[]> & { limit: (count?: number) => LimitedSelect };
+  where: () => {
+    limit: (count?: number) => LimitedSelect;
+    orderBy: () => Promise<Row[]> & { limit: (count?: number) => LimitedSelect };
+  };
   innerJoin: () => SelectChain;
   leftJoin: () => SelectChain;
 }
@@ -29,6 +36,7 @@ export function makeDbMock(): DbMock {
     update: vi.fn(),
     delete: vi.fn(),
     transaction: vi.fn(),
+    execute: vi.fn().mockResolvedValue([]),
   };
 }
 
@@ -40,12 +48,19 @@ export function stubSelect(db: DbMock, results: Row[][]): void {
     call += 1;
     // Recursive so join chains (.innerJoin/.leftJoin) keep the same terminal methods.
     // orderBy() must resolve to the rows itself while still exposing .limit(1) afterwards.
-    const limit = (): LimitedSelect => {
-      const rows = Promise.resolve(result.slice(0, 1));
-      return Object.assign(rows, { for: () => rows });
+    const limit = (count = 1): LimitedSelect => {
+      const rows = Promise.resolve(result.slice(0, count));
+      return Object.assign(rows, {
+        for: () => rows,
+        offset: (offset: number) => Promise.resolve(result.slice(offset, offset + count)),
+      });
     };
-    const orderedRows = (): Promise<Row[]> & { limit: () => Promise<Row[]> } => {
-      const promise = Promise.resolve(result) as Promise<Row[]> & { limit: () => Promise<Row[]> };
+    const orderedRows = (): Promise<Row[]> & {
+      limit: (count?: number) => LimitedSelect;
+    } => {
+      const promise = Promise.resolve(result) as Promise<Row[]> & {
+        limit: (count?: number) => LimitedSelect;
+      };
       promise.limit = limit;
       return promise;
     };
@@ -118,9 +133,7 @@ export function stubDelete(db: DbMock, row: Row | null): void {
  * exactly like you would on a bare db mock.
  */
 export function stubTransaction(db: DbMock, tx: DbMock): void {
-  db.transaction.mockImplementation(
-    (cb: (inner: DbMock) => Promise<unknown>) => cb(tx),
-  );
+  db.transaction.mockImplementation((cb: (inner: DbMock) => Promise<unknown>) => cb(tx));
 }
 
 export function jsonRequest(

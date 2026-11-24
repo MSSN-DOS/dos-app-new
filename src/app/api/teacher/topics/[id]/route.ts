@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 
@@ -8,6 +8,7 @@ import { requireAuth, type AuthContext } from "@/lib/auth/guard";
 import { ownershipScope } from "@/lib/auth/ownership";
 import { getTeachingScope, isCourseAllowed } from "@/lib/auth/teaching-scope";
 import { getDb } from "@/lib/db";
+import { lockStructureWrites } from "@/lib/db/structure-lock";
 import { questions, quizzes, topics } from "@/lib/db/schema";
 import { topicUpdateSchema } from "@/lib/validation/topics";
 
@@ -62,19 +63,43 @@ export async function PATCH(
       throw new ForbiddenError("You do not teach this course");
     }
 
-    const [row] = await db
-      .update(topics)
-      .set({ courseId: data.courseId, title: data.title })
-      .where(and(eq(topics.id, id), ownedWhere(auth)))
-      .returning();
-    if (!row) {
-      return NextResponse.json(
-        { error: { code: "NOT_FOUND", message: "Topic not found" } },
-        { status: 404 },
-      );
-    }
+    return await db.transaction(async (db) => {
+      await lockStructureWrites(db);
+      const [duplicate] = await db
+        .select({ id: topics.id })
+        .from(topics)
+        .where(
+          and(
+            ne(topics.id, id),
+            eq(topics.courseId, data.courseId),
+            sql`lower(${topics.title}) = lower(${data.title})`,
+          ),
+        )
+        .limit(1);
+      if (duplicate)
+        return NextResponse.json(
+          {
+            error: {
+              code: "CONFLICT",
+              message: "A topic with this title already exists in this course",
+            },
+          },
+          { status: 409 },
+        );
+      const [row] = await db
+        .update(topics)
+        .set({ courseId: data.courseId, title: data.title })
+        .where(and(eq(topics.id, id), ownedWhere(auth)))
+        .returning();
+      if (!row) {
+        return NextResponse.json(
+          { error: { code: "NOT_FOUND", message: "Topic not found" } },
+          { status: 404 },
+        );
+      }
 
-    return NextResponse.json(row);
+      return NextResponse.json(row);
+    });
   } catch (err) {
     if (err instanceof ZodError) return validationError(err);
     return errorResponse(err);
@@ -143,7 +168,10 @@ export async function DELETE(
       );
     }
 
-    const [row] = await db.delete(topics).where(and(eq(topics.id, id), ownedWhere(auth))).returning();
+    const [row] = await db
+      .delete(topics)
+      .where(and(eq(topics.id, id), ownedWhere(auth)))
+      .returning();
     if (!row) {
       return NextResponse.json(
         { error: { code: "NOT_FOUND", message: "Topic not found" } },

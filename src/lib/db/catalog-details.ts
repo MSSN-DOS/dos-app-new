@@ -8,12 +8,17 @@ import {
   departments,
   faculties,
   topics,
+  quizzes,
 } from "./schema";
 import type { AuthContext } from "@/lib/auth/guard";
 import { getTeachingScope, isCourseAllowed } from "@/lib/auth/teaching-scope";
 import { ForbiddenError } from "@/lib/auth/errors";
-import { listAuthoringQuizzes } from "./quiz-list";
-import { paginate } from "@/lib/api/pagination";
+import { authoringQuizConditions } from "./quiz-list";
+
+function pageMeta(total: number, requested: number) {
+  const totalPages = Math.max(1, Math.ceil(total / 10));
+  return { total, pageSize: 10, totalPages, page: Math.min(requested, totalPages) };
+}
 
 export async function catalogDetails(
   auth: AuthContext,
@@ -49,7 +54,10 @@ export async function catalogDetails(
     .innerJoin(levels, eq(levels.id, courses.levelId))
     .innerJoin(academicSessions, eq(academicSessions.id, courses.sessionId))
     .leftJoin(departments, eq(departments.id, courses.departmentId))
-    .leftJoin(faculties, eq(faculties.id, sql`coalesce(${courses.facultyId}, ${departments.facultyId})`))
+    .leftJoin(
+      faculties,
+      eq(faculties.id, sql`coalesce(${courses.facultyId}, ${departments.facultyId})`),
+    )
     .where(eq(courses.id, courseId))
     .limit(1);
   if (!course) return null;
@@ -59,6 +67,19 @@ export async function catalogDetails(
     .innerJoin(faculties, eq(faculties.id, courseFaculties.facultyId))
     .where(eq(courseFaculties.courseId, courseId))
     .orderBy(asc(faculties.name));
+  const topicCondition = and(
+    eq(topics.courseId, courseId),
+    auth.roleName === "admin" ? undefined : eq(topics.createdBy, auth.userId),
+  );
+  const [topicCount] =
+    kind === "course"
+      ? await db
+          .select({ total: sql<number>`count(*)::int` })
+          .from(topics)
+          .where(topicCondition)
+          .limit(1)
+      : [];
+  const topicMeta = pageMeta(topicCount?.total ?? 0, topicPage);
   const topicRows =
     kind === "course"
       ? await db
@@ -67,37 +88,45 @@ export async function catalogDetails(
             title: topics.title,
           })
           .from(topics)
-          .where(
-            and(
-              eq(topics.courseId, courseId),
-              auth.roleName === "admin" ? undefined : eq(topics.createdBy, auth.userId),
-            ),
-          )
+          .where(topicCondition)
           .orderBy(asc(topics.title), asc(topics.id))
+          .limit(10)
+          .offset((topicMeta.page - 1) * 10)
       : [];
-  const quizRows = (
-    await listAuthoringQuizzes(auth, {
+  const quizCondition = and(
+    ...authoringQuizConditions(auth, {
       courseId,
       search: "",
       type: kind === "course" ? "course" : "topic",
+    }),
+    kind === "topic" ? eq(quizzes.topicId, id) : undefined,
+  );
+  const [quizCount] = await db
+    .select({ total: sql<number>`count(*)::int` })
+    .from(quizzes)
+    .where(quizCondition)
+    .limit(1);
+  const quizMeta = pageMeta(quizCount?.total ?? 0, quizPage);
+  const quizRows = await db
+    .select({
+      id: quizzes.id,
+      title: quizzes.title,
+      status: quizzes.status,
+      questionCount: quizzes.questionCount,
+      weekStart: quizzes.weekStart,
     })
-  ).filter((q) => kind === "course" || q.topicId === id);
+    .from(quizzes)
+    .where(quizCondition)
+    .orderBy(asc(quizzes.id))
+    .limit(10)
+    .offset((quizMeta.page - 1) * 10);
   return {
     course: {
       ...course,
       sharedFaculties: sharedFaculties.map((row) => row.name).join(", ") || null,
     },
     topic,
-    topics: paginate(topicRows, { page: topicPage, pageSize: 10 }),
-    quizzes: paginate(
-      quizRows.map((q) => ({
-        id: q.id,
-        title: q.title,
-        status: q.status,
-        questionCount: q.questionCount,
-        weekStart: q.weekStart,
-      })),
-      { page: quizPage, pageSize: 10 },
-    ),
+    topics: { data: topicRows, meta: topicMeta },
+    quizzes: { data: quizRows, meta: quizMeta },
   };
 }

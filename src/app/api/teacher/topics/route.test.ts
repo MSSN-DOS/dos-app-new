@@ -20,6 +20,7 @@ let db: DbMock;
 beforeEach(() => {
   vi.clearAllMocks();
   db = makeDbMock();
+  db.transaction.mockImplementation((callback) => callback(db));
   getDb.mockReturnValue(db);
   requireAuth.mockResolvedValue({ userId: 5, roleId: 2 });
 });

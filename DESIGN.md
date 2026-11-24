@@ -6,6 +6,37 @@ This is the single source of truth for how the product behaves and how the code 
 
 ## 1. Roles
 
+### Academic structure workspace (2026-11-24 amendment)
+
+Admins manage faculties, departments, shared levels, courses and topics through
+`/admin/structure`. The approved Structure Studio layout uses the existing DOS
+shell and tokens: a browser beside record details on desktop, one pane at a time
+with Browse/Search/Setup/New controls on mobile. Teacher Topics remains separate.
+Legacy admin structure and topic URLs redirect to this workspace; course detail
+links preserve the course selection. Record, academic session and related-list
+pagination state are shareable in the URL.
+
+Levels remain global records linked to departments. Department courses are shown
+even if their level is absent from that department's configured levels. Faculty-wide
+courses appear beneath their faculty; general/interfaculty courses have a Shared
+courses branch. Search queries descendants directly across sessions, rather than
+requiring a matching parent. Selecting a search result opens its own session.
+
+Course-copy operations require a different, existing session, reject an existing
+code/session/level/semester combination, preserve scope and faculty links, and
+optionally copy topic titles. They never copy quizzes, questions, attempts, grades,
+assignments or resources. Topic batches accept at most 100 titles, trim whitespace,
+retain numbering and skip case-insensitive duplicates with explicit added/skipped
+counts. Course/topic writes share a transaction-scoped lock before duplicate reads;
+failed batch writes roll back together. No migration is required.
+
+Deletion keeps the existing server-side reference guards and asks for confirmation;
+there is no snapshot-based Undo. Dirty sheets ask before discarding and warn before
+browser unload. Empty setup reminders are informational. Course details paginate
+topics and course-only quizzes independently; topic details show only that topic's
+quizzes, using the existing preview action. Related lists and tree branches use
+bounded database queries.
+
 `admin`, `teacher`, `student`, `aspirant` — one `roles` table, one `users` table, role-specific detail in `student_profiles` / `aspirant_profiles`. See §5 for the schema.
 
 ## 2. Resolved decisions (source of truth — supersedes Section 9 of the requirements doc)

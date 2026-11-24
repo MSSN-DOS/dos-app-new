@@ -48,14 +48,34 @@ function Pager({
     </div>
   );
 }
-export function CatalogDetails({ id, kind }: { id: number; kind: "course" | "topic" }) {
+export function CatalogDetails({
+  id,
+  kind,
+  pagination,
+  onTopicSelect,
+}: {
+  id: number;
+  kind: "course" | "topic";
+  onTopicSelect?: (id: number) => void;
+  pagination?: {
+    topicPage: number;
+    quizPage: number;
+    onChange: (key: "topicPage" | "quizPage", page: number) => void;
+  };
+}) {
   const [topicPage, setTopicPage] = useState(1);
   const [quizPage, setQuizPage] = useState(1);
   const query = useQuery({
-    queryKey: ["catalog-details", kind, id, topicPage, quizPage],
+    queryKey: [
+      "catalog-details",
+      kind,
+      id,
+      pagination?.topicPage ?? topicPage,
+      pagination?.quizPage ?? quizPage,
+    ],
     queryFn: () =>
       apiFetch<{ data: Details }>(
-        `/teacher/catalog/${id}?kind=${kind}&topicPage=${topicPage}&quizPage=${quizPage}`,
+        `/teacher/catalog/${id}?kind=${kind}&topicPage=${pagination?.topicPage ?? topicPage}&quizPage=${pagination?.quizPage ?? quizPage}`,
       ),
   });
   if (query.isPending)
@@ -114,7 +134,18 @@ export function CatalogDetails({ id, kind }: { id: number; kind: "course" | "top
               {topics.data.map((row) => (
                 <li key={row.id} className="flex items-center justify-between gap-3 py-3">
                   <span className="min-w-0 break-words text-base">{row.title}</span>
-                  <TopicDetailsAction id={row.id} />
+                  {onTopicSelect ? (
+                    <Button
+                      variant="ghost"
+                      className="min-h-11"
+                      onClick={() => onTopicSelect(row.id)}
+                    >
+                      <Eye className="size-4" />
+                      View
+                    </Button>
+                  ) : (
+                    <TopicDetailsAction id={row.id} />
+                  )}
                 </li>
               ))}
             </ul>
@@ -123,7 +154,12 @@ export function CatalogDetails({ id, kind }: { id: number; kind: "course" | "top
               No topics are attached to this course yet.
             </p>
           )}
-          <Pager meta={topics.meta} onPage={setTopicPage} />
+          <Pager
+            meta={topics.meta}
+            onPage={(page) =>
+              pagination ? pagination.onChange("topicPage", page) : setTopicPage(page)
+            }
+          />
         </section>
       )}
       <section
@@ -159,7 +195,12 @@ export function CatalogDetails({ id, kind }: { id: number; kind: "course" | "top
             No {kind === "course" ? "course" : "topic"} quizzes are attached yet.
           </p>
         )}
-        <Pager meta={quizzes.meta} onPage={setQuizPage} />
+        <Pager
+          meta={quizzes.meta}
+          onPage={(page) =>
+            pagination ? pagination.onChange("quizPage", page) : setQuizPage(page)
+          }
+        />
       </section>
     </div>
   );
@@ -189,7 +230,7 @@ export function TopicDetailsAction({ id }: { id: number }) {
 export function CourseDetailsLink({ id }: { id: number }) {
   return (
     <Button asChild variant="ghost" className="min-h-11">
-      <Link href={`/admin/structure/courses/${id}`}>
+      <Link href={`/admin/structure?kind=course&id=${id}`}>
         <Eye className="size-4" />
         View
       </Link>

@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 
@@ -9,6 +9,7 @@ import { requireAuth } from "@/lib/auth/guard";
 import { ownershipScope } from "@/lib/auth/ownership";
 import { getTeachingScope, isCourseAllowed } from "@/lib/auth/teaching-scope";
 import { getDb } from "@/lib/db";
+import { lockStructureWrites } from "@/lib/db/structure-lock";
 import { courses, topics } from "@/lib/db/schema";
 import { topicCreateSchema } from "@/lib/validation/topics";
 
@@ -54,9 +55,7 @@ export async function GET(request: Request): Promise<NextResponse> {
         ? eq(topics.courseId, Number(courseIdParam))
         : undefined;
     const whereCond =
-      courseCond && ownerCond
-        ? and(courseCond, ownerCond)
-        : (courseCond ?? ownerCond);
+      courseCond && ownerCond ? and(courseCond, ownerCond) : (courseCond ?? ownerCond);
     const base = db
       .select({
         id: topics.id,
@@ -91,29 +90,37 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
 
     // Titles are unique within a course (no DB constraint — enforced here).
-    const [existing] = await db
-      .select({ id: topics.id })
-      .from(topics)
-      .where(and(eq(topics.title, data.title), eq(topics.courseId, data.courseId)))
-      .limit(1);
-    if (existing) {
-      return NextResponse.json(
-        {
-          error: {
-            code: "CONFLICT",
-            message: `Topic "${data.title}" already exists in this course`,
+    return await db.transaction(async (db) => {
+      await lockStructureWrites(db);
+      const [existing] = await db
+        .select({ id: topics.id })
+        .from(topics)
+        .where(
+          and(
+            sql`lower(${topics.title}) = lower(${data.title})`,
+            eq(topics.courseId, data.courseId),
+          ),
+        )
+        .limit(1);
+      if (existing) {
+        return NextResponse.json(
+          {
+            error: {
+              code: "CONFLICT",
+              message: `Topic "${data.title}" already exists in this course`,
+            },
           },
-        },
-        { status: 409 },
-      );
-    }
+          { status: 409 },
+        );
+      }
 
-    const [row] = await db
-      .insert(topics)
-      .values({ courseId: data.courseId, title: data.title, createdBy: auth.userId })
-      .returning();
+      const [row] = await db
+        .insert(topics)
+        .values({ courseId: data.courseId, title: data.title, createdBy: auth.userId })
+        .returning();
 
-    return NextResponse.json(row, { status: 201 });
+      return NextResponse.json(row, { status: 201 });
+    });
   } catch (err) {
     if (err instanceof ZodError) return validationError(err);
     return errorResponse(err);

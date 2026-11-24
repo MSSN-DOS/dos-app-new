@@ -7,6 +7,7 @@ import { courseErrorResponse } from "@/lib/api/course-error";
 import { paginate, parsePagination } from "@/lib/api/pagination";
 import { requireAuth } from "@/lib/auth/guard";
 import { getDb } from "@/lib/db";
+import { lockStructureWrites } from "@/lib/db/structure-lock";
 import { courseFaculties, courses } from "@/lib/db/schema";
 import { courseCreateSchema, type CourseCreateInput } from "@/lib/validation/structure";
 
@@ -113,6 +114,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     const db = getDb();
     return await db.transaction(async (db) => {
+      await lockStructureWrites(db);
       // No DB uniqueness on courses — keep the same code + level + semester combination
       // out with a readable conflict instead (same approach as departments).
       const [existing] = await db

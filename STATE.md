@@ -502,6 +502,15 @@ Board request (2026-11-15): port the three loading states from the supplied refe
   the matching Quizzes list. Preserve quiz authoring and existing bank imports.
   Typecheck passed, lint had one existing warning, and all 1,196 tests passed.
 
+## Phase 18 — Unified academic structure workspace
+
+- [x] P18-1–4 — Approved Structure Studio integrated into `/admin/structure`, with
+  themed browser/details, global search, session and URL state, mobile controls,
+  contextual sheets and safe batch operations. All 1,262 tests and the production
+  build pass. Lint has no errors (one existing auth-client warning); typecheck passes.
+- No migrations or direct database writes are needed. Live signed-in visual review
+  remains a deployment check; component tests do not substitute for that review.
+
 ## Open items still needing a real answer from the Board (not blocking dev, but don't let these go silently forgotten)
 
 - [x] Confirm Post-UTME conversion formula (P5-3) — confirmed 2026-08-25: aggregate is out of 100, conversion is the identity (best_score is already a percentage = correct × 2 for the 50-question quiz)
