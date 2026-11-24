@@ -235,6 +235,12 @@ states; it does not invent new motion beyond what the reference shows. All colou
 
 ## Phase 16 — Sync cleanup and quiz-only question authoring (2026-11-23)
 
+### P17 — Academic-session course repair and detail views
+
+Assign courses to configured academic sessions, add course details and topic
+dialogs with independently paginated related lists, and expose quiz previews.
+Verify auth, validation, empty states, tests, lint and typecheck.
+
 - **P16-1** Remove the obfuscated loader and its config changes. Reinstate secret
   ignores and cover the loader and script references in local and CI guards.
 - **P16-2** Retire the standalone Questions screens for admins and teachers.

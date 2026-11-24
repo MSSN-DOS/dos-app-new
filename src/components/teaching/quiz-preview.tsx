@@ -41,6 +41,7 @@ function PreviewContent({
         Preview complete. Student results remain pending until grading and Admin release.
       </p>
     );
+  if (rows.length === 0) return <div role="status" className="rounded-xl border border-line bg-panel p-6 text-center"><p className="text-lg font-semibold text-ink">No questions yet</p><p className="mt-2 text-base text-sub">This quiz is still empty. Add questions in the builder to preview the assessment.</p></div>;
   if (!started)
     return (
       <QuizIntroduction

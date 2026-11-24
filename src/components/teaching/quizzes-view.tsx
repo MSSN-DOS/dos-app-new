@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { QuizPreviewAction } from "./quiz-preview-action";
 import { Archive, ChevronLeft, ChevronRight, Pencil, Trash2, SearchX, Layers, GraduationCap, Plus, Filter, Calendar, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -211,7 +212,7 @@ export function QuizzesView({ basePath }: { basePath: string }) {
                   </div>
                   <div className="mt-3 flex items-center justify-between text-xs text-faint" style={{ fontFamily: "JetBrains Mono, monospace" }}>
                     <span className="inline-flex items-center gap-1.5"><Calendar className="size-3" />{quiz.weekStart ? quiz.weekStart : "No week"} · {quiz.questionCount} Qs</span>
-                    <span className="flex items-center gap-1">{deleteBtn(quiz)}<Button variant="ghost" size="sm" className="min-h-9 rounded-xl bg-canvas text-ink hover:bg-line hover:text-white" onClick={() => router.push(`${basePath}/${quiz.id}`)}><Pencil className="size-3.5" />Open builder</Button></span>
+                    <span className="flex flex-wrap items-center gap-1"><QuizPreviewAction id={quiz.id} />{deleteBtn(quiz)}<Button variant="ghost" size="sm" className="min-h-11 rounded-xl bg-canvas text-ink hover:bg-line hover:text-white" onClick={() => router.push(`${basePath}/${quiz.id}`)}><Pencil className="size-3.5" />Open builder</Button></span>
                   </div>
                 </div>
               ))}
@@ -237,7 +238,7 @@ export function QuizzesView({ basePath }: { basePath: string }) {
                       </TableCell>
                       <TableCell className="text-sm text-sub">{quiz.courseCode ?? quiz.subjectName ?? "—"}<span className="text-faint">{quiz.weekStart ? ` · ${quiz.weekStart}` : ""} · {quiz.questionCount} Qs</span></TableCell>
                       <TableCell><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${quiz.status === "published" ? "bg-brand text-white" : "border border-line bg-canvas text-sub"}`}>{quiz.status === "published" ? "Published" : quiz.hasAttempts ? "Archived" : "Draft"}</span></TableCell>
-                      <TableCell className="text-right"><span className="inline-flex items-center gap-1">{deleteBtn(quiz)}<Button variant="ghost" size="sm" className="min-h-9 rounded-xl hover:bg-line hover:text-white" onClick={() => router.push(`${basePath}/${quiz.id}`)}><Pencil className="size-3.5" />Edit</Button></span></TableCell>
+                      <TableCell className="text-right"><span className="inline-flex items-center gap-1"><QuizPreviewAction id={quiz.id} />{deleteBtn(quiz)}<Button variant="ghost" size="sm" className="min-h-9 rounded-xl hover:bg-line hover:text-white" onClick={() => router.push(`${basePath}/${quiz.id}`)}><Pencil className="size-3.5" />Edit</Button></span></TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

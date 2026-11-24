@@ -16,6 +16,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   db = makeDbMock();
   getDb.mockReturnValue(db);
+  db.transaction.mockImplementation((callback) => callback(db));
 });
 
 describe("GET /api/admin/structure/courses", () => {
@@ -24,7 +25,7 @@ describe("GET /api/admin/structure/courses", () => {
       [
         {
           id: 1,
-          code: "GNS 101",
+          sessionId: 1, code: "GNS 101",
           title: "Use of English",
           levelId: 10,
           semester: "harmattan",
@@ -34,7 +35,7 @@ describe("GET /api/admin/structure/courses", () => {
         },
         {
           id: 2,
-          code: "MAT 101",
+          sessionId: 1, code: "MAT 101",
           title: "Mathematics",
           levelId: 10,
           semester: "harmattan",
@@ -54,7 +55,7 @@ describe("GET /api/admin/structure/courses", () => {
       data: [
         {
           id: 1,
-          code: "GNS 101",
+          sessionId: 1, code: "GNS 101",
           title: "Use of English",
           levelId: 10,
           semester: "harmattan",
@@ -65,7 +66,7 @@ describe("GET /api/admin/structure/courses", () => {
         },
         {
           id: 2,
-          code: "MAT 101",
+          sessionId: 1, code: "MAT 101",
           title: "Mathematics",
           levelId: 10,
           semester: "harmattan",
@@ -83,16 +84,16 @@ describe("GET /api/admin/structure/courses", () => {
   it("slices courses after grouping and returns pagination metadata", async () => {
     stubSelect(db, [
       [
-        { id: 1, code: "GNS 101", title: "English", levelId: 10, semester: "harmattan", scopeType: "general", departmentId: null, facultyId: null },
-        { id: 2, code: "MAT 101", title: "Mathematics", levelId: 10, semester: "harmattan", scopeType: "general", departmentId: null, facultyId: null },
-        { id: 3, code: "PHY 101", title: "Physics", levelId: 10, semester: "harmattan", scopeType: "general", departmentId: null, facultyId: null },
+        { id: 1, sessionId: 1, code: "GNS 101", title: "English", levelId: 10, semester: "harmattan", scopeType: "general", departmentId: null, facultyId: null },
+        { id: 2, sessionId: 1, code: "MAT 101", title: "Mathematics", levelId: 10, semester: "harmattan", scopeType: "general", departmentId: null, facultyId: null },
+        { id: 3, sessionId: 1, code: "PHY 101", title: "Physics", levelId: 10, semester: "harmattan", scopeType: "general", departmentId: null, facultyId: null },
       ],
       [],
     ]);
     const res = await GET(jsonRequest("http://localhost/x?page=2&pageSize=1", "GET"));
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
-      data: [{ id: 2, code: "MAT 101", title: "Mathematics", levelId: 10, semester: "harmattan", scopeType: "general", departmentId: null, facultyId: null, facultyIds: [] }],
+      data: [{ id: 2, sessionId: 1, code: "MAT 101", title: "Mathematics", levelId: 10, semester: "harmattan", scopeType: "general", departmentId: null, facultyId: null, facultyIds: [] }],
       meta: { page: 2, pageSize: 1, total: 3, totalPages: 3 },
     });
   });
@@ -100,9 +101,9 @@ describe("GET /api/admin/structure/courses", () => {
   it("filters by department, level, and semester before pagination", async () => {
     stubSelect(db, [
       [
-        { id: 1, code: "CSC 101", title: "Intro", levelId: 10, semester: "harmattan", scopeType: "department", departmentId: 3, facultyId: null },
-        { id: 2, code: "CSC 102", title: "Logic", levelId: 10, semester: "harmattan", scopeType: "department", departmentId: 3, facultyId: null },
-        { id: 3, code: "MAT 101", title: "Math", levelId: 20, semester: "rain", scopeType: "department", departmentId: 4, facultyId: null },
+        { id: 1, sessionId: 1, code: "CSC 101", title: "Intro", levelId: 10, semester: "harmattan", scopeType: "department", departmentId: 3, facultyId: null },
+        { id: 2, sessionId: 1, code: "CSC 102", title: "Logic", levelId: 10, semester: "harmattan", scopeType: "department", departmentId: 3, facultyId: null },
+        { id: 3, sessionId: 1, code: "MAT 101", title: "Math", levelId: 20, semester: "rain", scopeType: "department", departmentId: 4, facultyId: null },
       ],
       [],
     ]);
@@ -111,7 +112,7 @@ describe("GET /api/admin/structure/courses", () => {
     );
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
-      data: [{ id: 2, code: "CSC 102", title: "Logic", levelId: 10, semester: "harmattan", scopeType: "department", departmentId: 3, facultyId: null, facultyIds: [] }],
+      data: [{ id: 2, sessionId: 1, code: "CSC 102", title: "Logic", levelId: 10, semester: "harmattan", scopeType: "department", departmentId: 3, facultyId: null, facultyIds: [] }],
       meta: { page: 2, pageSize: 1, total: 2, totalPages: 2 },
     });
   });
@@ -149,7 +150,7 @@ describe("POST /api/admin/structure/courses", () => {
             ? [
                 {
                   id: 5,
-                  code: "MAT 101",
+                  sessionId: 1, code: "MAT 101",
                   title: "Mathematics",
                   levelId: 10,
                   semester: "harmattan",
@@ -163,7 +164,7 @@ describe("POST /api/admin/structure/courses", () => {
     }));
     const res = await POST(
       jsonRequest("http://localhost/x", "POST", {
-        code: "MAT 101",
+        sessionId: 1, code: "MAT 101",
         title: "Mathematics",
         levelId: 10,
         semester: "harmattan",
@@ -174,7 +175,7 @@ describe("POST /api/admin/structure/courses", () => {
     expect(res.status).toBe(201);
     await expect(res.json()).resolves.toEqual({
       id: 5,
-      code: "MAT 101",
+      sessionId: 1, code: "MAT 101",
       title: "Mathematics",
       levelId: 10,
       semester: "harmattan",
@@ -195,7 +196,7 @@ describe("POST /api/admin/structure/courses", () => {
             return [
               {
                 id: 6,
-                code: "ENT 201",
+                sessionId: 1, code: "ENT 201",
                 title: "Entrepreneurship",
                 levelId: 20,
                 semester: "rain",
@@ -212,7 +213,7 @@ describe("POST /api/admin/structure/courses", () => {
     }));
     const res = await POST(
       jsonRequest("http://localhost/x", "POST", {
-        code: "ENT 201",
+        sessionId: 1, code: "ENT 201",
         title: "Entrepreneurship",
         levelId: 20,
         semester: "rain",
@@ -232,7 +233,7 @@ describe("POST /api/admin/structure/courses", () => {
     stubSelect(db, [[{ id: 1 }]]);
     const res = await POST(
       jsonRequest("http://localhost/x", "POST", {
-        code: "MAT 101",
+        sessionId: 1, code: "MAT 101",
         title: "Mathematics",
         levelId: 10,
         semester: "harmattan",
@@ -247,17 +248,17 @@ describe("POST /api/admin/structure/courses", () => {
 
   it.each([
     ["missing code", { title: "Mathematics", levelId: 10, semester: "harmattan", scopeType: "general" }],
-    ["empty code", { code: "", title: "Mathematics", levelId: 10, semester: "harmattan", scopeType: "general" }],
-    ["missing title", { code: "MAT 101", levelId: 10, semester: "harmattan", scopeType: "general" }],
-    ["zero levelId", { code: "MAT 101", title: "Mathematics", levelId: 0, semester: "harmattan", scopeType: "general" }],
-    ["non-numeric levelId", { code: "MAT 101", title: "Mathematics", levelId: "x", semester: "harmattan", scopeType: "general" }],
-    ["invalid semester", { code: "MAT 101", title: "Mathematics", levelId: 10, semester: "summer", scopeType: "general" }],
-    ["invalid scopeType", { code: "MAT 101", title: "Mathematics", levelId: 10, semester: "harmattan", scopeType: "world" }],
-    ["department scope without departmentId", { code: "MAT 101", title: "Mathematics", levelId: 10, semester: "harmattan", scopeType: "department" }],
-    ["department scope with a faculty too", { code: "MAT 101", title: "Mathematics", levelId: 10, semester: "harmattan", scopeType: "department", departmentId: 3, facultyId: 2 }],
-    ["faculty scope without facultyId", { code: "MAT 101", title: "Mathematics", levelId: 10, semester: "harmattan", scopeType: "faculty" }],
-    ["general scope with a department", { code: "MAT 101", title: "Mathematics", levelId: 10, semester: "harmattan", scopeType: "general", departmentId: 3 }],
-    ["interfaculty with fewer than two faculties", { code: "MAT 101", title: "Mathematics", levelId: 10, semester: "harmattan", scopeType: "interfaculty", facultyIds: [3] }],
+    ["empty code", { sessionId: 1, code: "", title: "Mathematics", levelId: 10, semester: "harmattan", scopeType: "general" }],
+    ["missing title", { sessionId: 1, code: "MAT 101", levelId: 10, semester: "harmattan", scopeType: "general" }],
+    ["zero levelId", { sessionId: 1, code: "MAT 101", title: "Mathematics", levelId: 0, semester: "harmattan", scopeType: "general" }],
+    ["non-numeric levelId", { sessionId: 1, code: "MAT 101", title: "Mathematics", levelId: "x", semester: "harmattan", scopeType: "general" }],
+    ["invalid semester", { sessionId: 1, code: "MAT 101", title: "Mathematics", levelId: 10, semester: "summer", scopeType: "general" }],
+    ["invalid scopeType", { sessionId: 1, code: "MAT 101", title: "Mathematics", levelId: 10, semester: "harmattan", scopeType: "world" }],
+    ["department scope without departmentId", { sessionId: 1, code: "MAT 101", title: "Mathematics", levelId: 10, semester: "harmattan", scopeType: "department" }],
+    ["department scope with a faculty too", { sessionId: 1, code: "MAT 101", title: "Mathematics", levelId: 10, semester: "harmattan", scopeType: "department", departmentId: 3, facultyId: 2 }],
+    ["faculty scope without facultyId", { sessionId: 1, code: "MAT 101", title: "Mathematics", levelId: 10, semester: "harmattan", scopeType: "faculty" }],
+    ["general scope with a department", { sessionId: 1, code: "MAT 101", title: "Mathematics", levelId: 10, semester: "harmattan", scopeType: "general", departmentId: 3 }],
+    ["interfaculty with fewer than two faculties", { sessionId: 1, code: "MAT 101", title: "Mathematics", levelId: 10, semester: "harmattan", scopeType: "interfaculty", facultyIds: [3] }],
   ])("returns 422 for %s", async (_label, body) => {
     const res = await POST(jsonRequest("http://localhost/x", "POST", body));
     expect(res.status).toBe(422);
@@ -270,7 +271,7 @@ describe("POST /api/admin/structure/courses", () => {
     requireAuth.mockRejectedValueOnce(new UnauthorizedError("Missing token"));
     const res = await POST(
       jsonRequest("http://localhost/x", "POST", {
-        code: "MAT 101",
+        sessionId: 1, code: "MAT 101",
         title: "Mathematics",
         levelId: 10,
         semester: "harmattan",
@@ -284,7 +285,7 @@ describe("POST /api/admin/structure/courses", () => {
     requireAuth.mockRejectedValueOnce(new ForbiddenError("Admin role required"));
     const res = await POST(
       jsonRequest("http://localhost/x", "POST", {
-        code: "MAT 101",
+        sessionId: 1, code: "MAT 101",
         title: "Mathematics",
         levelId: 10,
         semester: "harmattan",
