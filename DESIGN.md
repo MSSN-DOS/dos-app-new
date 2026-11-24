@@ -240,6 +240,12 @@ Deletion is not blocked by held/unreleased attempts: with the attempt gone, an u
 
 ## 9. Route map
 
+Course offerings require an explicit academic session. Admin course forms select
+from the existing academic_sessions table and send sessionId on create/update.
+Course details at /admin/structure/courses/[id] show academic metadata, paginated
+topics and course quizzes. Topic View opens a dialog with its parent course and
+paginated topic quizzes. Quiz View opens the existing student preview.
+
 ### Public
 - `/login`
 - `/register/student`, `/register/aspirant`

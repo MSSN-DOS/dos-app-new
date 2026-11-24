@@ -23,11 +23,12 @@ beforeEach(() => {
   vi.clearAllMocks();
   db = makeDbMock();
   getDb.mockReturnValue(db);
+  db.transaction.mockImplementation((callback) => callback(db));
 });
 
 const updatedRow = {
   id: 5,
-  code: "MAT 101",
+  sessionId: 1, code: "MAT 101",
   title: "Mathematics",
   levelId: 10,
   semester: "harmattan" as const,
@@ -37,7 +38,7 @@ const updatedRow = {
 };
 
 const validBody = {
-  code: "MAT 101",
+  sessionId: 1, code: "MAT 101",
   title: "Mathematics",
   levelId: 10,
   semester: "harmattan",
@@ -150,7 +151,7 @@ describe("PATCH /api/admin/structure/courses/[id]", () => {
 describe("DELETE /api/admin/structure/courses/[id]", () => {
   it("deletes the course and returns 204 when nothing references it", async () => {
     stubSelect(db, [[], [], []]); // no quiz, question or content refs
-    stubDelete(db, { id: 5, code: "MAT 101" });
+    stubDelete(db, { id: 5, sessionId: 1, code: "MAT 101" });
     const res = await DELETE(jsonRequest("http://localhost/x/5", "DELETE"), {
       params: Promise.resolve({ id: "5" }),
     });

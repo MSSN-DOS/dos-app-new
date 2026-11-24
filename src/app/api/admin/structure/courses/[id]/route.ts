@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 
 import { errorResponse } from "@/lib/api/response";
+import { courseErrorResponse } from "@/lib/api/course-error";
 import { requireAuth } from "@/lib/auth/guard";
 import { getDb } from "@/lib/db";
 import {
@@ -58,41 +59,44 @@ export async function PATCH(
       data.scopeType === "interfaculty" ? [...new Set(data.facultyIds ?? [])] : [];
 
     const db = getDb();
-    const [row] = await db
-      .update(courses)
-      .set({
-        code: data.code,
-        title: data.title,
-        levelId: data.levelId,
-        semester: data.semester,
-        scopeType: data.scopeType,
-        ...scopeColumns(data),
-      })
-      .where(eq(courses.id, id))
-      .returning();
-    if (!row) {
-      return NextResponse.json(
-        { error: { code: "NOT_FOUND", message: "Course not found" } },
-        { status: 404 },
-      );
-    }
-
-    // Set-replace the interfaculty faculty links — not incremental add/remove calls.
-    await db
-      .delete(courseFaculties)
-      .where(eq(courseFaculties.courseId, id))
-      .returning();
-    if (facultyIds.length > 0) {
-      await db
-        .insert(courseFaculties)
-        .values(facultyIds.map((facultyId) => ({ courseId: id, facultyId })))
+    return await db.transaction(async (db) => {
+      const [row] = await db
+        .update(courses)
+        .set({
+          code: data.code,
+          title: data.title,
+          sessionId: data.sessionId,
+          levelId: data.levelId,
+          semester: data.semester,
+          scopeType: data.scopeType,
+          ...scopeColumns(data),
+        })
+        .where(eq(courses.id, id))
         .returning();
-    }
+      if (!row) {
+        return NextResponse.json(
+          { error: { code: "NOT_FOUND", message: "Course not found" } },
+          { status: 404 },
+        );
+      }
 
-    return NextResponse.json({ ...row, facultyIds });
+      // Set-replace the interfaculty faculty links — not incremental add/remove calls.
+      await db
+        .delete(courseFaculties)
+        .where(eq(courseFaculties.courseId, id))
+        .returning();
+      if (facultyIds.length > 0) {
+        await db
+          .insert(courseFaculties)
+          .values(facultyIds.map((facultyId) => ({ courseId: id, facultyId })))
+          .returning();
+      }
+
+      return NextResponse.json({ ...row, facultyIds });
+    });
   } catch (err) {
     if (err instanceof ZodError) return validationError(err);
-    return errorResponse(err);
+    return courseErrorResponse(err);
   }
 }
 
@@ -155,7 +159,8 @@ export async function DELETE(
         {
           error: {
             code: "CONFLICT",
-            message: "Course has one or more content items attached and cannot be deleted",
+            message:
+              "Course has one or more content items attached and cannot be deleted",
           },
         },
         { status: 409 },
