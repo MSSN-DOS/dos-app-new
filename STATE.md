@@ -502,6 +502,15 @@ Board request (2026-11-15): port the three loading states from the supplied refe
   the matching Quizzes list. Preserve quiz authoring and existing bank imports.
   Typecheck passed, lint had one existing warning, and all 1,196 tests passed.
 
+## Phase 19 — Flexible quiz counts and topic-first creation
+
+- [x] P19-1–3 — Remove fixed-50 authoring restrictions for both roles and quiz types;
+  default creation to Topic; retain publish validation, auth, scope and attempt locks.
+  All 1,229 tests, typecheck and the production build pass. Lint has no errors
+  and retains one existing auth-client warning. No migrations or live DB writes.
+- Saturday automatic fallback generation is not implemented. Define source freshness
+  and no-question behaviour before adding a scheduled publisher.
+
 ## Open items still needing a real answer from the Board (not blocking dev, but don't let these go silently forgotten)
 
 - [x] Confirm Post-UTME conversion formula (P5-3) — confirmed 2026-08-25: aggregate is out of 100, conversion is the identity (best_score is already a percentage = correct × 2 for the 50-question quiz)

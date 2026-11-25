@@ -87,7 +87,7 @@ Two types, same `quizzes` table, discriminated by `quiz_type`:
 | | Topic Quiz | Course Quiz |
 |---|---|---|
 | Tied to | One `topic_id` | A `course_id` (or `jamb_subject_id` for Aspirants) + `week_start` |
-| Question count | Free-form, Teacher decides | Fixed 50 |
+| Question count | Author chooses; at least one valid question | Author chooses; at least one valid question (2026-11-25 amendment) |
 | Cadence | Ad hoc, whenever a Teacher publishes one | Weekly, opens Saturday 00:00 / closes Monday 00:00 WAT (Admin-overridable per quiz, decision 6) |
 | Counts toward CGPA / Post-UTME / leaderboard | No | Yes — only source that counts |
 
@@ -114,7 +114,7 @@ Rules that apply to both:
 
 ### Authoring rebuild (P12, 2026-11-14)
 
-- Teacher/Admin builder supports True/False (an options preset), single-answer multiple choice, `[gap]` fill-in-gap, shared passages with sub-questions, and manually graded essays. Course Quizzes retain exactly 50 questions. Drafts allow incomplete questions; publishing validates every question, passage, schedule and marks allocation.
+- Teacher/Admin builder supports True/False (an options preset), single-answer multiple choice, `[gap]` fill-in-gap, shared passages with sub-questions, and manually graded essays. Both roles choose the question count for either quiz type (2026-11-25 amendment). Drafts allow incomplete questions; publishing requires at least one valid question and validates every question, passage, schedule and marks allocation. The new quiz form defaults to Topic; Course remains selectable. Saturday availability applies to existing published Course Quizzes and does not itself generate them.
 - Description, instructions, questions, options, passages and explanations share Tiptap rich text with KaTeX. Cover and inline quiz images use a private Supabase bucket through authenticated, owner-scoped endpoints; this is separate from Admin-only PDF/article resources.
 - Quiz access remains signed-in and scoped to the existing academic track. Public/Private controls are omitted and the compatibility visibility column does not grant access.
 - Teachers may enable a start time and optional end time in Africa/Lagos. An enabled schedule uses the same `opens_at`/`closes_at` columns as the Admin availability override and replaces the week-derived window; without scheduling, Course Quizzes retain their existing default/override window. Duration is optional and stored in seconds; null is untimed.

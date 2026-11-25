@@ -84,7 +84,8 @@ are course-scoped. No visibility, payment, social or upgrade controls are added.
 **Create-flow pass (2026-11-19):** the sheet was rebuilt in the Quizboot two-section
 shape — brand header, numbered "Quiz basics" and "Scope & schedule" sections,
 segmented quiz-type and academic-track radios with arrow-key navigation, the weekly
-Course Quiz preselected with `weekStart` on the next Saturday, a live summary card
+Topic Quiz preselected (2026-11-25 amendment); choosing Course sets `weekStart`
+to the next Saturday. The form keeps a live summary card
 and a sticky Cancel / Create footer. Choosing Topic forces course scope and clears
 any JAMB subject, so the impossible Topic + Aspirant combination is unreachable.
 Readiness reuses `quizCreateSchema` instead of a hand-written check, and catalogue
@@ -132,7 +133,7 @@ FRAME: Quiz Builder — Draft / Published                         [Preview]
 
 **Data / API:** `GET/PUT /api/teacher/quizzes/[id]/builder` (shared draft/publish Zod, revision conflicts), `GET/POST/DELETE /api/teacher/quizzes/[id]/images` (private uploads, removal and owner-scoped signed-link renewal), `GET/PUT /api/teacher/quiz-preferences`, `GET /api/teacher/questions?...` and question detail for bank copies, `GET/PATCH /api/teacher/quizzes/[id]/grading`. Client requests use TanStack Query and `apiFetch`. Image links renew every eight minutes without replacing unsaved text, local uploads or the editor's draft state. Referenced images cannot be removed; unused replaced covers can be removed after publishing.
 
-**States:** loading/retry, empty questions with CTA, uploading/error, saving/saved/error, invalid draft fields, strict publish blockers, stale-revision conflict, preview introduction/questions/completion, published lock, essay-grading loading/empty/error/saving. Course Quizzes still require exactly 50 questions; passages count their sub-questions. Drafts tolerate unfinished questions and schedules.
+**States:** loading/retry, empty questions with CTA, uploading/error, saving/saved/error, invalid draft fields, strict publish blockers, stale-revision conflict, preview introduction/questions/completion, published lock, essay-grading loading/empty/error/saving. Both roles choose the number of questions for either quiz type; publishing requires at least one valid question. Passages count their sub-questions. Drafts tolerate unfinished questions and schedules.
 
 **P12-10 layout amendment (2026-11-16):** Questions / Settings / Results shadcn
 tabs preserve the draft payload outside tab content. Questions shows a live count,

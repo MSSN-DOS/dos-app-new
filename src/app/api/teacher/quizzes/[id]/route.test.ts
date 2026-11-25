@@ -110,18 +110,19 @@ describe("PATCH /api/teacher/quizzes/[id]", () => {
     expect(body.timeLimitMinutes).toBe(45);
   });
 
-  it("422s when a course quiz changes questionCount away from 50", async () => {
-    stubSelect(db, [[{ status: "draft", id: 1, quizType: "course" }], []]);
-    const res = await PATCH(
-      jsonRequest(URL_ID, "PATCH", { ...coursePayload, questionCount: 10 }),
-      PARAMS,
-    );
-    expect(res.status).toBe(422);
-    const body = (await res.json()) as {
-      error: { details: { message: string }[] };
-    };
-    expect(body.error.details[0]?.message).toMatch(/fixed at 50/i);
-  });
+  it.each([1, 10, 51, 120])(
+    "allows a course draft question count of %s",
+    async (count) => {
+      stubSelect(db, [[{ status: "draft", id: 1, quizType: "course" }], []]);
+      stubUpdate(db, { id: 1, ...coursePayload, questionCount: count });
+      const res = await PATCH(
+        jsonRequest(URL_ID, "PATCH", { ...coursePayload, questionCount: count }),
+        PARAMS,
+      );
+      expect(res.status).toBe(200);
+      expect((await res.json()).questionCount).toBe(count);
+    },
+  );
 
   it("422s when a topic quiz sends a weekStart", async () => {
     stubSelect(db, [[{ status: "draft", id: 1, quizType: "topic" }], []]);

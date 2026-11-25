@@ -86,6 +86,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         timeLimitSeconds: null,
         passMark: 60,
         status: "draft",
+        questionCount: 0,
         createdBy: auth.userId,
       })
       .returning();

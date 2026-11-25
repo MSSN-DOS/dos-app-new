@@ -247,6 +247,18 @@ Verify auth, validation, empty states, tests, lint and typecheck.
   Remove navigation, tours and page-only editors, redirect old URLs to Quizzes,
   and retain bank data and quiz import.
 
+## Phase 19 — Flexible quiz counts and topic-first creation (2026-11-25)
+
+The user supersedes the original fixed-50 Course Quiz rule: teachers and admins
+may publish either quiz type with any positive number of valid questions.
+P19-1 removes count-specific publish blockers and stores the actual attached count,
+including legacy publish and republish. P19-2 defaults new quiz setup to Topic,
+retains an explicit Course option and preserves the JAMB-track restrictions.
+P19-3 covers both roles and publication paths, validates scoring remains percentage-
+based, and runs the suite, lint and typecheck. No migration or live DB changes.
+Automatic Saturday quiz generation is not part of this patch; source-pool and
+empty-pool behaviour require confirmation before implementation.
+
 ## Explicitly out of scope for MVP (don't build these unless `PLAN.md` is updated to add them)
 
 - Email/SMS notifications

@@ -160,7 +160,7 @@ export function NewQuizForm({
   } = useAuthoringSubjects();
 
   const [title, setTitle] = useState("");
-  const [quizType, setQuizType] = useState<QuizType>("course");
+  const [quizType, setQuizType] = useState<QuizType>("topic");
   const [track, setTrack] = useState<Track>("course");
   const [courseId, setCourseId] = useState("");
   const [subjectId, setSubjectId] = useState("");
@@ -297,7 +297,9 @@ export function NewQuizForm({
                 setTitle(e.target.value);
                 setError("");
               }}
-              placeholder="e.g. MAT 101 · Week 4"
+              placeholder={
+                quizType === "topic" ? "e.g. Rolling basics" : "e.g. MAT 101 · Week 4"
+              }
               className="min-h-11 rounded-xl border-line bg-panel text-base text-ink placeholder:text-faint md:text-sm"
             />
           </div>
