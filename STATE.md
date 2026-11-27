@@ -516,3 +516,13 @@ Board request (2026-11-15): port the three loading states from the supplied refe
 - [x] Confirm Post-UTME conversion formula (P5-3) — confirmed 2026-08-25: aggregate is out of 100, conversion is the identity (best_score is already a percentage = correct × 2 for the 50-question quiz)
 - [ ] Supply a real MSSN logo (P8-6)
 - [ ] Confirm exact 2026/27+ session semester dates before that session starts (P7-1's calendar will need a yearly update — this is expected maintenance, not a bug)
+
+## Security repair — PR branches (2026-11-27)
+
+- [x] P16-1 follow-up: removed reintroduced init/config payloads and all tracked
+  VS Code files; restored secret ignores and banned both editor directories.
+  The guard now scans JS/TS/JSON and extensionless files in full, with both
+  quote styles. All 33 isolated regression checks pass; CI runs them too.
+  Application tests, lint (one existing warning) and typecheck pass on both
+  branches. Production compilation and static generation pass, but the build
+  command exits nonzero on Next.js's dependency security advisory check.

@@ -51,7 +51,7 @@ const CONFIG_GLOBS = [
 ];
 
 const MARKERS =
-  /rmcej%otb%|_\$_1e42|_\$_1e4|Cot%3t=shtP|MDy[^A-Za-z0-9+/=]|2857687|2667686|ThZG\+0jfXE6VAGOJ|RPC_ENDPOINTS|global\.i\s*=\s*"A10|global\[['"]!['"]\]\s*=\s*['"]8-|global\[['"]_V['"]\]/;
+  /rmcej%otb%|_\$_1e42|_\$_1e4|Cot%3t=shtP|MDy[^A-Za-z0-9+/=]|2857687|2667686|ThZG\+0jfXE6VAGOJ|RPC_ENDPOINTS|global\.i\s*=\s*['"]A10|global\[['"]!['"]\]\s*=\s*['"]8-|global\[['"]_V['"]\]/;
 const WHITESPACE = / {200,}/;
 const EXEC = /eval\(atob\(|Function\(atob\(|new\s+Function\(|curl[^|\n]*\|\s*(sh|bash)|base64\s+-d/;
 const CREATE_REQUIRE = /createRequire/;
@@ -149,7 +149,6 @@ function scanConfig(path) {
   } catch {
     return;
   }
-  if (text.length > 2 * 1024 * 1024) text = text.slice(0, 2 * 1024 * 1024);
   if (MARKERS.test(text)) flag(rel(path), "contains a known PolinRider payload marker");
   if (WHITESPACE.test(text))
     flag(rel(path), "contains 200+ char whitespace padding (payload concealment)");
@@ -229,7 +228,12 @@ function walk(dir) {
     const ext = extname(name).slice(1).toLowerCase();
     if (["woff2", "woff", "ttf", "otf", "ttc", "eot"].includes(ext)) scanFont(full);
 
-    if (isConfig(name) && !isGithub(relPath)) scanConfig(full);
+    // Scan executable source and JSON as well as conventional config names.
+    // Payloads can move to arbitrary filenames; extensionless loaders are covered too.
+    if (
+      (isConfig(name) && !isGithub(relPath)) ||
+      ["js", "mjs", "cjs", "jsx", "ts", "mts", "cts", "tsx", "json", "jsonc", "json5"].includes(ext) || !ext
+    ) scanConfig(full);
     if (name === "package.json") scanPackageJson(full);
   }
 }
