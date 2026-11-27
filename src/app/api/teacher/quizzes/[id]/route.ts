@@ -170,17 +170,6 @@ export async function PATCH(
           ]),
         );
       }
-      if (input.questionCount !== 50) {
-        return validationError(
-          new ZodError([
-            {
-              code: "custom",
-              path: ["questionCount"],
-              message: "Course quizzes are fixed at 50 questions",
-            },
-          ]),
-        );
-      }
     } else if (input.weekStart != null) {
       return validationError(
         new ZodError([

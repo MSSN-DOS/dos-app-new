@@ -56,7 +56,7 @@ import { resizeQuizImage } from "@/lib/quizzes/resize-image";
 import { QuizBulkDialog } from "./quiz-bulk-dialog";
 import { DeleteQuizDialog } from "./delete-quiz-dialog";
 import { QuizPublishDialog, PublishIssueList } from "./quiz-publish-dialog";
-import { issueTarget, questionProgress } from "@/lib/quizzes/publish-issues";
+import { issueTarget } from "@/lib/quizzes/publish-issues";
 import { QuizPrintDialog } from "./quiz-print-dialog";
 import {
   AlertDialog,
@@ -248,11 +248,6 @@ export function QuizBuilderEditor({
     onError: (error) => setFormError(error.message),
   });
   const blockers = collectQuizPublishBlockers(payload);
-  if (document.quizType === "course" && payload.questions.length !== 50)
-    blockers.unshift({
-      path: "questions",
-      message: `Course quizzes require exactly 50 questions (${payload.questions.length} currently).`,
-    });
   const fingerprint = draftFingerprint(payload);
   const issues = [
     ...blockers,
@@ -289,7 +284,6 @@ export function QuizBuilderEditor({
     }
     setFocusRequest({ ...target, nonce: Date.now() });
   };
-  const requiredCount = document.quizType === "course" ? 50 : null;
   const save = async (action: "draft" | "publish") => {
     if (inFlight.current || uploadMutation.isPending || locked) return;
     inFlight.current = true;
@@ -432,11 +426,21 @@ export function QuizBuilderEditor({
                 variant="outline"
                 className={`min-h-11 min-w-11 text-base ${hasAttempts ? "" : "text-ruby hover:text-ruby"}`}
                 aria-label={hasAttempts ? "Archive quiz" : "Delete quiz"}
-                disabled={saveMutation.isPending || lifecycle.isPending || uploadMutation.isPending}
+                disabled={
+                  saveMutation.isPending ||
+                  lifecycle.isPending ||
+                  uploadMutation.isPending
+                }
                 onClick={() => setDeleteOpen(true)}
               >
-                {hasAttempts ? <Archive className="size-5" /> : <Trash2 className="size-5" />}
-                <span className="sr-only lg:not-sr-only">{hasAttempts ? "Archive" : "Delete"}</span>
+                {hasAttempts ? (
+                  <Archive className="size-5" />
+                ) : (
+                  <Trash2 className="size-5" />
+                )}
+                <span className="sr-only lg:not-sr-only">
+                  {hasAttempts ? "Archive" : "Delete"}
+                </span>
               </Button>
             )}
             {!published && (
@@ -474,7 +478,7 @@ export function QuizBuilderEditor({
           </Badge>
           <span>
             {document.quizType === "course"
-              ? `Course Quiz · 50 questions · Week ${document.weekStart}`
+              ? `Course Quiz · ${payload.questions.length} questions · Week ${document.weekStart}`
               : "Topic Quiz"}
           </span>
           <span role="status" className="inline-flex items-center gap-2">
@@ -710,40 +714,6 @@ export function QuizBuilderEditor({
                   </div>
                 ))}
               </dl>
-              {requiredCount !== null && !published && (
-                <div className="mt-3 border-t border-line pt-3">
-                  {(() => {
-                    const progress = questionProgress(questions.length, requiredCount);
-                    return (
-                      <>
-                        <div className="flex items-baseline justify-between text-base">
-                          <span className="font-medium text-ink">{progress.label}</span>
-                          <span className="text-sm text-sub">
-                            {progress.over
-                              ? `Remove ${progress.over}`
-                              : progress.remaining
-                                ? `${progress.remaining} to go`
-                                : "Complete"}
-                          </span>
-                        </div>
-                        <div
-                          role="progressbar"
-                          aria-label="Questions added"
-                          aria-valuemin={0}
-                          aria-valuemax={requiredCount}
-                          aria-valuenow={Math.min(questions.length, requiredCount)}
-                          className="mt-2 h-2 overflow-hidden rounded-full bg-line"
-                        >
-                          <div
-                            className={`h-full rounded-full ${progress.over ? "bg-warning" : "bg-brand"}`}
-                            style={{ width: `${progress.percent}%` }}
-                          />
-                        </div>
-                      </>
-                    );
-                  })()}
-                </div>
-              )}
               <div className="mt-3 border-t border-line pt-3 text-base">
                 {published ? (
                   <p>Published · editing locked</p>
@@ -879,7 +849,12 @@ export function QuizBuilderEditor({
         <DeleteQuizDialog
           quiz={
             deleteOpen
-              ? { id: document.id, title: payload.details.title.trim() || "Untitled quiz", status, hasAttempts }
+              ? {
+                  id: document.id,
+                  title: payload.details.title.trim() || "Untitled quiz",
+                  status,
+                  hasAttempts,
+                }
               : null
           }
           onOpenChange={setDeleteOpen}

@@ -279,19 +279,22 @@ describe("authenticated quiz builder", () => {
     expect((await response.json()).error.details.length).toBeGreaterThan(0);
     expect(db.transaction).not.toHaveBeenCalled();
   });
-  it("keeps Course Quizzes fixed at exactly 50 questions", async () => {
-    stubSelect(db, [[{ ...quiz, quizType: "course" }], []]);
-    const response = await PUT(
-      jsonRequest("http://localhost/x", "PUT", {
-        action: "publish",
-        revision: 0,
-        payload,
-      }),
-      params,
-    );
-    expect(response.status).toBe(422);
-    expect((await response.json()).error.message).toMatch(/50/);
-  });
+  it.each(["admin", "teacher"] as const)(
+    "publishes a one-question course quiz for %s",
+    async (roleName) => {
+      requireAuth.mockResolvedValue({ userId: 5, roleId: 1, roleName });
+      stubSelect(db, [[{ ...quiz, quizType: "course", createdBy: 5 }], [], [], [], []]);
+      const res = await PUT(
+        jsonRequest("http://localhost/x", "PUT", {
+          action: "publish",
+          revision: 0,
+          payload,
+        }),
+        params,
+      );
+      expect(res.status).toBe(200);
+    },
+  );
   it.each([{ ...quiz, createdBy: 6 }, quiz])(
     "enforces ownership and teaching scope",
     async (row) => {

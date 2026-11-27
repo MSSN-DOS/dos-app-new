@@ -92,7 +92,7 @@ export const quizUpdateSchema = z
     title: z.string().trim().min(1).max(200),
     description: z.string().trim().max(2000).nullable().optional(),
     instructions: z.string().trim().max(5000).optional(),
-    questionCount: z.coerce.number().int().min(1).max(100),
+    questionCount: z.coerce.number().int().min(1),
     timeLimitMinutes: z.coerce.number().int().min(1).max(600),
     passMark: z.coerce.number().int().min(1).max(100),
     allowMultipleAttempts: z.boolean(),

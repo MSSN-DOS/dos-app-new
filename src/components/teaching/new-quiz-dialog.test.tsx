@@ -66,24 +66,23 @@ beforeEach(() => {
 });
 
 describe("new quiz setup", () => {
-  it("starts on the common weekly Course Quiz path", () => {
+  it("starts on Topic Quiz with the course track", () => {
     mount();
 
-    expect(screen.getByRole("radio", { name: /Course/ })).toHaveAttribute(
+    expect(screen.getByRole("radio", { name: /Topic/ })).toHaveAttribute(
       "aria-checked",
       "true",
     );
-    expect(screen.getByRole("radio", { name: /Students/ })).toHaveAttribute(
-      "aria-checked",
-      "true",
-    );
-    expect(screen.getByLabelText("Week starts")).toHaveValue("2026-11-21");
+    expect(screen.queryByRole("radio", { name: /Aspirants/ })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Week starts")).not.toBeInTheDocument();
+    expect(screen.getByText("Course topic")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Create & continue/ })).toBeDisabled();
   });
 
   it("never leaves Topic Quiz in the impossible JAMB track", () => {
     mount();
 
+    fireEvent.click(screen.getByRole("radio", { name: /^Course/ }));
     fireEvent.click(screen.getByRole("radio", { name: /Aspirants/ }));
     expect(screen.getByRole("combobox", { name: "JAMB subject" })).toBeInTheDocument();
 
@@ -97,11 +96,11 @@ describe("new quiz setup", () => {
   it("supports arrow-key navigation in segmented choices", () => {
     mount();
 
-    fireEvent.keyDown(screen.getByRole("radio", { name: /Course/ }), {
-      key: "ArrowRight",
+    fireEvent.keyDown(screen.getByRole("radio", { name: /Topic/ }), {
+      key: "ArrowLeft",
     });
 
-    expect(screen.getByRole("radio", { name: /Topic/ })).toHaveAttribute(
+    expect(screen.getByRole("radio", { name: /Course/ })).toHaveAttribute(
       "aria-checked",
       "true",
     );
@@ -109,6 +108,7 @@ describe("new quiz setup", () => {
 
   it("creates the draft with the selected DOS academic scope", async () => {
     mount();
+    fireEvent.click(screen.getByRole("radio", { name: /^Course/ }));
 
     fireEvent.change(screen.getByLabelText("Title"), {
       target: { value: "MAT 101 · Week 4" },

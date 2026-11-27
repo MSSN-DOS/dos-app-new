@@ -219,18 +219,8 @@ export async function signBuilderPayload(
     passages: payload.passages.map((p) => ({ ...p, bodyRichText: rich(p.bodyRichText) })),
   };
 }
-export function validateQuizPublish(
-  payload: QuizDraftPayloadInput,
-  quizType: string,
-): void {
+export function validateQuizPublish(payload: QuizDraftPayloadInput): void {
   quizPublishPayloadSchema.parse(payload);
-  if (quizType === "course" && payload.questions.length !== 50)
-    throw new QuizAuthoringError(422, "Course quizzes require exactly 50 questions", [
-      {
-        field: "questions",
-        message: `Add exactly 50 questions (${payload.questions.length} currently)`,
-      },
-    ]);
 }
 export async function saveQuizBuilder(
   id: number,
@@ -239,7 +229,7 @@ export async function saveQuizBuilder(
 ) {
   return getDb().transaction(async (tx) => {
     const quiz = await editableQuiz(tx, id, auth);
-    if (input.action === "publish") validateQuizPublish(input.payload, quiz.quizType);
+    if (input.action === "publish") validateQuizPublish(input.payload);
     const payload = input.payload;
     const images = await tx
       .select()
@@ -289,7 +279,7 @@ export async function saveQuizBuilder(
           payload.details.durationSeconds == null
             ? null
             : Math.ceil(payload.details.durationSeconds / 60),
-        questionCount: quiz.quizType === "course" ? 50 : payload.questions.length,
+        questionCount: payload.questions.length,
         ...settingsColumns,
         scheduleEnabled,
         loseFocusPolicy: focusLossPolicyFor(permitFocusLoss),
@@ -454,12 +444,15 @@ export async function changeQuizLifecycle(
     const status = input.action === "unpublish" ? "draft" : "published";
     if (quiz.status !== from)
       throw new QuizAuthoringError(409, `This quiz is already ${status}`);
-    if (input.action === "republish") validateQuizPublish(payload, quiz.quizType);
+    if (input.action === "republish") validateQuizPublish(payload);
     const hasAttempts = await quizHasAttempts(tx, quiz);
     const [updated] = await tx
       .update(quizzes)
       .set({
         status,
+        ...(input.action === "republish"
+          ? { questionCount: payload.questions.length }
+          : {}),
         ...(hasAttempts ? { attemptsStarted: true } : {}),
         unpublishedAt: input.action === "unpublish" ? new Date() : null,
         builderRevision: input.revision + 1,
@@ -492,10 +485,14 @@ export async function publishStoredQuiz(id: number, auth: AuthContext): Promise<
       throw new QuizAuthoringError(409, "This quiz is already published");
     if (!isTrackAllowed(await getTeachingScope(tx, auth), quiz))
       throw new QuizAuthoringError(403, "This quiz is outside your teaching assignments");
-    validateQuizPublish(payload, quiz.quizType);
+    validateQuizPublish(payload);
     const [updated] = await tx
       .update(quizzes)
-      .set({ status: "published", builderRevision: (quiz.builderRevision ?? 0) + 1 })
+      .set({
+        status: "published",
+        questionCount: payload.questions.length,
+        builderRevision: (quiz.builderRevision ?? 0) + 1,
+      })
       .where(
         and(
           eq(quizzes.id, id),
