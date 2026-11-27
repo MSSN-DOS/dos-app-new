@@ -502,8 +502,27 @@ Board request (2026-11-15): port the three loading states from the supplied refe
   the matching Quizzes list. Preserve quiz authoring and existing bank imports.
   Typecheck passed, lint had one existing warning, and all 1,196 tests passed.
 
+## Phase 18 — Unified academic structure workspace
+
+- [x] P18-1–4 — Approved Structure Studio integrated into `/admin/structure`, with
+  themed browser/details, global search, session and URL state, mobile controls,
+  contextual sheets and safe batch operations. All 1,262 tests and the production
+  build pass. Lint has no errors (one existing auth-client warning); typecheck passes.
+- No migrations or direct database writes are needed. Live signed-in visual review
+  remains a deployment check; component tests do not substitute for that review.
+
 ## Open items still needing a real answer from the Board (not blocking dev, but don't let these go silently forgotten)
 
 - [x] Confirm Post-UTME conversion formula (P5-3) — confirmed 2026-08-25: aggregate is out of 100, conversion is the identity (best_score is already a percentage = correct × 2 for the 50-question quiz)
 - [ ] Supply a real MSSN logo (P8-6)
 - [ ] Confirm exact 2026/27+ session semester dates before that session starts (P7-1's calendar will need a yearly update — this is expected maintenance, not a bug)
+
+## Security repair — PR branches (2026-11-27)
+
+- [x] P16-1 follow-up: removed reintroduced init/config payloads and all tracked
+  VS Code files; restored secret ignores and banned both editor directories.
+  The guard now scans JS/TS/JSON and extensionless files in full, with both
+  quote styles. All 33 isolated regression checks pass; CI runs them too.
+  Application tests, lint (one existing warning) and typecheck pass on both
+  branches. Production compilation and static generation pass, but the build
+  command exits nonzero on Next.js's dependency security advisory check.

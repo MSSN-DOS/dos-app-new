@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import {
-  BookOpen,
   Building2,
   ChevronRight,
   ClipboardList,
@@ -57,20 +56,13 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
   {
     label: "Structure",
-    href: "/admin/structure/levels",
+    href: "/admin/structure",
     icon: Building2,
     matchPrefix: "/admin/structure",
-    children: [
-      { label: "Levels", href: "/admin/structure/levels" },
-      { label: "Faculties", href: "/admin/structure/faculties" },
-      { label: "Departments", href: "/admin/structure/departments" },
-      { label: "Courses", href: "/admin/structure/courses" },
-    ],
   },
   { label: "Teachers", href: "/admin/teachers", icon: Users },
   { label: "Students", href: "/admin/students", icon: GraduationCap },
   { label: "Aspirants", href: "/admin/aspirants", icon: Target },
-  { label: "Topics", href: "/admin/topics", icon: BookOpen },
   { label: "Quizzes", href: "/admin/quizzes", icon: ClipboardList },
   { label: "Content", href: "/admin/content", icon: FileText },
   { label: "Leaderboard", href: "/admin/leaderboard", icon: Trophy },

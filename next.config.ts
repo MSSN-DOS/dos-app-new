@@ -9,6 +9,32 @@ const nextConfig: NextConfig = {
   },
   async redirects() {
     return [
+      {
+        source: "/admin/structure/courses/:id",
+        destination: "/admin/structure?kind=course&id=:id",
+        permanent: false,
+      },
+      {
+        source: "/admin/structure/levels",
+        destination: "/admin/structure",
+        permanent: false,
+      },
+      {
+        source: "/admin/structure/faculties",
+        destination: "/admin/structure",
+        permanent: false,
+      },
+      {
+        source: "/admin/structure/departments",
+        destination: "/admin/structure",
+        permanent: false,
+      },
+      {
+        source: "/admin/structure/courses",
+        destination: "/admin/structure",
+        permanent: false,
+      },
+      { source: "/admin/topics", destination: "/admin/structure", permanent: false },
       { source: "/admin/questions", destination: "/admin/quizzes", permanent: false },
       { source: "/teacher/questions", destination: "/teacher/quizzes", permanent: false },
     ];

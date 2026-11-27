@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 
@@ -6,6 +6,7 @@ import { errorResponse } from "@/lib/api/response";
 import { courseErrorResponse } from "@/lib/api/course-error";
 import { requireAuth } from "@/lib/auth/guard";
 import { getDb } from "@/lib/db";
+import { lockStructureWrites } from "@/lib/db/structure-lock";
 import {
   contentItems,
   courseFaculties,
@@ -60,6 +61,30 @@ export async function PATCH(
 
     const db = getDb();
     return await db.transaction(async (db) => {
+      await lockStructureWrites(db);
+      const [duplicate] = await db
+        .select({ id: courses.id })
+        .from(courses)
+        .where(
+          and(
+            ne(courses.id, id),
+            eq(courses.code, data.code),
+            eq(courses.sessionId, data.sessionId),
+            eq(courses.levelId, data.levelId),
+            eq(courses.semester, data.semester),
+          ),
+        )
+        .limit(1);
+      if (duplicate)
+        return NextResponse.json(
+          {
+            error: {
+              code: "CONFLICT",
+              message: "This course offering already exists in that session",
+            },
+          },
+          { status: 409 },
+        );
       const [row] = await db
         .update(courses)
         .set({

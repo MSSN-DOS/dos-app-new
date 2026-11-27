@@ -247,6 +247,23 @@ Verify auth, validation, empty states, tests, lint and typecheck.
   Remove navigation, tours and page-only editors, redirect old URLs to Quizzes,
   and retain bank data and quiz import.
 
+## Phase 18 — Unified academic structure workspace (2026-11-24)
+
+Implement the approved Structure Studio reference inside the existing Admin shell.
+Keep real shared levels and all four course scopes rather than imposing a new hierarchy.
+
+- **P18-1** One `/admin/structure` workspace with a lazy, paginated browser, details,
+  session selection, global search/command menu, contextual create/edit sheets and mobile
+  Browse/Search/Setup/New controls. URL state holds selection and related-list pages.
+- **P18-2** Authenticated workspace reads and atomic course-copy/bulk-topic operations.
+  Copy scope and optionally topic titles to another session; never copy quizzes. Share
+  transaction locking with ordinary course/topic writes to protect duplicate checks.
+- **P18-3** Preserve quiz previews, deletion reference guards, loading/error/empty states,
+  unsaved-edit protection and legacy-link redirects; retain Teacher Topics. Database
+  pagination bounds detail lists. No schema changes or migrations.
+- **P18-4** Endpoint, scope, batch and component regression coverage; full test suite,
+  lint, typecheck and production build. Document any unverified deployment checks.
+
 ## Explicitly out of scope for MVP (don't build these unless `PLAN.md` is updated to add them)
 
 - Email/SMS notifications

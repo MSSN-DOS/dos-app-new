@@ -1,5 +1,27 @@
 # Screen Specs — Admin
 
+### `/admin/structure` — Unified Structure workspace (P18)
+
+This supersedes the individual admin structure screens and standalone Admin Topics
+below. Teacher Topics remains unchanged. Use the existing admin shell, theme tokens,
+shadcn sheets, dialogs, selects and command menu.
+
+- Desktop: session/search/new toolbar, lazy browser on the left, selected record on
+  the right. Mobile: browse or details with Browse/Search/Setup/New controls.
+- Faculties contain departments and faculty-wide offerings; shared offerings have
+  their own branch; global levels remain separately manageable. No department-level
+  membership filter may hide an existing department course.
+- Query URL: `kind`, `id`, `session`, `topicPage`, `quizPage`. A session change clears
+  course/topic selection. Search runs across sessions and opens a result's session.
+- Reads: `GET /api/admin/structure/workspace` for root, branch, search and editable
+  records; existing `GET /api/teacher/catalog/:id` for related details/previews.
+- Writes: existing resource CRUD; `POST /api/admin/structure/workspace` for atomic
+  copy-to-session or paste-topics. Reuse shared Zod validation on both boundaries.
+- Every request handles loading, retryable errors and honest empty states. Destructive
+  actions retain reference guards, rejected saves retain input, and dirty sheets ask
+  before closing. Copy is disabled when there is no other session. Setup reminders
+  are neutral, not validation failures. Do not display prototype/demo controls.
+
 All screens in this file: **Guard:** `role = admin`. All live under an `(admin)` layout with a persistent left-nav (Dashboard, Structure, Teachers, Students, Aspirants, Topics, Questions, Quizzes, Content, Leaderboard, Score Release, Settings) — build that shell once (P2-1) and every screen below renders inside it.
 
 > **Shared authoring screens.** `/admin/topics`, `/admin/quizzes` and `/admin/quizzes/[id]` share components with their teacher counterparts. See `screens-teacher.md` for those specs. The former `/admin/questions` page redirects to `/admin/quizzes`, keeping admins in their own shell.
